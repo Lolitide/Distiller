@@ -1,0 +1,788 @@
+﻿# HarmonyOS Developer Documentation
+update_time: 2026-10-08T20:01:56.200423722Z
+
+# Docs
+- [上架分发与运营-上架-审核政策-联系我们](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50000-1.md):联系我们
+- [上架分发与运营-上架-审核政策-应用审核指南](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50104.md):应用审核指南
+- [上架分发与运营-上架-审核政策-应用审核FAQ](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50106.md):应用审核FAQ
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《安全评估报告》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50108.md):《安全评估报告》
+- [上架分发与运营-上架-审核政策-开发者账号与应用处理原因及措施](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50109.md):开发者账号与应用处理原因及措施
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111.md):资质文件法规依据及示例
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-资质提交入口](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-01.md):资质提交入口
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-计算机软件著作权证书](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-02.md):计算机软件著作权证书
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-ICP备案/《增值电信业务经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-03.md):ICP备案/《增值电信业务经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《网络文化经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-04.md):《网络文化经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《医疗机构执业许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-05.md):《医疗机构执业许可证》
+- [上架分发与运营-上架-《测绘资质证书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-06.md):《测绘资质证书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《互联网信息服务算法备案》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-07.md):《互联网信息服务算法备案》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《人力资源服务许可证》及机构登记备案](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-08.md):《人力资源服务许可证》及机构登记备案
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-资质授权关系说明格式](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-09.md):资质授权关系说明格式
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-人工智能生成合成内容标识相关材料](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-10.md):人工智能生成合成内容标识相关材料
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《诊所备案凭证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-100.md):《诊所备案凭证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《中医诊所备案证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-101.md):《中医诊所备案证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《经营证券期货业务许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-102.md):《经营证券期货业务许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-交易所行情授权书或会员证明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-103.md):交易所行情授权书或会员证明
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-企业征信机构备案证明或《个人征信业务经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-104.md):企业征信机构备案证明或《个人征信业务经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《金融许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-105.md):《金融许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-全国股转公司的书面许可](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-106.md):全国股转公司的书面许可
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《经营外汇业务许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-107.md):《经营外汇业务许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《个人本外币兑换特许业务经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-108.md):《个人本外币兑换特许业务经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-主管单位同意设立商业保理公司的批文或全国商业保理行业管理信息系统查询截图](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-109.md):主管单位同意设立商业保理公司的批文或全国商业保理行业管理信息系统查询截图
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《融资担保业务经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-110.md):《融资担保业务经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-批准成立股权交易市场相关文件](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-111.md):批准成立股权交易市场相关文件
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《私募基金备案证明》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-112.md):《私募基金备案证明》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《中国证券投资基金业协会会员证明》或中国证券投资基金业协会会员公示的查询截图](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-113.md):《中国证券投资基金业协会会员证明》或中国证券投资基金业协会会员公示的查询截图
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《私募基金管理人的登记》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-114.md):《私募基金管理人的登记》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-证监会关于同意公募基金产品注册的批复或文件](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-115.md):证监会关于同意公募基金产品注册的批复或文件
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-金融管理部门批准文件证明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-116.md):金融管理部门批准文件证明
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《交易所会员资格证书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-117.md):《交易所会员资格证书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-中国人民银行备案](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-118.md):中国人民银行备案
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-合作金融机构的上海黄金交易所银行间黄金询价市场做市商资格（含尝试做市商）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-119.md):合作金融机构的上海黄金交易所银行间黄金询价市场做市商资格（含尝试做市商）
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《小额贷款公司经营许可证》或省政府及以上级别发放的相关批文](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-120.md):《小额贷款公司经营许可证》或省政府及以上级别发放的相关批文
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-上海票据交易所批准并接入电子商业汇票系统的证明文件](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-121.md):上海票据交易所批准并接入电子商业汇票系统的证明文件
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-金融监督管理部门的许可文件](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-122.md):金融监督管理部门的许可文件
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《特种行业许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-13.md):《特种行业许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《旅行社业务经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-14.md):《旅行社业务经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《互联网宗教信息服务许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-15.md):《互联网宗教信息服务许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《期刊出版许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-16.md):《期刊出版许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《网络出版服务许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-17.md):《网络出版服务许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《出版物经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-18.md):《出版物经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《信息网络传播视听节目许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-19.md):《信息网络传播视听节目许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《广播电视节目制作经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-20.md):《广播电视节目制作经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《广播电视播出机构许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-21.md):《广播电视播出机构许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《广播电视频道许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-22.md):《广播电视频道许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《互联网新闻信息服务许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-23.md):《互联网新闻信息服务许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《全国汽车流通信息管理系统备案》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-24.md):《全国汽车流通信息管理系统备案》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《道路机动车辆生产企业准入资质》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-25.md):《道路机动车辆生产企业准入资质》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《二手车交易市场经营者和二手车经营主体备案证明》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-26.md):《二手车交易市场经营者和二手车经营主体备案证明》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《食品经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-27.md):《食品经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《国境口岸卫生许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-28.md):《国境口岸卫生许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《网络餐饮服务第三方平台备案》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-29.md):《网络餐饮服务第三方平台备案》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《网络食品交易第三方平台备案》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-30.md):《网络食品交易第三方平台备案》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《网络预约出租汽车经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-31.md):《网络预约出租汽车经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《娱乐经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-32.md):《娱乐经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-民政部关于指定个人求助网络服务平台公示截图](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-33.md):民政部关于指定个人求助网络服务平台公示截图
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《公共场所卫生许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-34.md):《公共场所卫生许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《兽药生产许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-35.md):《兽药生产许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《兽药经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-36.md):《兽药经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《快递业务经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-37.md):《快递业务经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《快递末端网点备案回执》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-38.md):《快递末端网点备案回执》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《动物诊疗许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-39.md):《动物诊疗许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《检验检测机构资质认定证书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-40.md):《检验检测机构资质认定证书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《营业性演出许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-41.md):《营业性演出许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《电影放映经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-42.md):《电影放映经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《危险化学品经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-43.md):《危险化学品经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《成品油零售经营批准证书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-44.md):《成品油零售经营批准证书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《单用途预付卡》备案](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-45.md):《单用途预付卡》备案
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《铁路运输许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-46.md):《铁路运输许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《水路运输业务经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-47.md):《水路运输业务经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《公共航空运输企业经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-48.md):《公共航空运输企业经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《省级航运部门的备案证明》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-49.md):《省级航运部门的备案证明》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《基础电信业务经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-50.md):《基础电信业务经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《基金会法人登记证书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-51.md):《基金会法人登记证书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《社团法人登记证书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-52.md):《社团法人登记证书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《公开募捐资格证书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-53.md):《公开募捐资格证书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《慈善组织互联网募捐信息平台公告》截图](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-54.md):《慈善组织互联网募捐信息平台公告》截图
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《支付业务许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-55.md):《支付业务许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-国家邮政管理部门备案截图](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-56.md):国家邮政管理部门备案截图
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《食品生产许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-57.md):《食品生产许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《预包装食品销售备案凭证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-58.md):《预包装食品销售备案凭证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《国产保健食品批准证书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-59.md):《国产保健食品批准证书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《进口保健食品批准证书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-60.md):《进口保健食品批准证书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-房地产经纪机构备案证书](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-61.md):房地产经纪机构备案证书
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《建筑业企业资质证书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-62.md):《建筑业企业资质证书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《房地产开发资质等级证书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-63.md):《房地产开发资质等级证书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《商品房预售许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-64.md):《商品房预售许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《商品房现售备案证明》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-65.md):《商品房现售备案证明》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《道路运输经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-66.md):《道路运输经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《专利代理机构执业许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-67.md):《专利代理机构执业许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《文物拍卖许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-68.md):《文物拍卖许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《拍卖经营批准证书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-69.md):《拍卖经营批准证书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《税务师事务所行政登记证书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-70.md):《税务师事务所行政登记证书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《认证机构批准书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-71.md):《认证机构批准书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《对外劳务合作经营资格证书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-72.md):《对外劳务合作经营资格证书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《保险许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-73.md):《保险许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《司法鉴定许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-74.md):《司法鉴定许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《全国工业产品生产许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-75.md):《全国工业产品生产许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《种畜禽生产经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-76.md):《种畜禽生产经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《种子生产经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-77.md):《种子生产经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《水产苗种生产经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-78.md):《水产苗种生产经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《会计师事务所执业证书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-79.md):《会计师事务所执业证书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《律师事务所执业许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-80.md):《律师事务所执业许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《仲裁委员会登记证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-81.md):《仲裁委员会登记证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《电子认证服务许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-82.md):《电子认证服务许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《办学许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-83.md):《办学许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《机动车驾驶员培训备案》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-84.md):《机动车驾驶员培训备案》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《省级教育行政部门备案》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-85.md):《省级教育行政部门备案》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《托育机构备案回执》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-86.md):《托育机构备案回执》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《典当经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-87.md):《典当经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《保险中介许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-88.md):《保险中介许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《第一类医疗器械生产备案凭证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-89.md):《第一类医疗器械生产备案凭证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《医疗器械生产许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-90.md):《医疗器械生产许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《互联网药品信息服务资格证书》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-91.md):《互联网药品信息服务资格证书》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-互联网药品信息服务备案](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-92.md):互联网药品信息服务备案
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《医疗器械网络销售备案凭证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-93.md):《医疗器械网络销售备案凭证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《医疗器械经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-94.md):《医疗器械经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《第二类医疗器械经营备案证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-95.md):《第二类医疗器械经营备案证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《医疗器械网络交易服务第三方平台备案凭证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-96.md):《医疗器械网络交易服务第三方平台备案凭证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《药品生产许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-97.md):《药品生产许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《药品经营许可证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-98.md):《药品经营许可证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-《药品网络交易服务第三方平台备案凭证》](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-99.md):《药品网络交易服务第三方平台备案凭证》
+- [上架分发与运营-上架-审核政策-资质文件法规依据及示例-概述](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50111-overview.md):概述
+- [上架分发与运营-上架-审核政策-游戏审核FAQ](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50118.md):游戏审核FAQ
+- [上架分发与运营-上架-审核政策-应用侵权投诉处理指引](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50120.md):应用侵权投诉处理指引
+- [上架分发与运营-上架-审核政策-应用审核相关讲解课程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50121.md):应用审核相关讲解课程
+- [上架分发与运营-上架-审核政策-应用年龄分级标准](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50125.md):应用年龄分级标准
+- [上架分发与运营-上架-审核政策-APP常见个人信息保护问题FAQ-应用隐私政策链接提交及内容规范参考FAQ](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50128.md):应用隐私政策链接提交及内容规范参考FAQ
+- [上架分发与运营-上架-审核政策-元服务审核指南](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50129.md):元服务审核指南
+- [上架分发与运营-上架-审核政策-APP核准（APP备案）指引](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50130.md):APP核准（APP备案）指引
+- [上架分发与运营-上架-审核政策-应用年龄分级问卷FAQ](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50142.md):应用年龄分级问卷FAQ
+- [上架分发与运营-上架-审核政策-元服务审核FAQ](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50150.md):元服务审核FAQ
+- [上架分发与运营-上架-审核政策-APP自动续费服务FAQ](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50166.md):APP自动续费服务FAQ
+- [上架分发与运营-上架-审核政策-应用审核Checklist](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50170.md):应用审核Checklist
+- [上架分发与运营-上架-审核政策-应用资质审核要求](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/80301.md):应用资质审核要求
+- [上架分发与运营-上架-审核政策-元服务资质审核要求](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/80302.md):元服务资质审核要求
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-AppGallery邀请测试-创建测试群组](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-appgallery-create-testgroup-0000002258071216.md):创建测试群组
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-AppGallery邀请测试-测试流程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-appgallery-invite-test-guide-0000002292711373.md):测试流程
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-AppGallery邀请测试-邀请用户参与测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-appgallery-invite-testuser-0000002292624413.md):邀请用户参与测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-AppGallery邀请测试-创建并发布测试版本](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-appgallery-release-testapp-0000002258174266.md):创建并发布测试版本
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-AppGallery邀请测试-停止测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-appgallery-stop-test-0000002292711381.md):停止测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-创建全网态服务-申请全网态服务上线](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-apply-formalstate-service-launch-0000002410652629.md):申请全网态服务上线
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-附录-申请使用已发布的POI](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-apply-publish-poi-0000002382902157.md):申请使用已发布的POI
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-AppTest邀请测试-创建测试群组-创建外部测试用户群组](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-apptest-create-externalgroup-0000002486414168.md):创建外部测试用户群组
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-AppTest邀请测试-创建测试群组-创建内部测试用户群组](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-apptest-create-internalgroup-0000002486254204.md):创建内部测试用户群组
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-AppTest邀请测试-创建测试群组](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-apptest-create-testgroup-0000002292624417.md):创建测试群组
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-AppTest邀请测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-apptest-invite-test-0000002258071220.md):AppTest邀请测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-AppTest邀请测试-测试流程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-apptest-invite-test-guide-0000002258174270.md):测试流程
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-AppTest邀请测试-邀请用户参与测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-apptest-invite-testuser-0000002258071224.md):邀请用户参与测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-AppTest邀请测试-创建并发布测试版本](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-apptest-release-testapp-0000002292711385.md):创建并发布测试版本
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-AppTest邀请测试-停止测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-apptest-stop-test-0000002258174274.md):停止测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-AppTest邀请测试-测试反馈](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-apptest-test-feedback-0000002573893749.md):测试反馈
+- [上架分发与运营-上架-AppGallery Connect 应用上架-维护应用-关联Android应用](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-associate-android-app-0000002385678957.md):关联Android应用
+- [上架分发与运营-上架-AppGallery Connect 应用上架-维护应用-关联Android应用-概述](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-associate-android-app-overview-0000002351878886.md):概述
+- [上架分发与运营-上架-AppGallery Connect 应用上架-维护应用-关联Android应用-发布时关联](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-associate-in-release-0000002385759281.md):发布时关联
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入花瓣地图场景-元服务嵌入式运行测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-atomic-embedded-running-test-0000002374154440.md):元服务嵌入式运行测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-0000002236336998.md):认证服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-0000002273777077.md):认证服务API
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-AGCAuthError](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-agcautherror-0000002273781653.md):AGCAuthError
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-Auth](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-auth-0000002273777093.md):Auth
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-AuthUser](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-authuser-0000002273781645.md):AuthUser
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-AuthUserExtra](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-authuserextra-0000002238782368.md):AuthUserExtra
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-CredentialInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-credentialinfo-0000002273621689.md):CredentialInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-EmailCredentialInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-emailcredentialinfo-0000002273617153.md):EmailCredentialInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-EmailInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-emailinfo-0000002238618028.md):EmailInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-EmailVerifyCode](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-emailverifycode-0000002238618020.md):EmailVerifyCode
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-HwIdCredentialInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-hwidcredentialinfo-0000002238618024.md):HwIdCredentialInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-Overview](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-overview-0000002273617145.md):Overview
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-PasswordInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-passwordinfo-0000002238777840.md):PasswordInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-PhoneCredentialInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-phonecredentialinfo-0000002273777085.md):PhoneCredentialInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-PhoneInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-phoneinfo-0000002273617157.md):PhoneInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-PhoneVerifyCode](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-phoneverifycode-0000002273617149.md):PhoneVerifyCode
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-ProviderType](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-providertype-0000002273781649.md):ProviderType
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-Region](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-region-0000002273621693.md):Region
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-SelfBuildCredentialInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-selfbuildcredentialinfo-0000002238777836.md):SelfBuildCredentialInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-SignInParam](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-signinparam-0000002273777089.md):SignInParam
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-SignInResult](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-signinresult-0000002273777081.md):SignInResult
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-Token](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-token-0000002238618016.md):Token
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-TokenResult](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-tokenresult-0000002238777828.md):TokenResult
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-UserProfileInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-userprofileinfo-0000002238782372.md):UserProfileInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-VerifyCodeAction](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-verifycodeaction-0000002238622568.md):VerifyCodeAction
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-VerifyCodeParam](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-verifycodeparam-0000002238777832.md):VerifyCodeParam
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-认证服务API-VerifyCodeResult](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-api-verifycoderesult-0000002238622564.md):VerifyCodeResult
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-典型应用场景](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-applicationscenarios-0000002271416133.md):典型应用场景
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-销户](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-deregistration-0000002271496197.md):销户
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-开发准备-启用认证方式](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-enable-authentication-method-0000002383148278.md):启用认证方式
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-开发准备-开通服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-enable-service-0000002271422405.md):开通服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-通过云函数扩展](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-extension-0000002237645842.md):通过云函数扩展
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-FAQ](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-faq-0000002271496205.md):FAQ
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-集成SDK](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-integration-sdk-0000002236337006.md):集成SDK
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-业务介绍](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-introduction-0000002271496181.md):业务介绍
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-登录](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-login-0000002271496189.md):登录
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-登录-匿名账号](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-login-anonymous-0000002271416145.md):匿名账号
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-登录-邮箱](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-login-email-0000002236496830.md):邮箱
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-登录-华为账号](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-login-hwaccount-0000002236337010.md):华为账号
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-登录-关联账号](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-login-linkaccount-0000002236496838.md):关联账号
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-登录-手机号码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-login-phone-0000002271416141.md):手机号码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-登录-自有账号](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-login-self-0000002271496193.md):自有账号
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-登出](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-logout-0000002236337014.md):登出
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-开发准备-获取SDK配置信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-obtain-files-0000002236343310.md):获取SDK配置信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-SDK合规使用指南](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-personal-data-0000002236337034.md):SDK合规使用指南
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-开发准备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-preparation-0000002236496826.md):开发准备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-计费说明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-pricing-0000002236496822.md):计费说明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-开发流程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-process-0000002271416137.md):开发流程
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-账号重认证](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-reauthenticate-0000002271416149.md):账号重认证
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-SDK版本更新说明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-releasenotes-0000002271496185.md):SDK版本更新说明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-使用限制](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-restrict-0000002236337002.md):使用限制
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-SDK隐私声明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-sdksecurity-0000002236496854.md):SDK隐私声明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-开发准备-（可选）安全配置](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-security-configuration-0000002271502509.md):（可选）安全配置
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-技术支持](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-support-0000002271416161.md):技术支持
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-异常处理](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-troubleshooting-0000002236337022.md):异常处理
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-用量统计](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-usage-0000002236835350.md):用量统计
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-认证服务-管理用户](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-auth-user-manage-0000002236496846.md):管理用户
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-设备管理API-数据模型-ConnectRet](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-api-connectret-0000002349158198.md):ConnectRet
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-设备管理API-数据模型](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-api-data-model-0000002382718893.md):数据模型
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-设备管理API-数据模型-DeviceBaseInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-api-devicebaseinfo-0000002382838601.md):DeviceBaseInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-设备管理API-数据模型-DeviceCustomInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-api-devicecustominfo-0000002348998434.md):DeviceCustomInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-设备管理API-错误码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-api-errorcode-0000002382718897.md):错误码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-创建全网态服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-apply-service-0000002270649536.md):创建全网态服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-创建测试态服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-apply-teststate-service-0000002456705193.md):创建测试态服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-使用自有真机测试-检查测试手机设置](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-check-test-phone-settings-0000002423146554.md):检查测试手机设置
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-创建测试态服务-创建测试态服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-create-teststate-service-0000002456705197.md):创建测试态服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-创建测试态服务-创建测试用户](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-create-userlist-0000002423146550.md):创建测试用户
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-使用自有真机测试-下发测试任务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-distribute-testing-tasks-0000002423306406.md):下发测试任务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-管理设备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-manage-0000002289119360.md):管理设备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-管理服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-manage-service-0000002323711885.md):管理服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-使用自有真机测试-修改测试态服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-modify-teststate-service-0000002485691553.md):修改测试态服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-使用自有真机测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-own-real-phone-testing-0000002456745305.md):使用自有真机测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-注册信标设备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-regist-0000002305369369.md):注册信标设备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-设备管理API-同步设备信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-regist-api-0000002348998430.md):同步设备信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-设备管理API](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-regist-by-api-0000002382718889.md):设备管理API
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-设备管理API-API版本更新说明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-regist-by-api-changenotes-0000002349158194.md):API版本更新说明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-设备管理API-位置推荐开发指导](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-regist-by-api-developprocess-0000002382838597.md):位置推荐开发指导
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-创建测试态服务-创建测试态POI](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-regist-testsate-poi-0000002423306402.md):创建测试态POI
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-使用自有真机测试-开始测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-starting-test-0000002456745309.md):开始测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-创建测试态服务-上传已注册意图的软件包](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-upload-pkg-0000002456745301.md):上传已注册意图的软件包
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-使用自有真机测试-查看POI测试范围](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-beacon-view-poi-testing-scope-0000002456705201.md):查看POI测试范围
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-接入流程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-beacon-summary-0000002270649532.md):接入流程
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-扫一扫](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-scan-0000002410592806.md):扫一扫
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-扫一扫-接入流程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-scan-access-0000002444192025.md):接入流程
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-扫一扫-创建链接](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-scan-createlink-0000002444072089.md):创建链接
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-扫一扫-下载标签](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-scan-downloadlabel-0000002410592810.md):下载标签
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-概述](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-summary-0000002382856337.md):概述
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-碰一碰](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-touch-0000002444192013.md):碰一碰
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-碰一碰-接入流程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-touch-access-0000002444072081.md):接入流程
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-碰一碰-更新服务卡片](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-touch-airtouch-0000002410432934.md):更新服务卡片
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-碰一碰-创建链接](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-touch-createlink-0000002410592802.md):创建链接
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-碰一碰-制作标签](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-touch-makelabel-0000002444072085.md):制作标签
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-碰一碰-物料准备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-touch-material-0000002410432930.md):物料准备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-碰扫合一](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-touch-scan-0000002444192029.md):碰扫合一
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-碰扫合一-接入流程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-touch-scan-access-0000002444072093.md):接入流程
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-碰扫合一-更新服务卡片](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-touch-scan-airtouch-0000002410432950.md):更新服务卡片
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-碰扫合一-创建标签](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-touch-scan-createlabel-0000002444192033.md):创建标签
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-碰扫合一-创建链接](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-touch-scan-createlink-0000002410592814.md):创建链接
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-碰扫合一-制作标签](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-touch-scan-makelabel-0000002444072097.md):制作标签
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-碰扫合一-物料准备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-harmonyoslabel-touch-scan-material-0000002410432942.md):物料准备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-NFC设备场景-接入流程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-by-nfc-summary-0000002382896613.md):接入流程
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-意图开发-意图调用](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-call-intents-0000002443081421.md):意图调用
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-意图开发-意图调用](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-call-intents-beacon-0000002443485897.md):意图调用
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-附录-图文素材审核细则](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-card-design-detail-rules-0000002349181504.md):图文素材审核细则
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-附录-模板卡片设计说明和示例](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-card-design-example-0000002349021736.md):模板卡片设计说明和示例
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-附录-预置卡片及快照开发说明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-card-snapshot-developguide-0000002382861889.md):预置卡片及快照开发说明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-使用自有真机测试-检查测试手机设置](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-check-test-phone-settings-0000002408164645.md):检查测试手机设置
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-0000002235870046.md):云调试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-单机调试-申请调试设备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-applyequip-0000002254916518.md):申请调试设备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-一帧多屏调试-申请调试设备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-applyequip-multidevice-0000002578270131.md):申请调试设备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-单机调试-预约调试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-appointequip-0000002255019572.md):预约调试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-典型应用场景](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-appscenarios-0000002289629817.md):典型应用场景
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-单机调试-调试截屏](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-capturescreen-0000002254916522.md):调试截屏
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-单机调试-调试应用](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-debugapp-0000002289629821.md):调试应用
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-一帧多屏调试-调试应用](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-debugapp-multidevice-0000002542099656.md):调试应用
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-FAQ](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-faq-0000002254916526.md):FAQ
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-业务介绍](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-introduction-0000002254916514.md):业务介绍
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-单机调试-使用控制参数面板调试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-location-0000002289516745.md):使用控制参数面板调试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-单机调试-管理应用](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-manageapp-0000002578460771.md):管理应用
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-一帧多屏调试-管理应用](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-manageapp-multidevice-0000002578350145.md):管理应用
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-单机调试-管理设备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-manageequip-0000002289516749.md):管理设备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-计费说明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-price-0000002255019568.md):计费说明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-单机调试-调试流程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-process-0000002289516737.md):调试流程
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-一帧多屏调试-调试流程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-process-multidevice-0000002547829984.md):调试流程
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-使用限制](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-restriction-0000002289516741.md):使用限制
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-单机调试-查看和导出日志](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-viewlog-0000002289629825.md):查看和导出日志
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-单机调试-查看测试报告](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-viewreport-0000002255019576.md):查看测试报告
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-一帧多屏调试-查看测试报告](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-clouddebug-viewreport-multidevice-0000002547670342.md):查看测试报告
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-cloudtest-0000002235710242.md):云测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云测试-典型应用场景](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-cloudtest-appscenarios-0000002289533589.md):典型应用场景
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云测试-查看专项测试报告-兼容性测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-cloudtest-compatibilitytest-0000002289534101.md):兼容性测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云测试-自定义测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-cloudtest-customizetest-0000002255036404.md):自定义测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云测试-FAQ](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-cloudtest-faq-0000002255036920.md):FAQ
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云测试-业务介绍](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-cloudtest-introduction-0000002255036400.md):业务介绍
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云测试-查看专项测试报告-性能测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-cloudtest-performancetest-0000002289647209.md):性能测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云测试-查看专项测试报告-功耗测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-cloudtest-powerconsumptiontest-0000002255036916.md):功耗测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云测试-预置条件](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-cloudtest-presetcontent-0000002254933880.md):预置条件
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云测试-计费说明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-cloudtest-price-0000002254933346.md):计费说明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云测试-查看专项测试报告-隐私测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-cloudtest-privacytest-0000002465035109.md):隐私测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云测试-上架测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-cloudtest-releasetest-0000002289646673.md):上架测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云测试-查看专项测试报告-稳定性测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-cloudtest-stabilitytest-0000002254933876.md):稳定性测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云测试-查看专项测试报告-UX测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-cloudtest-uxtest-0000002289534109.md):UX测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云测试-查看专项测试报告](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-cloudtest-viewreport-0000002289646669.md):查看专项测试报告
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-意图开发-确认意图名称](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-confirm-intent-name-0000002442961545.md):确认意图名称
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-意图开发-确认意图名称](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-confirm-intent-name-beacon-0000002443645837.md):确认意图名称
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-connect-api-0000002236015554.md):AppGallery Connect API
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-附录](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-connect-api-appendix-0000002271000741.md):附录
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-附录-应用分级](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-connect-api-appendix-applevel-0000002271000745.md):应用分级
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-附录-应用状态说明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-connect-api-appendix-application-status-0000002240477940.md):应用状态说明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-附录-应用游戏分类](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-connect-api-appendix-apptype-0000002271160689.md):应用游戏分类
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-附录-国家码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-connect-api-appendix-countrycode-0000002236201362.md):国家码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-附录-获取验签公钥](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-connect-api-appendix-gettestkey-0000002236041566.md):获取验签公钥
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-附录-语言类型](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-connect-api-appendix-langtype-0000002236041558.md):语言类型
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-附录-资质编码与资质文件对照表](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-connect-api-appendix-qualificationcode-0000002422741790.md):资质编码与资质文件对照表
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-附录-应用文件要求](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-connect-api-appendix-requirement-0000002271160693.md):应用文件要求
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-公共错误码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-connect-api-commonerror-0000002553016832.md):公共错误码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-示例代码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-connect-api-demo-0000002238448026.md):示例代码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-业务介绍](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-connect-api-introduction-0000002270974725.md):业务介绍
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-获取服务端授权](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-connect-api-obtain-server-auth-0000002271134661.md):获取服务端授权
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-附录-价格换算规则](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-connect-pi-appendix-pricechange-0000002236201366.md):价格换算规则
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-创建测试态服务-创建测试态服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-create-teststate-service-0000002382856313.md):创建测试态服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-创建测试态服务-创建测试用户](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-create-userlist-0000002408164665.md):创建测试用户
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-使用自有真机测试-下发测试任务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-distribute-testing-tasks-0000002408324497.md):下发测试任务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Domain Management API参考-数据模型](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-domain-api-data-0000002237343328.md):数据模型
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Domain Management API参考-数据模型-AppDomainConfig](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-domain-api-data-appdomainconfig-0000002237503148.md):AppDomainConfig
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Domain Management API参考-数据模型-ConnectRet](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-domain-api-data-connectret-0000002272462489.md):ConnectRet
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Domain Management API参考-数据模型-DomainInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-domain-api-data-domaininfo-0000002272582405.md):DomainInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Domain Management API参考-数据模型-DomainInfo2](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-domain-api-data-domaininfo2-0000002273216801.md):DomainInfo2
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Domain Management API参考-下载域名配置文件](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-domain-api-download-domain-config-0000002271160653.md):下载域名配置文件
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Domain Management API参考-错误码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-domain-api-errorcode-0000002362050933.md):错误码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Domain Management API参考-查询元服务的域名配置信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-domain-api-get-domain-0000002271000701.md):查询元服务的域名配置信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Domain Management API参考-查询域名修改次数/配置上限](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-domain-api-get-domain-config-0000002236201326.md):查询域名修改次数/配置上限
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Domain Management API指南](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-domain-api-guide-0000002236041402.md):Domain Management API指南
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Domain Management API参考-新增/更新元服务的域名配置信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-domain-api-post-domain-0000002236041522.md):新增/更新元服务的域名配置信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Domain Management API参考-预检查业务域名配置](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-domain-api-precheck-0000002295134522.md):预检查业务域名配置
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Domain Management API参考](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-domain-api-reference-0000002271160649.md):Domain Management API参考
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-附录-小艺建议出卡问题的反馈方法](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-feedback-method-for-non-card-issue-0000002445351893.md):小艺建议出卡问题的反馈方法
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-标签服务API](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-harmonyoslabel-api-0000002382896589.md):标签服务API
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-标签服务API-数据模型-AirtouchConfig](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-harmonyoslabel-api-airtouchconfig-0000002349016176.md):AirtouchConfig
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-标签服务API-获取服务端API授权](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-harmonyoslabel-api-authorize-0000002553919617.md):获取服务端API授权
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-标签服务API-数据模型-ConnectRet](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-harmonyoslabel-api-connectret-0000002382896625.md):ConnectRet
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-标签服务API-创建HarmonyOS标签](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-harmonyoslabel-api-create-0000002382856341.md):创建HarmonyOS标签
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-标签服务API-数据模型](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-harmonyoslabel-api-data-model-0000002349175964.md):数据模型
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-标签服务API-错误码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-harmonyoslabel-api-errorcode-0000002349175968.md):错误码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-标签服务API-数据模型-HmCodeOpenInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-harmonyoslabel-api-hmcodeinfo-0000002382856349.md):HmCodeOpenInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-标签服务API-查询HarmonyOS标签](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-harmonyoslabel-api-query-0000002349016172.md):查询HarmonyOS标签
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理-标签服务API-HarmonyOS标签开发流程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-harmonyoslabel-api-usage-0000002382896621.md):HarmonyOS标签开发流程
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-碰一碰-创建标签](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-harmonyoslabel-app-0000002349016168.md):创建标签
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景-扫一扫-创建标签](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-harmonyoslabel-atomic-0000002349175960.md):创建标签
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布In-house应用](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-inhouse-0000002281532696.md):发布In-house应用
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-意图开发](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-insight-config-beacon-0000002270752670.md):意图开发
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-意图开发](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-insight-config-poi-0000002349175932.md):意图开发
+- [上架分发与运营-上架-AppGallery Connect 应用上架-指定设备发布（原内部测试）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-internal-test-0000002270709477.md):指定设备发布（原内部测试）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-指定设备发布（原内部测试）-编译打包应用](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-internal-test-build-app-0000002295372093.md):编译打包应用
+- [上架分发与运营-上架-AppGallery Connect 应用上架-指定设备发布（原内部测试）-错误码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-internal-test-errorcode-0000002295325157.md):错误码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-指定设备发布（原内部测试）-FAQ](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-internal-test-faq-0000002295372101.md):FAQ
+- [上架分发与运营-上架-AppGallery Connect 应用上架-指定设备发布（原内部测试）-测试流程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-internal-test-guide-0000002295325149.md):测试流程
+- [上架分发与运营-上架-AppGallery Connect 应用上架-指定设备发布（原内部测试）-业务介绍](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-internal-test-overview-0000002253054942.md):业务介绍
+- [上架分发与运营-上架-AppGallery Connect 应用上架-指定设备发布（原内部测试）-准备打包所需配置文件](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-internal-test-prepare-0000002262046566.md):准备打包所需配置文件
+- [上架分发与运营-上架-AppGallery Connect 应用上架-指定设备发布（原内部测试）-构建Deeplink实现下载应用](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-internal-test-release-app-0000002260691994.md):构建Deeplink实现下载应用
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-invite-test-0000002270829393.md):邀请测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-FAQ](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-invite-test-faq-0000002363660365.md):FAQ
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-业务介绍](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-invite-test-overview-0000002287701773.md):业务介绍
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-location-sense-0000002305282449.md):近场服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-API管理](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-location-sense-api-0000002412255913.md):API管理
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-附录](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-location-sense-appendix-0000002349021732.md):附录
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-申请开通权限](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-location-sense-apply-permission-0000002382902149.md):申请开通权限
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-location-sense-by-beacon-0000002305369365.md):信标设备场景
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-标签场景](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-location-sense-by-harmonyoslabel-0000002349175928.md):标签场景
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-NFC设备场景](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-location-sense-by-nfc-0000002382896585.md):NFC设备场景
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入花瓣地图场景](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-location-sense-by-poi-petalmap-0000002373994556.md):POI接入花瓣地图场景
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-location-sense-by-poi-xiaoyi-0000002349175920.md):POI接入小艺建议场景
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-FAQ](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-location-sense-faq-0000002349181496.md):FAQ
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-业务介绍](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-location-sense-introduction-0000002270752666.md):业务介绍
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-个人数据处理说明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-location-sense-personal-data-0000002349021728.md):个人数据处理说明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-术语](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-location-sense-related-terms-0000002382861885.md):术语
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-技术支持](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-location-sense-technical-support-0000002382902153.md):技术支持
+- [上架分发与运营-上架-AppGallery Connect 应用上架-维护应用](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-maintain-0000002270829401.md):维护应用
+- [上架分发与运营-上架-AppGallery Connect 应用上架-维护应用-自定义比例分阶段发布（7天内自动更新）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-maintain-customphasedrelease-7day-0000002665165831.md):自定义比例分阶段发布（7天内自动更新）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-维护应用-删除应用/元服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-maintain-delete-0000002271413701.md):删除应用/元服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-维护应用-分阶段发布](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-maintain-phased-release-0000002271493785.md):分阶段发布
+- [上架分发与运营-上架-AppGallery Connect 应用上架-维护应用-分阶段发布（7天内自动更新）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-maintain-phased-release-7day-0000002279615726.md):分阶段发布（7天内自动更新）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-维护应用-下架应用/元服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-maintain-remove-0000002274058145.md):下架应用/元服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-维护应用-回退版本](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-maintain-rollback-0000002236334578.md):回退版本
+- [上架分发与运营-上架-AppGallery Connect 应用上架-维护应用-转移应用/元服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-maintain-transfer-0000002236494390.md):转移应用/元服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-维护应用-应用转移申请邮件模板](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-maintain-transfer-email-0000002341799166.md):应用转移申请邮件模板
+- [上架分发与运营-上架-AppGallery Connect 应用上架-维护应用-更新应用信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-maintain-update-0000002271413697.md):更新应用信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-维护应用-升级版本](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-maintain-upgrade-0000002236494386.md):升级版本
+- [上架分发与运营-上架-AppGallery Connect 应用上架-维护应用-查看版本历史记录](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-maintain-version-history-0000002236334582.md):查看版本历史记录
+- [上架分发与运营-上架-AppGallery Connect 应用上架-维护应用-关联Android应用-管理应用系列进行关联](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-manage-app-series-0000002352038686.md):管理应用系列进行关联
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-一帧多屏调试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-multidevice-linkage-debugging-0000002547670340.md):一帧多屏调试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-NFC设备场景-创建全网态服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-nfc-apply-service-0000002349016136.md):创建全网态服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-NFC设备场景-管理设备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-nfc-manage-0000002349175956.md):管理设备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-NFC设备场景-管理服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-nfc-manage-service-0000002382896617.md):管理服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-NFC设备场景-注册NFC设备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-nfc-regist-0000002382856333.md):注册NFC设备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-非公开发布](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-non-public-release-0000002278016482.md):非公开发布
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-open-ability-0000002235710238.md):AGC开放能力
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-概述](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-open-ability-introduction-0000002236175358.md):概述
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入花瓣地图场景-接入流程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-petalmap-access-process-0000002407793981.md):接入流程
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入花瓣地图场景-创建全网态POI](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-petalmap-create-formalstate-poi-0000002407634113.md):创建全网态POI
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入花瓣地图场景-创建全网态服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-petalmap-create-formalstate-service-0000002373994560.md):创建全网态服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-创建全网态服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-poi-apply-formalstate-service-0000002349016132.md):创建全网态服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-创建测试态服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-poi-apply-teststate-service-0000002382896581.md):创建测试态服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-附录-POI分类](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-poi-classification-query-0000002395746324.md):POI分类
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-使用自有真机测试-修改测试态服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-poi-modify-teststate-service-0000002452517690.md):修改测试态服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-使用自有真机测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-poi-own-real-phone-testing-0000002382896597.md):使用自有真机测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-创建测试态服务-创建测试态POI](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-poi-regist-testsate-0000002382896593.md):创建测试态POI
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-使用自有真机测试-开始测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-poi-starting-test-0000002374565120.md):开始测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-创建测试态服务-上传已注册意图的软件包](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-poi-upload-pkg-0000002382856301.md):上传已注册意图的软件包
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-附录-如何反馈位置信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-position-info-feedback-0000002349181500.md):如何反馈位置信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-邀请测试-AppGallery邀请测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-privacy-appgallery-invite-test-0000002292624409.md):AppGallery邀请测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-管理隐私声明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-privacy-policy-0000002316794885.md):管理隐私声明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-管理隐私声明-配置隐私政策（HarmonyOS应用）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-privacy-policy-app-0000002282162168.md):配置隐私政策（HarmonyOS应用）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-管理隐私声明-配置隐私政策（元服务）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-privacy-policy-atomic-0000002317135133.md):配置隐私政策（元服务）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-管理隐私声明-FAQ](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-privacy-policy-faq-0000002342315628.md):FAQ
+- [上架分发与运营-上架-AppGallery Connect 应用上架-管理隐私声明-概述](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-privacy-policy-overview-0000002316881805.md):概述
+- [上架分发与运营-上架-AppGallery Connect 应用上架-管理隐私声明-配置用户协议](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-privacy-user-agreement-0000002282265450.md):配置用户协议
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-定向应用发布](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-private-release-0000002353433008.md):定向应用发布
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-批量添加设备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-add-device-0000002236041498.md):批量添加设备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-新增证书指纹](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-add-fingerprints-0000002431201480.md):新增证书指纹
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-申请证书](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-apply-cent-0000002236201302.md):申请证书
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-申请Profile](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-apply-provision-0000002271000689.md):申请Profile
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-申请受限ACL权限](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-applyacl-0000002502198721.md):申请受限ACL权限
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-创建APP ID](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-create-appid-0000002526543939.md):创建APP ID
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-数据模型](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-data-0000002271160637.md):数据模型
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-数据模型-AddDeviceInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-data-adddeviceinfo-0000002236201314.md):AddDeviceInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-数据模型-AddDeviceResult](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-data-adddeviceresult-0000002271160641.md):AddDeviceResult
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-数据模型-OpenApplyPermissionInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-data-applypermissioninfo-0000002469038756.md):OpenApplyPermissionInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-数据模型-OpenApplyPermissionStatusInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-data-applypermissionstatus-0000002502126131.md):OpenApplyPermissionStatusInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-数据模型-CertInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-data-certinfo-0000002236041510.md):CertInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-数据模型-ConnectRet](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-data-connectret-0000002271000693.md):ConnectRet
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-数据模型-DeviceInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-data-deviceinfo-0000002271000697.md):DeviceInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-数据模型-Permission](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-data-permission-0000002585695085.md):Permission
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-数据模型-PermissionLanguage](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-data-permissionlanguage-0000002585575019.md):PermissionLanguage
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-数据模型-ProvisionInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-data-provisioninfo-0000002236041514.md):ProvisionInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-数据模型-UserPermission](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-data-userpermission-0000002466197781.md):UserPermission
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-删除证书](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-delete-cent-0000002271000685.md):删除证书
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-删除设备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-delete-device-0000002271160633.md):删除设备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-删除证书指纹](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-delete-fingerprints-0000002464839925.md):删除证书指纹
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-删除Profile](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-delete-provision-0000002236201310.md):删除Profile
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-查询可申请的ACL权限列表](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-eligible-acl-0000002554975044.md):查询可申请的ACL权限列表
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-错误码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-errorcode-0000002236201322.md):错误码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-查询证书指纹](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-get-fingerprints-0000002431361316.md):查询证书指纹
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-查询已申请的受限ACL权限](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-getacl-0000002465770113.md):查询已申请的受限ACL权限
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-查询受限ACL权限的申请状态](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-getaclapplystatus-0000002469246150.md):查询受限ACL权限的申请状态
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API指南](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-guide-0000002271000601.md):Provisioning API指南
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-查询证书](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-query-cent-0000002271160629.md):查询证书
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-查询设备列表](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-query-device-0000002236201306.md):查询设备列表
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-查询Profile列表](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-query-provision-0000002236041506.md):查询Profile列表
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-reference-0000002236041494.md):Provisioning API参考
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Provisioning API参考-修改Profile绑定的设备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-provision-api-update-provision-0000002469198766.md):修改Profile绑定的设备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-公开测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-public-test-0000002287814841.md):公开测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-公开测试-测试流程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-public-test-guide-0000002293706429.md):测试流程
+- [上架分发与运营-上架-AppGallery Connect 应用上架-公开测试-业务介绍](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-public-test-overview-0000002259136294.md):业务介绍
+- [上架分发与运营-上架-AppGallery Connect 应用上架-公开测试-创建并发布测试版本](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publictest-release-app-0000002259033172.md):创建并发布测试版本
+- [上架分发与运营-上架-AppGallery Connect 应用上架-公开测试-停止测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publictest-stop-test-0000002293706433.md):停止测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-公开测试-测试版本转正式版本](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publictest-to-formal-version-0000002293633341.md):测试版本转正式版本
+- [上架分发与运营-上架-AppGallery Connect 应用上架-公开测试-用户参与测试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publictest-user-test-0000002259136298.md):用户参与测试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-更新应用文件信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-app-file-info-update-0000002236041430.md):更新应用文件信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-更新应用软件包信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-app-package-info-update-0000002236201250.md):更新应用软件包信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-下架应用](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-app-shelf-off-0000002236041450.md):下架应用
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-提交发布](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-app-submit-0000002271160585.md):提交发布
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-查询应用包名对应的appid](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-appid-list-0000002271000617.md):查询应用包名对应的appid
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-查询应用信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-appinfo-query-0000002236041422.md):查询应用信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-更新应用基本信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-appinfo-update-0000002236201246.md):更新应用基本信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-撤销资质审核任务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-cancel-qualification-review-0000002236201258.md):撤销资质审核任务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-新建用户协议](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-create-user-agreement-0000002271160581.md):新建用户协议
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-0000002236201266.md):数据模型
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-ACLPermission](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-aclpermission-0000002271160593.md):ACLPermission
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-AdsInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-adsinfo-0000002295005298.md):AdsInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-Agreement（隐私政策协议）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-agreement-privacy-0000002295005286.md):Agreement（隐私政策协议）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-Agreement（用户协议）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-agreement-user-0000002271160613.md):Agreement（用户协议）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-AgreementBaseInfo（用户协议）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-agreementbaseinfo-user-0000002236201290.md):AgreementBaseInfo（用户协议）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-AgreementInfo（隐私政策协议）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-agreementinfo-privacy-0000002294845630.md):AgreementInfo（隐私政策协议）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-AgreementInfo（用户协议）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-agreementinfo-user-0000002236041482.md):AgreementInfo（用户协议）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-AllPermission](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-allpermission-0000002295046904.md):AllPermission
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-AppInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-appinfo-0000002236041454.md):AppInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-AppReviewContact](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-appreviewcontact-0000002505438989.md):AppReviewContact
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-AuditInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-auditinfo-0000002271000649.md):AuditInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-BriefPackageInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-briefpackageinfo-0000002236041470.md):BriefPackageInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-BriefVersionInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-briefversioninfo-0000002271000657.md):BriefVersionInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-ConnectRet](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-connectret-0000002271160589.md):ConnectRet
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-ContactInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-contactinfo-0000002328805225.md):ContactInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-ContractObligationMode](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-contractobligationmode-0000002328924941.md):ContractObligationMode
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-CustInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-custinfo-0000002504067925.md):CustInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-CustomChapter](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-customchapter-0000002294845694.md):CustomChapter
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-CustomInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-custominfo-0000002295005358.md):CustomInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-DataItem](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-dataitem-0000002328924933.md):DataItem
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-DependentQual](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-dependentqual-0000002271160605.md):DependentQual
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-DependentQualLang](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-dependentquallang-0000002271000661.md):DependentQualLang
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-DeveloperInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-developerinfo-0000002649369326.md):DeveloperInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-DeviceMaterial](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-devicematerial-0000002236201274.md):DeviceMaterial
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-DevicePermission](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-devicepermission-0000002294845674.md):DevicePermission
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-DeviceTypeInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-devicetypeinfo-0000002236201270.md):DeviceTypeInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-ExtendInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-extendinfo-0000002328924981.md):ExtendInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-ExtFieldCustomInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-extfieldcustominfo-0000002328924997.md):ExtFieldCustomInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-FileInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-fileinfo-0000002236041466.md):FileInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-FullServiceMode](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-fullservicemode-0000002294845638.md):FullServiceMode
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-GroupInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-groupinfo-0000002678290865.md):GroupInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-InfoAccess](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-infoaccess-0000002328805233.md):InfoAccess
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-InfoCancel](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-infocancel-0000002328924989.md):InfoCancel
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-InfoDelete](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-infodelete-0000002294845690.md):InfoDelete
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-InfoModify](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-infomodify-0000002295005354.md):InfoModify
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-Lang](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-lang-0000002649209416.md):Lang
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-LangFileInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-langfileinfo-0000002271000653.md):LangFileInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-LanguageInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-languageinfo-0000002236041462.md):LanguageInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-LawRegulationMode](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-lawregulationmode-0000002295005342.md):LawRegulationMode
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-ManagePersonalInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-managepersionalinfo-0000002328924985.md):ManagePersonalInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-MemberRoleList](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-memberrolelist-0000002679449001.md):MemberRoleList
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-OpenTestInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-opentestinfo-0000002678282119.md):OpenTestInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-OtherRatingResult](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-otherratingresult-0000002621935699.md):OtherRatingResult
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-PackageInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-packageinfo-0000002328964965.md):PackageInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-PackageStates](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-packagestates-0000002271160601.md):PackageStates
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-Pair](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-pair-0000002271000645.md):Pair
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-Permission](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-permission-0000002328924977.md):Permission
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-PersonalInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-personalinfo-0000002328805173.md):PersonalInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-PhasedReleaseInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-phasedreleaseinfo-0000002271160597.md):PhasedReleaseInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-QualificationFileInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-qualificationfileinfo-0000002271160609.md):QualificationFileInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-QualificationInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-qualificationinfo-0000002236201286.md):QualificationInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-QualReviewTaskInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-qualreviewtaskinfo-0000002271000665.md):QualReviewTaskInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-RecommendInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-recommendinfo-0000002328805177.md):RecommendInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-RequiredInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-requiredinfo-0000002295005294.md):RequiredInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-Role](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-role-0000002679289169.md):Role
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-SceneItem](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-sceneitem-0000002294845634.md):SceneItem
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-SdkInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-sdkinfo-0000002295005346.md):SdkInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-ServiceStop](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-servicestop-0000002328805237.md):ServiceStop
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-ServiceTypeInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-servicetypeinfo-0000002328805213.md):ServiceTypeInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-StorageInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-storageinfo-0000002295005350.md):StorageInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-SubAgreement](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-subagreement-0000002328805241.md):SubAgreement
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-TagQual](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-tagqual-0000002236201282.md):TagQual
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-TagQualInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-tagqualinfo-0000002236041478.md):TagQualInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-ThirdSdkInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-thirdsdkinfo-0000002328805217.md):ThirdSdkInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-ThirdSharedInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-thirdsharedinfo-0000002294845678.md):ThirdSharedInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-VersionChangeDesc](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-versionchangedesc-0000002294845686.md):VersionChangeDesc
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-VersionVoc](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-versionvoc-0000002495156924.md):VersionVoc
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-VersionVocReq](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-data-versionvocreq-0000002527368597.md):VersionVocReq
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-删除资质审核任务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-delete-qualification-review-0000002526538788.md):删除资质审核任务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-deleteFeedbackRequest](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-deletefeedbackrequest-0000002671009673.md):deleteFeedbackRequest
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-delFeedBackInfos](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-delfeedbackinfos-0000002641014324.md):delFeedBackInfos
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-错误码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-errorcode-0000002271000673.md):错误码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-feedbackListRequest](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-feedbacklistrequest-0000002671389861.md):feedbackListRequest
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-查询资质审核任务详情](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-get-qualification-review-0000002236041438.md):查询资质审核任务详情
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API指南](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-guide-0000002271134665.md):Publishing API指南
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-删除应用语言信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-language-info-delete-0000002271000621.md):删除应用语言信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-更新应用语言信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-language-info-update-0000002271160569.md):更新应用语言信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-撤销审核](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-on-shelf-cancel-0000002271000637.md):撤销审核
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-更新分阶段发布](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-phased-release-0000002271000625.md):更新分阶段发布
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-申请年龄分级](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-post-app-age-rating-0000002236201262.md):申请年龄分级
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-查询应用未处理的问题工单](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-post-app-version-voc-0000002495233986.md):查询应用未处理的问题工单
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-提交资质审核任务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-post-qualification-review-0000002271000629.md):提交资质审核任务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-提交隐私政策协议](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-put-privacy-agreement-0000002271000633.md):提交隐私政策协议
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-修改资质审核任务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-put-qualification-review-0000002422530746.md):修改资质审核任务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-查询应用所有版本类型的版本列表](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-query-brief-info-list-0000002236201254.md):查询应用所有版本类型的版本列表
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-查询软件包编译状态](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-query-compile-status-0000002236041434.md):查询软件包编译状态
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-查询应用软件包信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-query-package-info-0000002328848469.md):查询应用软件包信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-查询隐私政策协议列表](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-query-privacy-agreement-0000002328924925.md):查询隐私政策协议列表
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-查询需要上传的资质文件信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-query-tag-qual-dependent-0000002271160577.md):查询需要上传的资质文件信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-查询用户协议列表](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-query-user-agreement-0000002236041442.md):查询用户协议列表
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-reference-0000002271160565.md):Publishing API参考
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-查询团队账号下的成员角色列表](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-teamid-member-list-0000002679253743.md):查询团队账号下的成员角色列表
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-更新隐私政策协议](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-update-privacy-agreement-0000002328805169.md):更新隐私政策协议
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-更新版本上架时间](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-update-release-time-0000002271160573.md):更新版本上架时间
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-更新用户协议](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-publish-api-update-user-agreement-0000002294845626.md):更新用户协议
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-意图开发-意图注册](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-regist-intents-0000002409402350.md):意图注册
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-信标设备场景-意图开发-意图注册](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-regist-intents-beacon-0000002410006612.md):意图注册
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-0000002235870050.md):发布应用
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-0000002271695230.md):发布HarmonyOS应用
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-配置AI功能声明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-ai-0000002485431261.md):配置AI功能声明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-配置发布国家或地区](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-area-0000002313510997.md):配置发布国家或地区
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-选择待发布软件包](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-choose-pkg-0000002278981434.md):选择待发布软件包
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-配置应用分类、标签](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-class-tag-0000002271695234.md):配置应用分类、标签
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-配置版权信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-copyright-0000002278981450.md):配置版权信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-配置支持设备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-devicetype-0000002271592112.md):配置支持设备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-配置开发者服务信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-devinfo-0000002306311925.md):配置开发者服务信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-配置应用内资费类型和应用内商品](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-goods-0000002278981442.md):配置应用内资费类型和应用内商品
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-发布指引](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-guide-0000002287176372.md):发布指引
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-配置本地化基础信息（介绍、特性、素材）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-intro-0000002313477961.md):配置本地化基础信息（介绍、特性、素材）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-配置本地化基础信息（应用名称、图标）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-nameicon-0000002306265009.md):配置本地化基础信息（应用名称、图标）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-发布准备工作](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-prepare-0000002306311921.md):发布准备工作
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-配置隐私说明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-privacy-desc-0000002313477969.md):配置隐私说明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-配置隐私声明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-privacy-state-0000002278878296.md):配置隐私声明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-配置隐私标签信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-privacy-tag-0000002316420993.md):配置隐私标签信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-配置内容分级](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-rating-0000002313511005.md):配置内容分级
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-配置核准（备案）信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-record-0000002319594705.md):配置核准（备案）信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-设置上架时间](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-review-time-0000002293233458.md):设置上架时间
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-填写审核信息与联系方式](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-reviewinfo-0000002320780365.md):填写审核信息与联系方式
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-提交审核](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-submit-0000002286180890.md):提交审核
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS应用-上传软件包](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-app-upload-pkg-0000002277983368.md):上传软件包
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-0000002327731065.md):发布元服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-配置AI功能声明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-ai-0000002485425989.md):配置AI功能声明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-选择待发布软件包](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-choose-pkg-0000002327731073.md):选择待发布软件包
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-配置应用分类、标签和资质信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-class-tag-0000002293651518.md):配置应用分类、标签和资质信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-配置支持设备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-devicetype-0000002293811138.md):配置支持设备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-配置开发者服务信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-devinfo-0000002327610829.md):配置开发者服务信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-配置应用内资费类型和应用内商品](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-goods-0000002327731077.md):配置应用内资费类型和应用内商品
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-发布指引](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-guide-0000002293651514.md):发布指引
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-配置本地化基础信息（介绍、特性）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-intro-0000002327610833.md):配置本地化基础信息（介绍、特性）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-配置本地化基础信息（应用名称、图标）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-nameicon-0000002327731069.md):配置本地化基础信息（应用名称、图标）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-发布准备工作](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-prepare-0000002327610825.md):发布准备工作
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-配置隐私说明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-privacy-desc-0000002327610837.md):配置隐私说明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-配置隐私声明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-privacy-state-0000002293811150.md):配置隐私声明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-配置内容分级](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-rating-0000002293651526.md):配置内容分级
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-配置核准（备案）信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-record-0000002327610841.md):配置核准（备案）信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-设置上架时间](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-review-time-0000002327731085.md):设置上架时间
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-填写审核信息与联系方式](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-reviewinfo-0000002293811154.md):填写审核信息与联系方式
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-提交审核](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-submit-0000002293651534.md):提交审核
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布元服务-上传软件包](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-atomic-upload-pkg-0000002293811142.md):上传软件包
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-FAQ](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-faq-0000002298937792.md):FAQ
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-0000002364930906.md):发布HarmonyOS游戏
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置AI功能声明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-ai-0000002509382903.md):配置AI功能声明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置发布国家或地区](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-area-0000002399129161.md):配置发布国家或地区
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-选取软件包版本](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-choose-pkg-0000002365569342.md):选取软件包版本
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置应用分类标签](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-class-0000002398530749.md):配置应用分类标签
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置联系方式](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-contact-0000002401757581.md):配置联系方式
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置版权信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-copyright-0000002401259413.md):配置版权信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置支持设备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-devicetype-0000002398650613.md):配置支持设备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置开发者服务信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-devinfo-0000002365729266.md):配置开发者服务信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置应用内商品](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-goods-0000002367699526.md):配置应用内商品
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-发布指引](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-guide-0000002372998230.md):发布指引
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置本地化基础信息（介绍、特性、素材）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-intro-0000002400209657.md):配置本地化基础信息（介绍、特性、素材）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置本地化基础信息（名称、图标）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-name-0000002365090802.md):配置本地化基础信息（名称、图标）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置应用内资费](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-pay-0000002366729768.md):配置应用内资费
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-准备工作](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-prepare-0000002406557837.md):准备工作
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置应用隐私说明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-privacy-desc-0000002513751229.md):配置应用隐私说明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置隐私声明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-privacy-state-0000002401219281.md):配置隐私声明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置隐私标签信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-privacy-tag-0000002367539634.md):配置隐私标签信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置内容分级](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-rating-0000002400329549.md):配置内容分级
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置核准（备案）信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-record-0000002401219285.md):配置核准（备案）信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置应用审核信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-review-0000002368317832.md):配置应用审核信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-提交审核](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-submit-0000002408726077.md):提交审核
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置上架时间](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-time-0000002368157928.md):配置上架时间
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-上传软件包](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-upload-pkg-0000002399249081.md):上传软件包
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布HarmonyOS游戏-配置版号信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-game-version-0000002401837705.md):配置版号信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-0000002424923330.md):发布小游戏
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-申请ACL权限和开放能力](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-acl-and-ability-0000002425276004.md):申请ACL权限和开放能力
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-配置AI功能声明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-ai-0000002546985293.md):配置AI功能声明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-选择正式上架的软件包](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-choose-pkg-0000002424923338.md):选择正式上架的软件包
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-选择游戏分类和游戏标签](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-class-0000002424763494.md):选择游戏分类和游戏标签
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-填写联系方式](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-contact-0000002424923354.md):填写联系方式
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-上传版权材料](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-copyright-0000002458362109.md):上传版权材料
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-选择设备类型](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-devicetype-0000002424923334.md):选择设备类型
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-填写开发者服务信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-devinfo-0000002458362101.md):填写开发者服务信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-添加数字商品](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-goods-0000002424923350.md):添加数字商品
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-发布指引](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-guide-0000002458282213.md):发布指引
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-配置本地化基础信息（介绍、特性、素材）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-intro-0000002424763498.md):配置本地化基础信息（介绍、特性、素材）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-配置本地化基础信息（游戏名称、游戏图标）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-name-0000002458282217.md):配置本地化基础信息（游戏名称、游戏图标）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-选择游戏内资费](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-pay-0000002458362105.md):选择游戏内资费
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-准备工作](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-prepare-0000002424763490.md):准备工作
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-配置应用隐私说明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-privacy-desc-0000002515400290.md):配置应用隐私说明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-配置隐私声明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-privacy-state-0000002458282225.md):配置隐私声明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-配置内容分级](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-rating-0000002424923342.md):配置内容分级
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-填写备案信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-record-0000002458282229.md):填写备案信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-填写游戏审核信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-review-0000002458362113.md):填写游戏审核信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-提交审核](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-submit-0000002424763510.md):提交审核
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-设置上架时间](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-time-0000002458282233.md):设置上架时间
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-上传软件包](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-upload-pkg-0000002458362097.md):上传软件包
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-发布小游戏-上传版号材料](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-minigame-version-0000002424763506.md):上传版号材料
+- [上架分发与运营-上架-AppGallery Connect 应用上架-发布应用-催促/加急/撤销审核](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-release-push-0000002312626049.md):催促/加急/撤销审核
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Reports API参考-获取HarmonyOS应用下载安装的报表文件](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-report-api-app-download-export-0000002271000737.md):获取HarmonyOS应用下载安装的报表文件
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Reports API参考-获取HarmonyOS应用安装失败的报表文件](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-report-api-app-install-failed-0000002236041554.md):获取HarmonyOS应用安装失败的报表文件
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Reports API参考-获取AppFreeze指标](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-report-api-appfreeze-0000002309619750.md):获取AppFreeze指标
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Reports API参考-获取Crash指标](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-report-api-crash-0000002343738625.md):获取Crash指标
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Reports API参考-数据模型](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-report-api-data-0000002273179781.md):数据模型
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Reports API参考-数据模型-analyticsReportData](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-report-api-data-analyticsreportdata-0000002434328984.md):analyticsReportData
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Reports API参考-数据模型-analyticsReportDataDetail](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-report-api-data-analyticsreportdatadetail-0000002467887469.md):analyticsReportDataDetail
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Reports API参考-数据模型-ConnectRet](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-report-api-data-connectret-0000002273219845.md):ConnectRet
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Reports API参考-数据模型-vocReportData](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-report-api-data-vocreportdata-0000002497658249.md):vocReportData
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Reports API参考-获取元服务分发分析的报表文件](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-report-api-distribute-analysis-export-0000002236201358.md):获取元服务分发分析的报表文件
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Reports API参考-错误码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-report-api-errorcode-0000002271160685.md):错误码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Reports API指南](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-report-api-guide-0000002271134669.md):Reports API指南
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Reports API参考-获取HarmonyOS应用或元服务报表的指标数据](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-report-api-obtain-measures-data-0000002467612601.md):获取HarmonyOS应用或元服务报表的指标数据
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Reports API参考-获取应用源声数据详情](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-report-api-obtain-source-voice-0000002464628284.md):获取应用源声数据详情
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Reports API参考](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-report-api-reference-0000002236201354.md):Reports API参考
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Reports API参考-获取HarmonyOS应用或元服务用户分析的报表文件](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-report-api-user-analysis-export-0000002271160681.md):获取HarmonyOS应用或元服务用户分析的报表文件
+- [上架分发与运营-上架-AppGallery Connect 应用上架-云调试-单机调试](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-single-device-debugging-0000002578270125.md):单机调试
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-生成邀请码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-add-invite-code-0000002236201342.md):生成邀请码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-新增测试群组](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-add-test-group-0000002271160661.md):新增测试群组
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-新增测试群组成员](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-add-test-group-user-0000002236201338.md):新增测试群组成员
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-添加软件包](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-add-test-package-0000002236201330.md):添加软件包
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-新建测试版本](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-add-test-version-0000002236041526.md):新建测试版本
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-创建公开链接](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-create-open-test-link-0000002665117715.md):创建公开链接
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-0000002237336484.md):数据模型
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-AppLanguage](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-applanguage-0000002237496312.md):AppLanguage
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-AppReviewContact](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-appreviewcontact-0000002527365043.md):AppReviewContact
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-ConnectRet](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-connectret-0000002272455641.md):ConnectRet
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-DeviceMaterial](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-devicematerial-0000002237336492.md):DeviceMaterial
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-DeviceTypeInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-devicetypeinfo-0000002237336488.md):DeviceTypeInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-FileInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-fileinfo-0000002272575549.md):FileInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-GroupInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-groupinfo-0000002272575557.md):GroupInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-InvitationCodeInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-invitationcodeinfo-0000002237496324.md):InvitationCodeInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-OpenTestInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-opentestinfo-0000002272575553.md):OpenTestInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-PackagePermissionIntroVideo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-packagepermissionintrovideo-0000002237496316.md):PackagePermissionIntroVideo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-PageInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-pageinfo-0000002272455653.md):PageInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-PhasedReleaseInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-phasedreleaseinfo-0000002237496320.md):PhasedReleaseInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-SimpleGroupInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-simplegroupinfo-0000002237336496.md):SimpleGroupInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-TesterInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-testerinfo-0000002272575561.md):TesterInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-TestTaskInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-testtaskinfo-0000002272455649.md):TestTaskInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-数据模型-VersionExtInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-data-versionextinfo-0000002272455645.md):VersionExtInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-删除测试问题反馈](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-delete-feedback-0000002634718668.md):删除测试问题反馈
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-删除邀请码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-delete-invite-code-0000002634878570.md):删除邀请码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-删除测试群组](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-delete-test-group-0000002236041534.md):删除测试群组
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-删除测试群组成员](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-delete-test-group-user-0000002271000721.md):删除测试群组成员
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-删除测试版本](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-delete-test-version-0000002236201346.md):删除测试版本
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-修改公开链接](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-edit-open-test-link-0000002634718666.md):修改公开链接
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-修改测试群组](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-edit-test-group-0000002634718664.md):修改测试群组
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-错误码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-errorcode-0000002356508845.md):错误码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-查询上架自检报告信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-get-detect-task-0000002525033189.md):查询上架自检报告信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-查询测试群组邀请码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-get-invite-code-0000002271160669.md):查询测试群组邀请码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-查询测试群组列表](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-get-test-grouplist-0000002271000717.md):查询测试群组列表
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API指南](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-guide-0000002236015562.md):Testing API指南
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-更新测试版本](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-modify-test-version-0000002271160657.md):更新测试版本
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-发送邀请测试通知](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-post-test-notify-0000002236041538.md):发送邀请测试通知
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-查询测试问题反馈](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-query-feedback-0000002665117717.md):查询测试问题反馈
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-查询测试问题反馈维度](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-query-feedback-dimension-0000002634878572.md):查询测试问题反馈维度
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-查询公开链接](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-query-open-test-link-0000002664997775.md):查询公开链接
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-查询测试群组成员](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-query-test-group-user-0000002271160665.md):查询测试群组成员
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-查询测试群组成员](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-query-test-user-0000002664997773.md):查询测试群组成员
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-reference-0000002271000709.md):Testing API参考
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-更新测试生效版本](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-release-test-version-0000002271000713.md):更新测试生效版本
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-停止邀请码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-stop-invite-code-0000002271000725.md):停止邀请码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-停止测试版本](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-stop-test-version-0000002236041542.md):停止测试版本
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-提交测试版本](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-submit-test-version-0000002236201334.md):提交测试版本
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Testing API参考-更新有效期内的测试版本信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-test-api-update-test-version-opentest-0000002236041530.md):更新有效期内的测试版本信息
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Upload Management API参考-数据模型](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-upload-api-data-0000002272457913.md):数据模型
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Upload Management API参考-数据模型-CommonUrlInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-upload-api-data-commonurlinfo-0000002272577809.md):CommonUrlInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Upload Management API参考-数据模型-ConnectRet](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-upload-api-data-connectret-0000002273607369.md):ConnectRet
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Upload Management API参考-数据模型-FilePartComposeInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-upload-api-data-filepartcomposeinfo-0000002272457917.md):FilePartComposeInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Upload Management API参考-数据模型-FilePartInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-upload-api-data-filepartinfo-0000002237498540.md):FilePartInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Upload Management API参考-数据模型-FilePartUploadInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-upload-api-data-filepartuploadinfo-0000002237338748.md):FilePartUploadInfo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Upload Management API参考-错误码](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-upload-api-errorcode-0000002271000681.md):错误码
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Upload Management API指南](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-upload-api-guide-0000002271160549.md):Upload Management API指南
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Upload Management API参考-合并分片](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-upload-api-obbfile-compose-0000002271160625.md):合并分片
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Upload Management API参考-分片上传初始化](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-upload-api-obbfile-init-0000002271000677.md):分片上传初始化
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Upload Management API参考-上传分片实体](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-upload-api-obbfile-upload-0000002236201298.md):上传分片实体
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Upload Management API参考-获取分片上传地址](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-upload-api-obbfile-uploadurl-0000002236041490.md):获取分片上传地址
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Upload Management API参考](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-upload-api-reference-0000002236041486.md):Upload Management API参考
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Upload Management API参考-上传文件](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-upload-api-upload-file-0000002271160621.md):上传文件
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Upload Management API参考-获取文件上传地址](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-upload-api-upload-url-0000002236201294.md):获取文件上传地址
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-使用自有真机测试-查看POI测试范围](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-view-poi-testing-scope-0000002374724984.md):查看POI测试范围
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-接入流程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-xiaoyi-access-process-0000002349016140.md):接入流程
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-创建全网态服务-创建全网态POI](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-xiaoyi-create-formalstate-poi-0000002376893188.md):创建全网态POI
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-POI接入小艺建议场景-创建全网态服务-创建全网态服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-xiaoyi-create-formalstate-service-0000002349016144.md):创建全网态服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-近场服务-附录-小艺建议出卡的验收要求](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-help-xiaoyi-requirements-for-card-out-0000002430663182.md):小艺建议出卡的验收要求
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-TestTaskInfo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/agc-publish-api-data-testtaskinfo-0000002648371004.md):TestTaskInfo
+- [上架分发与运营-上架-审核政策-APP常见个人信息保护问题FAQ](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/faq-00.md):APP常见个人信息保护问题FAQ
+- [上架分发与运营-上架-审核政策-APP常见个人信息保护问题FAQ-1. 违规收集个人信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/faq-01.md):1. 违规收集个人信息
+- [上架分发与运营-上架-审核政策-APP常见个人信息保护问题FAQ-2. 超范围收集个人信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/faq-02.md):2. 超范围收集个人信息
+- [上架分发与运营-上架-审核政策-APP常见个人信息保护问题FAQ-3. 违规使用个人信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/faq-03.md):3. 违规使用个人信息
+- [上架分发与运营-上架-审核政策-APP常见个人信息保护问题FAQ-4. 定向推送行为](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/faq-04.md):4. 定向推送行为
+- [上架分发与运营-上架-审核政策-APP常见个人信息保护问题FAQ-5. 权限索取行为](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/faq-05.md):5. 权限索取行为
+- [上架分发与运营-上架-审核政策-APP常见个人信息保护问题FAQ-6. 自启动&关联启动](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/faq-06.md):6. 自启动&关联启动
+- [上架分发与运营-上架-审核政策-APP常见个人信息保护问题FAQ-7. 下载分发行为](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/faq-07.md):7. 下载分发行为
+- [上架分发与运营-上架-审核政策-APP常见个人信息保护问题FAQ-8. 违规获取个人信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/faq-08.md):8. 违规获取个人信息
+- [上架分发与运营-上架-审核政策-APP常见个人信息保护问题FAQ-10. 开发者需提供真实有效的信息](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/faq-09.md):10. 开发者需提供真实有效的信息
+- [上架分发与运营-上架-审核政策-APP常见个人信息保护问题FAQ-11.​​​​​​ 个人信息保护合规性检测服务介绍](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/faq-10.md):11.​​​​​​ 个人信息保护合规性检测服务介绍
+- [上架分发与运营-上架-审核政策-APP常见个人信息保护问题FAQ-9. 账号注销常见问题](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/faq-11.md):9. 账号注销常见问题
+- [上架分发与运营-上架-审核政策-APP常见个人信息保护问题FAQ-概述](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/faq-overview.md):概述
+- [上架分发与运营-上架-审核政策-AppGallery隐私标签服务说明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/privacy-label.md):AppGallery隐私标签服务说明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-AgreementBaseInfo（隐私政策协议）](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/publish-api-agreementbaseinfo-privacy-0000002328924929.md):AgreementBaseInfo（隐私政策协议）
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-DeviceMultiPermissionReason](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/publish-api-devicemultipermissionreason-0000002294885664.md):DeviceMultiPermissionReason
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-AppGallery Connect API-Publishing API参考-数据模型-PackagePermissionIntroVideo](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/publish-api-packagepermissionintrovedio-0000002236201278.md):PackagePermissionIntroVideo
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-0000002664883500.md):远程配置
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-远程配置API](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-api-0000002665043396.md):远程配置API
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-远程配置API-ConfigValues](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-api-configvalues-0000002665043408.md):ConfigValues
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-远程配置API-Overview](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-api-overview-0000002694843255.md):Overview
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-远程配置API-RemoteConfig](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-api-remoteconfig-0000002664883514.md):RemoteConfig
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-远程配置API-RemoteConfigErrorCode](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-api-remoteconfigerrorcode-0000002694923363.md):RemoteConfigErrorCode
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-远程配置API-RemoteConfigOptions](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-api-remoteconfigoptions-0000002683496098.md):RemoteConfigOptions
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-附录](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-appendix-0000002665043406.md):附录
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-开发准备-创建项目和应用](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-create-app-0000002664883504.md):创建项目和应用
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-开发准备-开通服务](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-enable-service-0000002665043400.md):开通服务
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-附录-历史版本管理](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-history-record-0000002694923361.md):历史版本管理
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-集成SDK](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-integratesdk-0000002665043402.md):集成SDK
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-业务介绍](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-introduction-0000002694923351.md):业务介绍
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-获取云端配置项](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-obtainconfig-0000002664883510.md):获取云端配置项
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-SDK合规使用指南](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-personal-data-0000002694923359.md):SDK合规使用指南
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-开发准备](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-prep-0000002694843247.md):开发准备
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-开发流程](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-process-0000002694923353.md):开发流程
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-SDK版本更新说明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-releasenotes-0000002665043398.md):SDK版本更新说明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-使用限制](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-restrict-0000002664883502.md):使用限制
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-典型应用场景](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-scenarios-0000002694843245.md):典型应用场景
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-SDK隐私声明](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-sdksecurity-0000002665043404.md):SDK隐私声明
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-设置云端配置项](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-setcloudconfig-0000002694843251.md):设置云端配置项
+- [上架分发与运营-上架-AppGallery Connect 应用上架-AGC开放能力-远程配置-设置应用内默认值](https://developer.huawei.com/consumer/cn/doc/doccenter-submission/remoteconfig-hos-arkts12-setvalue-0000002694923357.md):设置应用内默认值

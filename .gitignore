@@ -10,3 +10,13 @@
 /.clang-tidy
 **/.test
 /.appanalyzer
+
+# 临时与日志
+*.log
+.DS_Store
+Thumbs.db
+
+# docs/_调查/_tmp 下只保留被台账正文引用的 docs-submission.txt，
+# 其余原始转储与临时产物不进仓库（全量 dump 留在 Distiller-DOC\_调查\_tmp\）
+docs/_调查/_tmp/**
+!docs/_调查/_tmp/docs-submission.txt

@@ -1,0 +1,21 @@
+# 行尾与文本规范
+#
+# 仓库内一律 LF。这个工程要在 Windows 上开发、又引用了一批带中文的 Markdown，
+# 不锁死行尾的话，编辑器一存就会出现「整个文件都改了」的假 diff。
+* text=auto eol=lf
+
+# 这些是二进制，不要做行尾转换，也不要让 git 试着自己判定
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.hap binary
+*.har binary
+*.so binary
+*.dll binary
+*.exe binary
+*.ttf binary
+*.otf binary

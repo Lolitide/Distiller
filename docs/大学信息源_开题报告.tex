@@ -1,0 +1,521 @@
+% !TEX program = xelatex
+% ============================================================
+%  西安交通大学《移动应用开发》课程  项目开题报告
+%  项目名称：知了 · 校园信息助手——基于 HarmonyOS 的校园信息智能整理与提醒应用
+%  编译方式：xelatex（建议 xelatex 连续编译两次）
+% ============================================================
+\documentclass[12pt,a4paper,fontset=windows]{ctexart}
+
+% ---------- 页面与页眉页脚 ----------
+\usepackage[top=2.54cm,bottom=2.54cm,left=2.50cm,right=2.25cm,headsep=0.5cm,footskip=0.9cm]{geometry}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[C]{\songti\fontsize{9pt}{12pt}\selectfont 西安交通大学《移动应用开发》课程组}
+\fancyfoot[C]{\songti\fontsize{9pt}{12pt}\selectfont \thepage}
+\renewcommand{\headrulewidth}{0.75pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\songti\fontsize{9pt}{12pt}\selectfont \thepage}\renewcommand{\headrulewidth}{0pt}}
+
+% ---------- 常用宏包 ----------
+\usepackage{graphicx}
+\usepackage{array,booktabs,tabularx,multirow,makecell}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{float}
+% 浮动体占页比例：让连续的大表排在页面顶部，减少页中空洞
+\renewcommand{\topfraction}{0.92}
+\renewcommand{\bottomfraction}{0.6}
+\renewcommand{\textfraction}{0.06}
+\renewcommand{\floatpagefraction}{0.75}
+% 浮动体与正文、浮动体之间的间距收一点，避免表格页贴边
+\setlength{\textfloatsep}{12pt plus 2pt minus 2pt}
+\setlength{\intextsep}{8pt plus 2pt minus 2pt}
+\setlength{\floatsep}{10pt plus 2pt minus 2pt}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric,shapes.misc,fit,backgrounds,calc,chains,decorations.pathreplacing}
+\usepackage[hidelinks,bookmarks=false]{hyperref}
+\usepackage{xurl}
+
+% ---------- 标题样式（对齐模板：黑体四号、段前段后留白）----------
+\ctexset{
+  section = {
+    name   = {,},
+    number = {\chinese{section}},
+    aftername = {、},
+    format = {\heiti\bfseries\fontsize{14pt}{20pt}\selectfont},
+    beforeskip = {16pt},
+    afterskip  = {10pt},
+    indent = {0pt},
+  },
+  subsection = {
+    format = {\heiti\fontsize{12pt}{18pt}\selectfont},
+    beforeskip = {12pt},
+    afterskip  = {6pt},
+    indent = {0pt},
+  },
+}
+
+% ---------- 正文版式 ----------
+\linespread{1.36}
+\setlength{\parindent}{2em}
+\setlength{\parskip}{2pt}
+\captionsetup{font={small},labelfont={bf},labelsep=quad,justification=centering,skip=5pt}
+\makeatletter
+\renewcommand{\fnum@figure}{\figurename\thefigure}
+\renewcommand{\fnum@table}{\tablename\thetable}
+\makeatother
+\renewcommand{\arraystretch}{1.25}
+\setlist[itemize]{leftmargin=2.4em,itemsep=2pt,topsep=3pt,parsep=0pt}
+\setlist[enumerate]{leftmargin=2.6em,itemsep=2pt,topsep=3pt,parsep=0pt}
+
+% ---------- 常用命令 ----------
+\newcommand{\code}[1]{{\ttfamily\small #1}}
+\newcommand{\uline}[1]{\underline{\makebox[9.7cm][l]{#1}}}
+\newcommand{\figph}[1]{\par\vspace{4pt}\noindent\hspace{2em}#1\par\vspace{4pt}}
+
+% ---------- 插图统一样式 ----------
+\definecolor{cPrimary}{HTML}{1F4E79}
+\definecolor{cAccent}{HTML}{2E75B6}
+\definecolor{cFill}{HTML}{EAF1F8}
+\definecolor{cFill2}{HTML}{F4F6F8}
+\definecolor{cGray}{HTML}{5A5A5A}
+\definecolor{cLine}{HTML}{B7C7D8}
+\definecolor{cWarn}{HTML}{B45309}
+\tikzset{
+  fbox/.style   = {draw=cAccent,line width=0.6pt,rounded corners=2.2pt,fill=cFill,
+                   minimum height=8.2mm,align=center,inner sep=3pt,font=\sffamily\small,text=cPrimary},
+  fboxp/.style  = {fbox,fill=cPrimary,text=white,draw=cPrimary},
+  fboxw/.style  = {fbox,fill=white,draw=cLine,text=cGray},
+  fboxg/.style  = {draw=cLine,line width=0.6pt,rounded corners=2.2pt,fill=cFill2,
+                   minimum height=8.2mm,align=center,inner sep=3pt,font=\sffamily\small,text=cGray},
+  arr/.style    = {-{Stealth[length=2.2mm,width=1.7mm]},draw=cPrimary,line width=0.7pt},
+  arrg/.style   = {-{Stealth[length=2mm,width=1.5mm]},draw=cGray,line width=0.6pt,dashed},
+  lbl/.style    = {font=\sffamily\scriptsize,text=cGray,inner sep=1.5pt},
+  band/.style   = {draw=cLine,line width=0.6pt,rounded corners=3pt,fill=cFill2},
+}
+
+\begin{document}
+
+% ============================================================
+%  封面
+% ============================================================
+\thispagestyle{empty}
+\begin{center}
+  \vspace*{0.2cm}
+  \includegraphics[width=10.21cm]{figures/xjtu_logo_soft.png}
+\end{center}
+
+\vspace{1.5cm}
+\begin{center}
+  {\kaishu\fontsize{26pt}{34pt}\selectfont 移动应用开发}\\[0.85cm]
+  {\heiti\bfseries\fontsize{26pt}{34pt}\selectfont 项\hspace{0.35em}目\hspace{0.35em}开\hspace{0.35em}题\hspace{0.35em}报\hspace{0.35em}告}
+\end{center}
+
+\vspace{2.6cm}
+\begin{center}
+{\fontsize{16pt}{26pt}\selectfont
+\begin{tabular}{@{}r@{\hspace{0.45em}}l@{}}
+  项\hspace{0.42em}目\hspace{0.42em}名\hspace{0.42em}称： & \uline{知了 · 校园信息助手} \\[0.30cm]
+             & \uline{\fontsize{12pt}{18pt}\selectfont ——基于 HarmonyOS 的校园信息智能整理与提醒应用} \\[0.70cm]
+  项\hspace{0.42em}目\hspace{0.42em}组\hspace{0.42em}长： & \uline{谢忠宇} \\[0.45cm]
+  项\hspace{0.42em}目\hspace{0.42em}成\hspace{0.42em}员： & \uline{谢忠宇\quad 杜俊廷\quad 袁正锟} \\
+\end{tabular}}
+\end{center}
+
+\vfill
+\begin{center}
+{\fontsize{15pt}{22pt}\selectfont
+ 西安交通大学《移动应用开发》课程组\\[0.25cm]
+ 2026 年 9 月制}
+\end{center}
+\vspace{0.6cm}
+
+\newpage
+\setcounter{page}{2}
+
+% ============================================================
+\section{选题的理论意义与实际意义}
+
+\subsection{项目背调}
+
+对于大学生而言，收到的通知、信息往往源于各种社媒群聊。作业要求、临时调课、社团报名、比赛截止，最先出现的地方往往是 QQ 群：一门课一个群，一个社团还有好几个群，班级群、年级群、水群同时开着。群消息刷得快，也不会有针对不同重要性的区分。经常会发生这样的事：一条重要的消息发出来，看到后不容易记住的话，很容易变成突然出现的 DDL；一条水群里的转发通知，因为重要性不明，等想起来去翻，要么翻不到，要么已经过了截止日期。这类延误很少是因为没有通知，更多是通知来了没被看到、记住，等到即将截止时让人变得匆忙。
+
+当下，学生的对策是把要紧的消息转发给自己，或者截图存进相册、手动敲进备忘录。多走几步，漏掉的比例会降下来，但「谁来看住这些消息」的问题没有解决。本项目的出发点是把这件事交给应用：群里的机器人一直在，用户自己看到的截图和文字也能随手交进来，解析、整理和提醒由系统与用户一起完成。
+
+\subsection{理论意义}
+
+移动应用正在从「把信息展示给用户」转向「替用户理解信息」。本项目研究后一种思路在校园场景里的落地方式：用户把看到的通知、聊天消息、截图或一段语音交给应用，由系统 AI 能力抽出时间、地点、事项与截止时间，用户确认后生成待办与提醒。提醒类应用对准确性的要求高于一般工具，因此，用户对 AI 生成内容的二次确认是不可或缺的。
+
+\subsection{实际意义}
+
+学生每天要处理的临时信息大多是聊天消息或一张截图：作业提交要求、临时调整的考试时间、社团活动报名、材料提交、比赛截止日期……费时间的环节不是「看到」，而是「记住」：在阅读、记录、设置提醒之间来回切换，中间漏掉一步，代价往往是错过一个截止日期。
+
+本项目把这几个环节并成一个入口：内容通过几条通道进来（用户分享的截图或聊天记录、QQ 机器人转发、语音或文字输入、无障碍读屏），AI 抽取字段，用户确认后生成待办与提醒。每条通道单独授权、默认关闭，随时可以收回；定位、通讯录这类与功能无关的权限不申请。目标用户是在校学生，应用要能通过应用市场的隐私审核，读什么、存在哪里写清楚，权限用得越克制，能长期留在手机里的概率越高。
+
+% ============================================================
+\section{国内外有关选题的研究动态}
+
+\subsection{校园信息类应用与提醒工具}
+
+国内高校的校园应用已经形成固定模式：把课表、成绩、校园卡、图书馆等服务聚合到一个客户端，清华大学 THU Info 是使用较广的一例，课表加成绩加校园动态的组合在市场上也很常见。这类产品解决的是「去哪里查」，用户仍然是信息的检索者，查完之后要做什么，应用不负责。近几年的校园助手开始加入提醒与 AI 模块，公开项目 Mini-HBUT 把成绩查询、课表、考试安排、通知推送与 AI 功能放在同一个应用里，说明定位正在从查询工具向个人信息中枢迁移；它们的共同前提是学校后台接口，而这恰恰是学生开发者最难拿到的部分。近两年手机端出现了几条绕开学校接口的采集通道，比如机器人转发群消息、无障碍读屏、跨应用分享；这些通道拿到的是用户自己看得见的那部分内容，代价是要通过平台的权限审核，本项目的信息采集模块就建立在这几条通道上。
+
+同时，各家手机系统中的系统级 AI 也进一步拥有 Agent 能力，具备识别并创建日程、备忘的能力，甚至有操作手机 APP 的能力。此项目正顺应移动应用的变革，并拓宽到个人 Agent 领域。
+
+\subsection{信息抽取技术的进展}
+
+把自然语言文本转成结构化事件属于信息抽取的经典任务，学术方法已经比较成熟，工程侧的瓶颈在稳定性、调用成本和端侧可行性。HarmonyOS 侧提供的 Natural Language Kit、Vision Kit、Agent Framework Kit，加上小艺开放平台与意图框架，让语义理解可以交给系统能力完成：第三方应用不必自己接一个大模型，也不必为密钥和提示词维护一套服务端，对隐私和成本都更友好。代价是能力边界由平台决定，能拿到哪些能力，要以实际申请和真机验证的结果为准。
+
+\subsection{本项目的定位}
+
+本项目不做校园门户。传统平台按学校的组织方式组织信息，用户要自己判断哪条与自己有关；本项目按用户自己的待办组织信息，信息进入系统时就已经带上时间、地点和优先级，两者的差别见表 \ref{tab:diff}。研究范围也主动收缩：避开学籍、成绩、课表等需要学校授权的数据，只处理用户自己愿意提供的那部分信息，把精力放在解析质量与提醒可靠性上。
+
+\begin{table}[tbp]
+\centering
+\caption{传统校园信息平台与本项目的差别}
+\label{tab:diff}
+\small
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+\textbf{传统校园平台} & \textbf{本项目} \\
+\midrule
+用户主动去查询信息 & 用户把看到的信息交给应用 \\
+信息按学校部门的分类组织 & 信息按用户的待办组织 \\
+用户自己阅读并找出截止时间 & AI 抽取关键字段，用户只做确认 \\
+用户自己创建提醒 & 确认后由应用生成提醒 \\
+重心在「查得到」 & 重心在「做得完」 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ============================================================
+\section{研究内容（项目模块）}
+\label{sec:modules}
+
+本项目的目标是做出一个能装到手机上、能给同学试用、能提交应用市场审核的 HarmonyOS 应用：用户把看到的内容交给它，它把内容里的时间、地点、事项和截止时间抽出来，生成一条会响的待办。下面按业务功能划分项目模块，共七个一级模块，覆盖从信息进入到到期提醒的完整链路，模块结构与主要功能见图 \ref{fig:arch} 与表 \ref{tab:modules}。
+
+\subsection{模块划分依据}
+
+划分依据是用户完成一次信息处理的自然顺序：把信息交进来（信息采集）、看懂信息（信息解析）、确认信息（解析确认）、管好信息（任务管理）、按时被提醒（提醒与日程）。提示与反馈模块、个人设置与隐私模块不占链路里的位置，但每个环节都会用到。本项目只有学生用户一个角色，不设管理端，因此模块按业务功能域划分，不按角色划分，也不按前端与后端划分。
+
+\subsection{系统功能模块结构}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[fboxp,minimum width=3.6cm] (u) at (0,0) {学生用户};
+  \node[lbl,anchor=west] at (2.05,0) {唯一角色，可完成全部操作};
+  % ---- 主链路五个模块 ----
+  \foreach \i/\t/\c in {%
+      0/信息采集/{QQ 机器人转发\\分享接收（截图、聊天记录）\\语音与文字输入\\无障碍读屏},
+      1/信息解析/{图片文字识别\\语音转文字\\事项与时间提取\\缺失字段标记},
+      2/解析确认/{字段查看\\内容修改\\原文对照},
+      3/任务管理/{任务列表\\任务详情\\状态流转\\编辑与删除},
+      4/提醒与日程/{首页时间线\\提醒规则\\到期提醒}}
+  {%
+    \draw[draw=cLine,line width=0.6pt,rounded corners=3pt,fill=cFill]
+      (-7.1+2.9*\i,-1.95) rectangle (-4.5+2.9*\i,-5.45);
+    \node[font=\sffamily\small\bfseries,text=cPrimary] at (-5.8+2.9*\i,-2.32) {\t};
+    \node[font=\sffamily\scriptsize,text=cGray,align=center,text width=2.35cm] at (-5.8+2.9*\i,-3.95) {\c};
+    \ifnum\i>0 \draw[arr] (-7.4+2.9*\i,-3.7) -- (-7.1+2.9*\i,-3.7);\fi
+  }
+  \draw[arr] (u.south) -- (0,-1.95);
+  % ---- 两个贯穿模块 ----
+  \draw[draw=cLine,line width=0.6pt,rounded corners=3pt,fill=cFill2] (-7.1,-6.15) rectangle (-0.35,-8.55);
+  \node[font=\sffamily\small\bfseries,text=cPrimary,anchor=north west] at (-6.95,-6.32) {提示与反馈模块};
+  \node[font=\sffamily\scriptsize,text=cGray,anchor=north west,text width=6.3cm] at (-6.95,-6.9)
+    {解析失败提示 \textbar\ 网络异常提示 \textbar\ 权限未授予提示 \textbar\ 操作结果反馈};
+  \draw[draw=cLine,line width=0.6pt,rounded corners=3pt,fill=cFill2] (0.35,-6.15) rectangle (7.1,-8.55);
+  \node[font=\sffamily\small\bfseries,text=cPrimary,anchor=north west] at (0.5,-6.32) {个人设置与隐私模块};
+  \node[font=\sffamily\scriptsize,text=cGray,anchor=north west,text width=6.3cm] at (0.5,-6.9)
+    {提醒提前量 \textbar\ 解析方式选择 \textbar\ 数据清理与导出 \textbar\ 隐私说明 \textbar\ 首次启动引导};
+  \draw[arrg] (-3.7,-6.15) -- (-3.7,-5.45);
+  \draw[arrg] (3.7,-6.15) -- (3.7,-5.45);
+  \node[lbl,anchor=west] at (-3.55,-5.8) {贯穿全流程};
+  \node[lbl,anchor=west] at (3.85,-5.8) {贯穿全流程};
+\end{tikzpicture}
+\caption{系统功能模块结构：五个主链路模块与两个贯穿模块}
+\label{fig:arch}
+\end{figure}
+
+\subsection{模块功能说明}
+
+\begin{table}[tbp]
+\centering
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{2.05cm}>{\raggedright\arraybackslash}p{2.5cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{1.5cm}>{\raggedright\arraybackslash}p{3.75cm}@{}}
+\toprule
+模块名称 & 模块职责 & 主要功能 & 涉及角色 & 与其他模块的关系 \\
+\midrule
+信息采集 & 把用户授权范围内的信息收进应用，统一成一段可编辑的原文 & QQ 机器人转发、分享接收（截图或聊天记录）、语音与文字输入、无障碍读屏、原文编辑 & 学生用户 & 接收用户输入，向信息解析模块提交原文 \\
+\midrule
+信息解析 & 把一段自然语言原文转成待办要素，缺失的内容不猜测 & 图片文字识别、语音转文字、事项与时间提取、类型与优先级判断、缺失字段标记 & 学生用户 & 接收信息采集模块的原文，向解析确认模块提交候选结果 \\
+\midrule
+解析确认 & 在内容变成任务之前由用户把关，允许逐项修改 & 字段查看、内容修改、原文对照、低可信字段提示、失败重试 & 学生用户 & 接收信息解析模块的结果，确认后写入任务管理模块 \\
+\midrule
+任务管理 & 管理任务的全生命周期与状态 & 任务列表、任务详情、任务状态流转、编辑与删除、按截止时间排序 & 学生用户 & 接收解析确认模块的确认结果，向提醒与日程模块提供任务数据 \\
+\midrule
+提醒与日程 & 按时间顺序呈现待办，并在到期前后提醒 & 首页时间线（今天、明天、本周、更远）、提醒规则设置、到期提醒、提醒撤销与同步 & 学生用户、系统自动触发 & 读取任务管理模块的任务，把提醒结果交给提示与反馈模块 \\
+\midrule
+提示与反馈 & 把解析、网络、权限等异常与操作结果告知用户，并给出可执行的下一步 & 解析失败提示、网络异常提示、权限未授予提示、操作结果反馈 & 学生用户 & 贯穿各模块，接收信息解析、提醒与日程等模块的异常与结果 \\
+\midrule
+个人设置与隐私 & 管理用户偏好与数据边界 & 提醒提前量、解析方式选择、数据清理与导出、隐私说明、首次启动引导 & 学生用户 & 为信息解析、提醒与日程模块提供偏好设置 \\
+\bottomrule
+\end{tabularx}
+\caption{项目模块职责与功能一览}
+\label{tab:modules}
+\end{table}
+
+七个模块里，只有任务管理需要拆到第三级：一条任务从待确认开始，经用户确认进入已确认，开始执行后为进行中，完成后为已完成；截止时间已过而没有完成的，由系统自动标记为已过期，用户也可以在任何状态下直接删除。状态流转见图 \ref{fig:task}。
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \node[fboxw,minimum width=2.9cm] (t1) at (-5.4,0) {待确认};
+  \node[fbox,minimum width=2.9cm] (t2) at (-1.8,0) {已确认};
+  \node[fbox,minimum width=2.9cm] (t3) at (1.8,0) {进行中};
+  \node[fboxw,minimum width=2.9cm] (t4) at (5.4,0) {已完成};
+  \draw[arr] (t1) -- (t2) node[midway,below=14pt,lbl] {用户确认};
+  \draw[arr] (t2) -- (t3);
+  \draw[arr] (t3) -- (t4);
+  \node[fboxw,minimum width=2.9cm] (t5) at (1.8,-2.2) {已过期};
+  \draw[arrg] (t3.south) -- (t5.north) node[midway,right=7pt,lbl] {截止时间已过};
+  \node[fboxw,minimum width=2.9cm] (t6) at (5.4,-2.2) {已删除};
+  \draw[arrg] (t4.south) -- (t6.north) node[midway,right=7pt,lbl] {用户删除};
+  \node[lbl,anchor=north west,text width=13.6cm,align=left] at (-6.6,-3.2)
+    {说明：任务在用户点击「确认创建」时从「待确认」进入「已确认」；只有「已过期」由系统按截止时间自动标记，其余状态均由用户操作触发。任一状态都可以被用户直接删除，删除后的任务不再参与提醒，也不再出现在时间线上。};
+\end{tikzpicture}
+\caption{任务管理模块的状态流转}
+\label{fig:task}
+\end{figure}
+
+\subsection{模块关系与主要流程}
+
+一次完整的使用过程串起五个主链路模块：用户在信息采集模块通过分享、机器人转发、无障碍读屏或自己的语音输入把内容交进来，信息解析模块把原文里的时间、地点、事项和截止时间抽出来，解析确认模块把这些要素摊开给用户逐项核对与修改，确认之后才写入任务管理模块，最后由提醒与日程模块在到期前后提醒，并在首页把待办按时间排开。
+
+链路上有一个位置不做妥协：解析结果不直接写入任务库，中间必须经过用户确认。一条解析错了的任务，用户不会被错误信息打扰，却会被「什么都没发生」耽误；把解析结果和任务数据分开，等于把一个可能出错的理解变成一次用户看得见的确认。提示与反馈模块在每一环失败时给出可执行的下一步，个人设置与隐私模块决定用户愿意交出多少信息，两者贯穿全链路。
+
+\subsection{功能范围与优先级}
+
+一个月的开发周期决定了功能必须有明确取舍。表 \ref{tab:mvp} 列出要做的事和优先级，表 \ref{tab:notdo} 列出明确不做的事，两张表的判断标准是同一条：这个功能是否服务于「看到信息到按时提醒」这条主链路。采集通道里，机器人转发与分享接收是主链路，第一个月必须先跑通；语音输入与无障碍读屏按 P1、P2 排期，其中无障碍读屏属于敏感能力，能否上线取决于审核结果。
+
+\begin{table}[tbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}XcXc@{}}
+\toprule
+功能 & 优先级 & 功能 & 优先级 \\
+\midrule
+粘贴文本解析 & P0 & 分享面板接收文本 & P1 \\
+解析结果可确认、可修改、可保存 & P0 & 分享面板接收图片 & P1 \\
+任务列表与首页时间线 & P0 & 图片文字识别解析 & P1 \\
+本地保存与重启后恢复 & P0 & 任务编辑与删除 & P1 \\
+到期提醒（含兜底方式） & P0 & 设置页（提醒提前量、解析方式） & P1 \\
+解析失败与断网的提示 & P0 & 首次启动引导与主题切换 & P2 \\
+QQ 机器人转发接入 & P1 & 无障碍读屏接入 & P2 \\
+语音输入与识别 & P2 & & \\
+\bottomrule
+\end{tabularx}
+\caption{一个月内要做的功能与优先级}
+\label{tab:mvp}
+\end{table}
+
+\begin{table}[tbp]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}p{4.8cm}X@{}}
+\toprule
+明确不做 & 原因 \\
+\midrule
+账号系统与多设备同步 & 一个月内做不完，同步还会带来账号与隐私上的合规成本 \\
+未经用户开启的后台采集 & 采集通道必须逐项授权、默认关闭，不做静默读取 \\
+对接学校教务系统 & 依赖学校授权与接口，学生项目拿不到 \\
+社区、评论、信息流 & 与「个人待办」的定位冲突，先把一条链路做深 \\
+自动报名、抢课等写操作 & 越权且结果不可控，应用只做理解与提取 \\
+逐条解释「为什么这样解析」 & 成本高、收益低，用户需要的是能改，不是解释 \\
+订阅通知栏的通知 & 通知订阅能力在目标系统上不可用，改由用户主动分享或机器人转发替代 \\
+商业化与推广位 & 与课程目标无关 \\
+\bottomrule
+\end{tabularx}
+\caption{明确不做的功能}
+\label{tab:notdo}
+\end{table}
+
+\subsection{可行性说明}
+
+技术上有现成的落点。机器人转发走 QQ 机器人开放接口，群管理员把机器人拉进群，它只转发群里公开可见的文本；用户分享走 Share Kit 的分享扩展；语音与文字输入走系统语音识别与键盘；解析交给 HarmonyOS 侧的 AI 能力（小艺与意图框架）；结构化结果存在本机数据库，到期提醒用系统代理提醒。这条链路上没有一环需要学校后台接口，也不需要自建服务端保存用户数据。
+
+合规上可控。应用只处理用户自己看得见、并且主动交进来的内容：机器人只接收群内消息，不读本地聊天记录；分享由用户在别的应用里发起；语音识别在用户按下录音之后才开始；权限逐项申请、默认关闭，随时可以收回。原文留在本机，云端不落盘、不建索引。这些约束既写进隐私说明，也写进权限清单。
+
+进度上留了退路。四条采集通道里，机器人转发与分享接收是主链路，语音输入与无障碍读屏可以晚一步；系统 AI 拿不到时，用户手动填字段也能把任务建起来；服务端如果最终不需要，整块砍掉不影响演示。
+
+\subsection{特色与创新点}
+
+一句话概括：把「群里发的」变成「待办里的」。校园平台等用户主动去查，本项目让信息自己走过来，机器人常驻群里，通知出现就进入待办，用户不需要记住任何东西，这就是「避免信息差」的落点。具体有三点：
+
+\begin{itemize}
+  \item 采集通道不依赖学校接口。机器人、分享、语音、读屏都是平台已经开放的能力，学生开发者就能用；某一条通道失效，主链路仍然可用。
+  \item AI 只给建议，用户点确认才落库。模型的不确定性被挡在任务库之外，解析错了改一个字段就行，不会留下一条永远不会响的待办。
+  \item 首页按「接下来要做什么」组织，不按信息来源分类，也不做信息流，打开就看到最近要处理的事。
+\end{itemize}
+
+% ============================================================
+\section{人员及分工}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\textwidth}{@{}p{2.6cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
+\toprule
+成员 & 主要职责 & 主要交付物 \\
+\midrule
+谢忠宇 & 架构与范围冻结、进度把控；QQ 机器人接入与解析链路、字段约定；解析页与确认页 & 需求与范围文档、机器人接入与字段约定、确认页实现、每周进度记录 \\
+杜俊廷 & 界面与交互；首次启动、首页时间线、任务列表与详情、设置页；视觉规范与素材 & 页面原型、ArkUI 页面实现、应用图标与商店截图 \\
+袁正锟 & 系统能力集成；分享接收、文字识别与语音、系统 AI 能力接入、提醒、本地存储；测试与缺陷跟踪 & 能力接入代码、本地数据模型、真机测试记录与缺陷清单 \\
+\bottomrule
+\end{tabularx}
+\caption{人员及分工}
+\label{tab:team}
+\end{table}
+
+% ============================================================
+\section{项目进度安排（具体到周）}
+
+四周按「先验证可行性，再跑通闭环，最后补异常和上架」的顺序推进，计划按周排，每一项工作不超过两周，每周结束都有一份能当面演示的东西。最大的不确定项是系统能力能不能用（尤其是代理提醒），所以它被排在第一周验证，而不是等到开发末期才发现没有退路。整体安排见图 \ref{fig:gantt}，各周的具体工作与交付物见表 \ref{tab:weeks}。
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm]
+  % ---- 边框与底纹 ----
+  \fill[fill=cFill2,rounded corners=2pt] (-7.2,0.85) rectangle (-3.4,-7.1);
+  \draw[draw=cLine,line width=0.5pt,rounded corners=2pt] (-7.2,0.85) rectangle (7.2,-7.1);
+  % ---- 周标题 ----
+  \foreach \k/\w in {0/第 1 周,1/第 2 周,2/第 3 周,3/第 4 周}
+    {\node[font=\sffamily\scriptsize\bfseries,text=cPrimary] at (-3.4+2.65*\k+1.325,0.44) {\w};}
+  \draw[draw=cPrimary,line width=0.7pt] (-7.2,0) -- (7.2,0);
+  % ---- 网格 ----
+  \foreach \k in {0,1,2,3,4}
+    {\draw[draw=cLine,line width=0.3pt] (-3.4+2.65*\k,0) -- (-3.4+2.65*\k,-7.1);}
+  \foreach \k in {1,...,11}
+    {\draw[draw=cLine,line width=0.3pt] (-7.2,-0.62*\k) -- (7.2,-0.62*\k);}
+  % ---- 任务条 ----
+  \foreach \i/\t/\s/\e/\c in {%
+      0/范围冻结与可行性验证/0/1/cWarn,
+      1/页面静态原型与视觉规范/0/1/cAccent,
+      2/工程骨架与本地数据表/0/1/cAccent,
+      3/假数据主链路闭环/0/2/cAccent,
+      4/接入系统 AI 与字段校验/1/2/cPrimary,
+      5/首页时间线、列表与详情/1/2/cAccent,
+      6/提醒申请与撤销/1/3/cAccent,
+      7/机器人转发与分享接收/1/2/cAccent,
+      8/异常处理与真机测试/2/4/cPrimary,
+      9/同学试用与问题修复/2/4/cAccent,
+      10/上架材料与提交审核/3/4/cWarn}
+  {
+    \node[anchor=west,font=\sffamily\scriptsize,text=cPrimary] at (-7.1,-0.62*\i-0.31) {\t};
+    \fill[fill=\c,rounded corners=1.5pt] (-3.4+2.65*\s+0.12,-0.62*\i-0.44) rectangle (-3.4+2.65*\e-0.12,-0.62*\i-0.18);
+  }
+  % ---- 里程碑 ----
+  \node[lbl,anchor=north west,text width=14.2cm,align=left] at (-7.2,-7.25)
+    {里程碑：第 1 周末给出可行性结论与六页静态原型，并演示假数据闭环；第 2 周末产出能给同学试用的版本；第 3 周末收齐试用反馈与修复清单；第 4 周末提交应用市场审核并准备答辩材料。};
+\end{tikzpicture}
+\caption{四周进度安排}
+\label{fig:gantt}
+\end{figure}
+
+\begin{table}[tbp]
+\centering
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}p{1.5cm}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{4.2cm}@{}}
+\toprule
+周次 & 主要工作 & 周末交付物 \\
+\midrule
+第 1 周 & 冻结功能范围；画出六个页面的静态原型（首次启动、首页时间线、添加信息、解析确认、任务列表与详情、设置）；搭工程骨架与本地数据表，用假数据跑通「粘贴 $\rightarrow$ 解析 $\rightarrow$ 确认 $\rightarrow$ 任务」；真机验证机器人转发、系统 AI 抽取、代理提醒三项能力 & 可行性结论、六页静态原型与假数据闭环的开发版 \\
+\midrule
+第 2 周 & 把功能接上并测试：机器人转发与分享接收进得来，系统 AI 抽取接得上，字段校验与失败提示补齐；完成首页时间线、任务列表与详情、确认页的字段编辑；接上提醒的申请与撤销 & 可交给同学试用的版本（真解析、真存储、真提醒） \\
+\midrule
+第 3 周 & 补齐异常路径：AI 返回不符合字段约定、接口超时、断网、用户拒绝通知权限、图片识别失败；找 5 到 10 名同学真机试用，修影响主链路的问题，其余排期或砍掉 & 试用反馈与修复清单 \\
+\midrule
+第 4 周 & 隐私政策、权限说明、应用图标与商店截图、AGC 配置、签名与打包；稳定性压测；提交审核并准备答辩材料 & 提交审核的安装包与答辩材料 \\
+\bottomrule
+\end{tabularx}
+\caption{各周工作与交付物}
+\label{tab:weeks}
+\end{table}
+
+\subsection{主要风险与应对}
+
+
+\begin{table}[H]
+\centering
+\footnotesize
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{2.9cm}c>{\raggedright\arraybackslash}p{2.5cm}>{\raggedright\arraybackslash}X@{}}
+\toprule
+风险 & 可能性 & 影响 & 应对 \\
+\midrule
+AI 解析结果错误 & 高 & 用户错过截止时间 & 确认页必须人工过一遍，时间字段高亮显示；置信度低时提示重新解析 \\
+系统 AI 能力不可用或返回异常 & 中 & 主链路不可用 & 客户端保留原文允许重试；失败时提示手动填写；保留假数据模式用于演示 \\
+图片识别出错 & 高 & 时间、地点抽错 & 识别结果先进入可编辑文本框；支持手动修正；只对清晰截图与海报承诺识别 \\
+代理提醒受限或配额不足 & 中 & 提醒不准时或不到 & 第一周真机验证；失败则退回普通通知，并在设置页写明提醒可能延迟 \\
+隐私审核被驳回 & 中 & 无法上架 & 采集通道逐项授权、默认关闭；隐私政策写明每条通道读什么、存在哪里；无障碍读屏提前查审核要求 \\
+无障碍读屏未获批 & 中 & 该采集通道不可用 & 第一周真机验证；失败则把该通道标为实验性并默认关闭，主链路改用分享与粘贴，其余通道不受影响 \\
+QQ 机器人规则变化或接口受限 & 中 & 群消息拿不到 & 机器人转发只作可选通道；分享与粘贴始终保留，任何一条通道失效都不影响主链路 \\
+范围膨胀 & 高 & 一个月做不完 & 按表 \ref{tab:notdo} 的清单克制；每周只按 P0、P1 的优先级排活 \\
+\bottomrule
+\end{tabularx}
+\caption{主要风险与应对}
+\label{tab:risk}
+\end{table}
+
+% ============================================================
+\newpage
+\section*{参考文献}
+
+{\scriptsize\raggedright\sloppy
+\textbf{同类应用与产品}
+
+\begin{enumerate}[label={[\arabic*]},leftmargin=2.4em,itemsep=1pt,topsep=2pt,parsep=0pt]
+  \item 清华大学 THU Info，校园信息聚合应用的开源实现. \url{https://github.com/thu-info-community/thu-info-app}
+  \item Mini-HBUT，湖北工业大学教务助手（成绩、课表、考试、空教室、通知与 AI）. \url{https://github.com/superdaobo/mini-hbut}
+\end{enumerate}
+
+\vspace{3pt}
+\textbf{信息采集通道}
+
+\begin{enumerate}[label={[\arabic*]},leftmargin=2.4em,itemsep=1pt,topsep=2pt,parsep=0pt,start=3]
+  \item QQ 机器人开发文档：群消息事件（全量模式）. \url{https://bot.q.qq.com/wiki/develop/api-v2/autogen/event/group_message_create.html}
+  \item 华为开发者联盟. Accessibility Kit：辅助功能扩展能力. \url{https://developer.huawei.com/consumer/cn/doc/harmonyos-references-V13/js-apis-application-accessibilityextensionability-V13}
+  \item 华为开发者联盟. Core Speech Kit：语音识别（speechRecognizer）. \url{https://developer.huawei.com/consumer/cn/doc/harmonyos-references/hms-ai-speechrecognizer}
+\end{enumerate}
+
+\vspace{3pt}
+\textbf{信息理解与系统能力}
+
+\begin{enumerate}[label={[\arabic*]},leftmargin=2.4em,itemsep=1pt,topsep=2pt,parsep=0pt,start=6]
+  \item 华为开发者联盟. Intents Kit（意图框架服务）. \url{https://developer.huawei.com/consumer/cn/doc/harmonyos-guides-V5/intents-kit-guide-V5}
+  \item 华为开发者联盟. 小艺开放平台：Agent 开发指南. \url{https://developer.huawei.com/consumer/cn/doc/doccenter-celia/development-guide-0000002670266897}
+  \item 华为开发者联盟. Natural Language Kit 简介（自然语言理解服务）. \url{https://developer.huawei.com/consumer/cn/doc/harmonyos-guides-V5/natural-language-introduction-V5}
+  \item 华为开发者联盟. Vision Kit 简介（场景化视觉服务）. \url{https://developer.huawei.com/consumer/cn/doc/harmonyos-guides-V5/vision-introduction-V5}
+  \item 华为开发者联盟. AI-Agent Framework Kit（智能体框架服务）. \url{https://developer.huawei.com/consumer/cn/doc/doccenter-references/api/hmaf-a2a-protocol}
+  \item 华为开发者联盟. Core Vision Kit：文字识别. \url{https://developer.huawei.com/consumer/cn/doc/doccenter-references/api/core-vision-text-recognition-api}
+  \item 华为开发者联盟. Stage 模型开发概述. \url{https://developer.huawei.com/consumer/cn/arkui/arkui-stage}
+  \item 华为开发者联盟. Share Kit：分享文本. \url{https://developer.huawei.com/consumer/cn/doc/doccenter-capabilities/share-utd-text}
+  \item 华为开发者联盟. ShareExtensionAbility（API 参考）. \url{https://developer.huawei.com/consumer/cn/doc/doccenter-references/api/js-apis-app-ability-shareextensionability}
+  \item 华为开发者联盟. 代理提醒常见问题（后台任务）. \url{https://developer.huawei.com/consumer/cn/doc/doccenter-dev-faq/faqs-background-tasks-11}
+  \item 华为开发者联盟. 应用权限访问控制. \url{https://developer.huawei.com/consumer/cn/doc/harmonyos-guides-V3/accesstoken-overview-0000001333641125-V3}
+  \item 华为开发者联盟. HarmonyOS NEXT 文档中心. \url{https://developer.huawei.com/consumer/cn/doc/}
+\end{enumerate}
+
+\vspace{3pt}
+\textbf{上架与分发}
+
+\begin{enumerate}[label={[\arabic*]},leftmargin=2.4em,itemsep=1pt,topsep=2pt,parsep=0pt,start=18]
+  \item 华为开发者联盟. HarmonyOS 应用上架申请. \url{https://developer.huawei.com/consumer/cn/doc/HMScore-Guides/harmonyos-release-application-0000001181600758}
+  \item 华为开发者联盟. 在应用市场分发应用. \url{https://developer.huawei.com/consumer/cn/appgallery/devstart/}
+  \item 华为开发者联盟. AppGallery Connect 简介. \url{https://developer.huawei.com/consumer/cn/doc/appgallery-connect-Guides/agc-introduction-0000001057492641}
+\end{enumerate}
+}
+
+\end{document}
