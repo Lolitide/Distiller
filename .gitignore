@@ -11,3 +11,17 @@
 /.clang-tidy
 **/.test
 /.appanalyzer
+
+# ---- 后端（qqbot-backend）只留在作者电脑，不进本仓库 ----
+/qqbot-backend/
+.env
+relay_store.json
+group_names.json
+bot.db
+*.db
+*.db-shm
+*.db-wal
+*.log
+__pycache__/
+*.pyc
+.venv/
