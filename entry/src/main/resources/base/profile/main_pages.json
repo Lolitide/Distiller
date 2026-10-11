@@ -1,0 +1,10 @@
+{
+  "src": [
+    "pages/Index",
+    "pages/OnboardingPage",
+    "pages/HomePage",
+    "pages/MessageDetailPage",
+    "pages/GroupSubPage",
+    "pages/SettingsPage"
+  ]
+}
