@@ -1,5 +1,7 @@
 # 知了 · 机器人通道（鸿蒙 App 端）
 
+克隆代码：git clone -b QQBot-Subcribe-News --single-branch https://github.com/Lolitide/Distiller
+
 本仓库是「知了」HarmonyOS 应用的**机器人通道**部分：订阅 QQ 群、通过本机 HTTP 轮询把机器人转发的群消息取回 App，展示、转成待办。
 
 > **分工**：本仓库**只包含 App（鸿蒙端）**。后端（QQ 机器人 + 中继服务，`qqbot-backend`）**只在作者电脑上运行，不随本仓库分发**。别人拿到本仓库后**只测 App**，把 App 的服务器地址指向作者提供的后端地址即可，自己不用跑后端。
