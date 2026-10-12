@@ -28,6 +28,8 @@ const LEAD_FILLER: string[] = ['记得', '别忘了', '别忘', '要', '需要',
  */
 export function removeTimeAndPlace(text: string, place: string): string {
   let out: string = text;
+  // 「截止」这类字段标记词本身不是动作，先去掉（它的值由下面的日期规则去掉）
+  out = out.replace(/截止日期|截止|ddl|DDL|deadline/g, '');
   out = out.replace(/(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})[日号]?/g, '');
   out = out.replace(/(\d{1,2})[月/](\d{1,2})[日号]?/g, '');
   out = out.replace(/今天|明天|后天|大后天|今晚|明晚|今早/g, '');
@@ -106,7 +108,7 @@ export function extractSlots(text: string, kind: string, base: Ymd): EventSlots 
 
   let deadline: string = '';
   const dm: RegExpExecArray | null =
-    /(?:截止|ddl|DDL|deadline)[^\u4e00-\u9fa5]{0,4}([^\s，,。.；;]{1,16})/.exec(t);
+    /(?:截止日期|截止|ddl|DDL|deadline)\s*[:：]?\s*([^\s，,。.；;]{1,16})/.exec(t);
   if (dm !== null) {
     deadline = dm[1];
   } else if (t.indexOf('之前') >= 0 || t.indexOf('以前') >= 0) {

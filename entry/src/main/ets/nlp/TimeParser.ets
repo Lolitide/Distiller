@@ -56,6 +56,17 @@ export function ymdFromTimestamp(ts: string): Ymd {
   return { y: now.getFullYear(), mo: now.getMonth() + 1, d: now.getDate() };
 }
 
+/** 时间戳 -> 毫秒，用于比较两条消息的间隔（忽略时区，同一群内足够）。 */
+export function tsToMillis(ts: string): number {
+  const m: RegExpExecArray | null = /(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/.exec(ts);
+  if (m === null) {
+    return 0;
+  }
+  const sec: number = m[6] !== undefined ? parseInt(m[6], 10) : 0;
+  return Date.UTC(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10),
+    parseInt(m[4], 10), parseInt(m[5], 10), sec);
+}
+
 export function timeSlotDisplay(slot: TimeSlot): string {
   if (slot.unresolved) {
     return slot.text + '（待确认具体日期）';

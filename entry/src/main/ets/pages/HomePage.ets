@@ -4,6 +4,11 @@ import { RobotMessage, DetailParams, ParsedEntity, formatTime, hasImageAttachmen
 import { EntityIcon } from '../common/UiParts';
 import { CampusEvent, isActionable, EVENT_NOTICE, EVENT_PLAN, EVENT_TODO } from '../nlp/EventTypes';
 import { timeSlotDisplay } from '../nlp/TimeParser';
+import { clusterEvents, EventCluster } from '../nlp/EventCluster';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+
+const DOMAIN: number = 0x0000;
+const TAG: string = 'HomePage';
 
 @Entry
 @Component
@@ -15,12 +20,16 @@ struct HomePage {
   @State statusText: string = '';
   @State refreshing: boolean = false;
   @State hideSelf: boolean = false;
+  /** T3 汇总：把零散消息聚成若干事件 */
+  @State digest: EventCluster[] = [];
   private statusTimer: number = -1;
   private bannerTimer: number = -1;
+  private digestSig: string = '';
 
   aboutToAppear(): void {
     this.messages = Store.getMessages();
     this.hideSelf = Store.getHideSelf();
+    this.refreshDigest();
     PollService.start();
     this.updateStatus();
     this.statusTimer = setInterval(() => {
@@ -32,6 +41,52 @@ struct HomePage {
     // 从设置页返回时重新读取显示开关，立即生效
     this.hideSelf = Store.getHideSelf();
     this.messages = Store.getMessages();
+    this.refreshDigest();
+  }
+
+  /** T3：把当前可见消息的事件聚成簇，取最有信息量的前几条做「群汇总」 */
+  refreshDigest(): void {
+    const list: RobotMessage[] = this.visibleMessages();
+    const evs: CampusEvent[] = [];
+    for (let i = 0; i < list.length; i++) {
+      const e: CampusEvent | undefined = list[i].event;
+      if (e !== undefined) {
+        evs.push(e);
+      }
+    }
+    const clusters: EventCluster[] = clusterEvents(evs);
+    const picked: EventCluster[] = [];
+    for (let i = 0; i < clusters.length; i++) {
+      const c: EventCluster = clusters[i];
+      // 单条闲聊不算「事件」，不进汇总
+      if (c.kind === '闲聊' && c.count < 2) {
+        continue;
+      }
+      picked.push(c);
+    }
+    // 待办/通知/出行计划优先，其次按条数、置信度
+    picked.sort((a: EventCluster, b: EventCluster): number => {
+      const pa: number = isActionable(a.kind) ? 0 : 1;
+      const pb: number = isActionable(b.kind) ? 0 : 1;
+      if (pa !== pb) {
+        return pa - pb;
+      }
+      if (a.count !== b.count) {
+        return b.count - a.count;
+      }
+      return b.confidence - a.confidence;
+    });
+    this.digest = picked.slice(0, 3);
+    // 只在汇总内容变化时打一条日志，便于排查又不刷屏
+    let sig: string = '';
+    for (let i = 0; i < this.digest.length; i++) {
+      const c: EventCluster = this.digest[i];
+      sig += c.kind + ':' + c.title + ':' + c.count + ' | ';
+    }
+    if (sig !== this.digestSig) {
+      this.digestSig = sig;
+      hilog.info(DOMAIN, TAG, 'digest changed: %{public}s', sig);
+    }
   }
 
   visibleMessages(): RobotMessage[] {
@@ -174,6 +229,7 @@ struct HomePage {
 
   onVersionChanged(): void {
     this.messages = Store.getMessages();
+    this.refreshDigest();
   }
 
   onBannerChanged(): void {
@@ -350,6 +406,48 @@ struct HomePage {
       } else {
         Refresh({ refreshing: this.refreshing }) {
           List({ space: 8 }) {
+            if (this.digest.length > 0) {
+              ListItem() {
+                Column({ space: 6 }) {
+                  Row() {
+                    Text('群汇总')
+                      .fontSize(14)
+                      .fontWeight(FontWeight.Medium)
+                      .layoutWeight(1)
+                    Text(this.messages.length + ' 条消息')
+                      .fontSize(12)
+                      .fontColor(Color.Gray)
+                  }
+                  .width('100%')
+
+                  ForEach(this.digest, (c: EventCluster, index: number) => {
+                    Row({ space: 6 }) {
+                      Text(c.kind)
+                        .fontSize(10)
+                        .fontColor(Color.White)
+                        .backgroundColor('#8A5CC7')
+                        .borderRadius(3)
+                        .padding({ left: 5, right: 5, top: 1, bottom: 1 })
+                      Text(c.title)
+                        .fontSize(13)
+                        .maxLines(1)
+                        .textOverflow({ overflow: TextOverflow.Ellipsis })
+                        .layoutWeight(1)
+                      Text(c.count + ' 条')
+                        .fontSize(11)
+                        .fontColor(Color.Gray)
+                    }
+                    .width('100%')
+                  }, (c: EventCluster, index: number) => index + '_' + c.kind + '_' + c.title)
+                }
+                .width('100%')
+                .padding(12)
+                .alignItems(HorizontalAlign.Start)
+                .backgroundColor('#F5F3FA')
+                .borderRadius(8)
+              }
+            }
+
             ForEach(this.visibleMessages(), (item: RobotMessage) => {
               ListItem() {
                 Column({ space: 6 }) {
