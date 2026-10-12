@@ -3,6 +3,7 @@ import { Config } from '../common/Config';
 import { ApiClient } from '../common/ApiClient';
 import { Store } from '../common/Store';
 import { Discovery } from '../common/Discovery';
+import { ParseService } from '../common/ParseService';
 import { MessagesData, RobotMessage, toRobotMessages } from '../common/Types';
 
 const NET_FAIL_THRESHOLD: number = 3;
@@ -136,6 +137,8 @@ export class PollService {
       Store.saveMessages(finalList);
     }
     Store.setMaxSeq(data.max_seq);
+    // 后台异步解析新消息（端侧 NL Kit），不阻塞本轮轮询
+    ParseService.parsePending();
     return PollService.notifiableCount(merged);
   }
 

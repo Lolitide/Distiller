@@ -1,33 +1,61 @@
-import { describe, beforeAll, beforeEach, afterEach, afterAll, it, expect } from '@ohos/hypium';
+import { describe, it, expect } from '@ohos/hypium';
+import { buildKeyFields, buildSummary, classifyCategory, entityTypeLabel, normalizeText } from '../main/ets/common/ParseRules';
+import { ParsedEntity } from '../main/ets/common/Types';
 
 export default function localUnitTest() {
-  describe('localUnitTest', () => {
-    // Defines a test suite. Two parameters are supported: test suite name and test suite function.
-    beforeAll(() => {
-      // Presets an action, which is performed only once before all test cases of the test suite start.
-      // This API supports only one parameter: preset action function.
+  describe('parseRulesTest', () => {
+    it('classify_edu', 0, () => {
+      expect(classifyCategory('周五前交实验报告', [])).assertEqual('教务');
     });
-    beforeEach(() => {
-      // Presets an action, which is performed before each unit test case starts.
-      // The number of execution times is the same as the number of test cases defined by **it**.
-      // This API supports only one parameter: preset action function.
+
+    it('classify_activity', 0, () => {
+      expect(classifyCategory('今晚有讲座，欢迎报名', [])).assertEqual('活动');
     });
-    afterEach(() => {
-      // Presets a clear action, which is performed after each unit test case ends.
-      // The number of execution times is the same as the number of test cases defined by **it**.
-      // This API supports only one parameter: clear action function.
+
+    it('classify_job', 0, () => {
+      expect(classifyCategory('急招前端实习生，可内推', [])).assertEqual('招聘');
     });
-    afterAll(() => {
-      // Presets a clear action, which is performed after all test cases of the test suite end.
-      // This API supports only one parameter: clear action function.
+
+    it('classify_secondhand', 0, () => {
+      expect(classifyCategory('出一本二手教材，价格好商量', [])).assertEqual('二手');
     });
-    it('assertContain', 0, () => {
-      // Defines a test case. This API supports three parameters: test case name, filter parameter, and test case function.
-      let a = 'abc';
-      let b = 'b';
-      // Defines a variety of assertion methods, which are used to declare expected boolean conditions.
-      expect(a).assertContain(b);
-      expect(a).assertEqual(a);
+
+    it('classify_fallback_chat', 0, () => {
+      expect(classifyCategory('今天天气不错', [])).assertEqual('闲聊');
+    });
+
+    it('classify_noun_boost_keeps_result', 0, () => {
+      expect(classifyCategory('周五前交实验报告', ['实验'])).assertEqual('教务');
+    });
+
+    it('summary_first_sentence', 0, () => {
+      expect(buildSummary('周五前交实验报告。地点三教301', 24)).assertEqual('周五前交实验报告');
+    });
+
+    it('summary_truncate', 0, () => {
+      const s: string = buildSummary('这是一条非常长的通知内容需要被截断处理', 10);
+      expect(s.length).assertEqual(11);
+    });
+
+    it('normalize_whitespace', 0, () => {
+      expect(normalizeText('a\n\n  b\tc')).assertEqual('a b c');
+    });
+
+    it('key_fields_skip_unknown', 0, () => {
+      const entities: ParsedEntity[] = [
+        { type: 'datetime', text: '周五' },
+        { type: 'location', text: '三教301' },
+        { type: 'unknown', text: 'x' }
+      ];
+      const kf: string[] = buildKeyFields(entities);
+      expect(kf.length).assertEqual(2);
+      expect(kf[0]).assertEqual('时间 周五');
+      expect(kf[1]).assertEqual('地点 三教301');
+    });
+
+    it('entity_label', 0, () => {
+      expect(entityTypeLabel('phoneNo')).assertEqual('电话');
+      expect(entityTypeLabel('nope')).assertEqual('');
     });
   });
 }

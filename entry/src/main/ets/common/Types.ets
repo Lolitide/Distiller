@@ -131,10 +131,35 @@ export interface UnsubscribeBody {
 
 // ============================================================ 本地模型
 
-/** 存进本机的消息：服务端字段 + 两个本地状态字段 */
+/** 解析出的单个实体（只保留展示所需字段，避免依赖 Kit 枚举做序列化） */
+export interface ParsedEntity {
+  /** 'datetime' | 'location' | 'name' | 'phoneNo' | 'url' | 'email' 等 */
+  type: string;
+  /** 实体原文 */
+  text: string;
+}
+
+/** 消息类别（对应「知了调研」用户画像里给定的类别载体） */
+export const CATEGORIES: string[] = ['教务', '活动', '招聘', '二手', '闲聊'];
+
+/** 解析结果缓存：parsedAt 非空表示已尝试解析（失败也会写，避免反复重试） */
+export interface ParsedInfo {
+  parsedAt: string;
+  parseOk: boolean;
+  category: string;
+  summary: string;
+  entities: ParsedEntity[];
+}
+
+/** 存进本机的消息：服务端字段 + 本地状态字段 + 本地解析字段 */
 export interface RobotMessage extends ServeMessage {
   read: boolean;
   handled: boolean;
+  parsedAt?: string;
+  parseOk?: boolean;
+  category?: string;
+  summary?: string;
+  entities?: ParsedEntity[];
 }
 
 /** 本地订阅缓存 */
