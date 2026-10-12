@@ -11,16 +11,37 @@ struct HomePage {
   @State messages: RobotMessage[] = [];
   @State statusText: string = '';
   @State refreshing: boolean = false;
+  @State hideSelf: boolean = false;
   private statusTimer: number = -1;
   private bannerTimer: number = -1;
 
   aboutToAppear(): void {
     this.messages = Store.getMessages();
+    this.hideSelf = Store.getHideSelf();
     PollService.start();
     this.updateStatus();
     this.statusTimer = setInterval(() => {
       this.updateStatus();
     }, 10000);
+  }
+
+  onPageShow(): void {
+    // 从设置页返回时重新读取显示开关，立即生效
+    this.hideSelf = Store.getHideSelf();
+    this.messages = Store.getMessages();
+  }
+
+  visibleMessages(): RobotMessage[] {
+    if (!this.hideSelf) {
+      return this.messages;
+    }
+    const out: RobotMessage[] = [];
+    for (let i = 0; i < this.messages.length; i++) {
+      if (this.messages[i].is_self !== true) {
+        out.push(this.messages[i]);
+      }
+    }
+    return out;
   }
 
   aboutToDisappear(): void {
@@ -194,9 +215,9 @@ struct HomePage {
         })
       }
 
-      if (this.messages.length === 0) {
+      if (this.visibleMessages().length === 0) {
         Column({ space: 12 }) {
-          Text('还没有收到消息')
+          Text(this.hideSelf && this.messages.length > 0 ? '你已隐藏自己发的消息，暂无其他消息' : '还没有收到消息')
             .fontSize(16)
             .fontColor(Color.Gray)
           Text('请确认机器人已在群里收到过消息')
@@ -213,7 +234,7 @@ struct HomePage {
       } else {
         Refresh({ refreshing: this.refreshing }) {
           List({ space: 8 }) {
-            ForEach(this.messages, (item: RobotMessage) => {
+            ForEach(this.visibleMessages(), (item: RobotMessage) => {
               ListItem() {
                 Column({ space: 6 }) {
                   Row() {

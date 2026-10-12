@@ -84,6 +84,8 @@ export interface ServeMessage {
   timestamp: string;
   msg_id: string;
   event_type: string;
+  /** 是否为本机绑定用户本人发的消息（服务端据 sender_openid 判定） */
+  is_self?: boolean;
 }
 
 export interface MessagesData {
@@ -179,6 +181,7 @@ export function toRobotMessages(remote: ServeMessage[]): RobotMessage[] {
       timestamp: m.timestamp,
       msg_id: m.msg_id,
       event_type: m.event_type,
+      is_self: m.is_self === true,
       read: false,
       handled: false
     });

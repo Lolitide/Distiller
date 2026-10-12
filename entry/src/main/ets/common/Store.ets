@@ -13,6 +13,7 @@ const K_SUBS = 'subs_json';
 const K_BASE_URL = 'base_url';
 const K_BOUND_TAIL = 'bound_openid_tail';
 const K_PENDING = 'pending_parse_json';
+const K_HIDE_SELF = 'hide_self';
 
 export class Store {
   private static pref: preferences.Preferences | null = null;
@@ -135,6 +136,21 @@ export class Store {
 
   static setBoundTail(tail: string): void {
     Store.putString(K_BOUND_TAIL, tail);
+  }
+
+  static getHideSelf(): boolean {
+    if (Store.pref === null) {
+      return false;
+    }
+    return Store.pref.getSync(K_HIDE_SELF, false) as boolean;
+  }
+
+  static setHideSelf(value: boolean): void {
+    if (Store.pref === null) {
+      return;
+    }
+    Store.pref.putSync(K_HIDE_SELF, value);
+    Store.pref.flushSync();
   }
 
   static getPending(): RobotMessage[] {

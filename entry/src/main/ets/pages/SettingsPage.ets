@@ -26,12 +26,14 @@ struct SettingsPage {
   @State bindPhase: string = 'idle';
   @State pairCode: string = '';
   @State bindHint: string = '';
+  @State hideSelf: boolean = false;
   private bindTimerId: number = -1;
   private bindPollCount: number = 0;
   private baselineBoundAt: string = '';
 
   aboutToAppear(): void {
     this.baseUrlInput = Store.getBaseUrl();
+    this.hideSelf = Store.getHideSelf();
     this.refreshLocal();
     this.loadMyData();
     this.loadBindStatus();
@@ -273,6 +275,28 @@ struct SettingsPage {
             Text('游标 max_seq：' + this.maxSeq).fontSize(13)
             Text('本机消息条数：' + this.msgCount).fontSize(13)
             Text('上次同步时间：' + (this.lastSync.length > 0 ? this.lastSync : '尚未同步')).fontSize(13)
+          }
+          .alignItems(HorizontalAlign.Start)
+          .width('100%')
+
+          Column({ space: 8 }) {
+            Text('消息显示')
+              .fontSize(16)
+              .fontWeight(FontWeight.Medium)
+            Row({ space: 12 }) {
+              Text('隐藏我在群里发的消息')
+                .fontSize(14)
+                .layoutWeight(1)
+              Toggle({ type: ToggleType.Switch, isOn: this.hideSelf })
+                .onChange((isOn: boolean) => {
+                  this.hideSelf = isOn;
+                  Store.setHideSelf(isOn);
+                })
+            }
+            .width('100%')
+            Text('打开后本机不再显示由你本人发出的群消息（服务端照常转发，仅本机展示时过滤，关闭即可恢复）。')
+              .fontSize(12)
+              .fontColor(Color.Gray)
           }
           .alignItems(HorizontalAlign.Start)
           .width('100%')
