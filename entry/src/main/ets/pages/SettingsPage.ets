@@ -2,8 +2,9 @@ import { ApiClient } from '../common/ApiClient';
 import { Config } from '../common/Config';
 import { Store } from '../common/Store';
 import { Discovery } from '../common/Discovery';
+import { pasteboard } from '@kit.BasicServicesKit';
 import { PollService } from '../service/PollService';
-import { MyData, DeletedData } from '../common/Types';
+import { BindCodeData, BindCodeBody, BindStatusData, MyData, DeletedData } from '../common/Types';
 
 const PRIVACY_TEXT = '本应用通过 QQ 机器人接收您主动订阅的群聊中公开可见的文本消息，用于生成您个人待办与提醒。\n' +
   '我们的服务器不保存聊天消息正文：消息仅用于判断是否属于您的订阅范围，并只在服务器内存中保留最多 30 分钟供您同步；超过 30 分钟未同步的消息将被自动删除且无法找回。\n' +
@@ -18,13 +19,26 @@ struct SettingsPage {
   @State msgCount: number = 0;
   @State lastSync: string = '';
   @State boundTail: string = '';
+  @State bound: boolean = false;
+  @State boundKnown: boolean = false;
   @State myData: string = '';
   @State scanning: boolean = false;
+  @State bindPhase: string = 'idle';
+  @State pairCode: string = '';
+  @State bindHint: string = '';
+  private bindTimerId: number = -1;
+  private bindPollCount: number = 0;
+  private baselineBoundAt: string = '';
 
   aboutToAppear(): void {
     this.baseUrlInput = Store.getBaseUrl();
     this.refreshLocal();
     this.loadMyData();
+    this.loadBindStatus();
+  }
+
+  aboutToDisappear(): void {
+    this.stopBindPoll();
   }
 
   refreshLocal(): void {
@@ -32,6 +46,109 @@ struct SettingsPage {
     this.msgCount = Store.getMessages().length;
     this.lastSync = PollService.lastSyncAt;
     this.boundTail = Store.getBoundTail();
+  }
+
+  async loadBindStatus(): Promise<void> {
+    const res = await ApiClient.get<BindStatusData>('/api/relay/bind/status');
+    if (res.ok && res.data !== undefined) {
+      this.boundKnown = true;
+      this.bound = res.data.bound;
+      this.boundTail = res.data.bound ? (res.data.user_openid_tail ?? '') : '';
+      Store.setBoundTail(this.boundTail);
+    } else {
+      this.boundKnown = false;
+    }
+  }
+
+  bindText(): string {
+    if (!this.boundKnown) {
+      return this.boundTail.length > 0 ? '已绑定（本地缓存 ' + this.boundTail + '）' : '绑定状态未知（未连上服务端）';
+    }
+    if (!this.bound) {
+      return '未绑定';
+    }
+    return this.boundTail.length > 0 ? '已绑定（' + this.boundTail + '）' : '已绑定';
+  }
+
+  async startRebind(): Promise<void> {
+    this.stopBindPoll();
+    this.pairCode = '';
+    const cur = await ApiClient.get<BindStatusData>('/api/relay/bind/status');
+    if (cur.ok && cur.data !== undefined) {
+      this.boundKnown = true;
+      this.bound = cur.data.bound;
+      this.boundTail = cur.data.bound ? (cur.data.user_openid_tail ?? '') : '';
+      this.baselineBoundAt = cur.data.bound ? (cur.data.bound_at ?? '') : '';
+    } else {
+      this.baselineBoundAt = '';
+    }
+    const body: BindCodeBody = {};
+    const res = await ApiClient.post<BindCodeData>('/api/relay/bind/code', body);
+    if (res.ok && res.data !== undefined) {
+      this.pairCode = res.data.code;
+      this.bindHint = res.data.hint;
+      this.bindPollCount = 0;
+      this.bindPhase = 'waiting';
+      this.startBindPoll();
+    } else {
+      this.bindPhase = 'idle';
+      this.getUIContext().getPromptAction().showToast({ message: res.error?.message ?? '生成配对码失败，请检查服务器地址' });
+    }
+  }
+
+  startBindPoll(): void {
+    this.stopBindPoll();
+    this.bindTimerId = setInterval(() => {
+      this.pollBindStatus();
+    }, Config.bindPollIntervalMs);
+  }
+
+  stopBindPoll(): void {
+    if (this.bindTimerId >= 0) {
+      clearInterval(this.bindTimerId);
+      this.bindTimerId = -1;
+    }
+  }
+
+  async pollBindStatus(): Promise<void> {
+    this.bindPollCount++;
+    const res = await ApiClient.get<BindStatusData>('/api/relay/bind/status');
+    if (res.ok && res.data !== undefined && res.data.bound) {
+      const at: string = res.data.bound_at ?? '';
+      const isNewBinding: boolean = this.baselineBoundAt.length === 0 || (at.length > 0 && at !== this.baselineBoundAt);
+      if (isNewBinding) {
+        this.stopBindPoll();
+        this.boundKnown = true;
+        this.bound = true;
+        this.boundTail = res.data.user_openid_tail ?? '';
+        Store.setBoundTail(this.boundTail);
+        this.bindPhase = 'success';
+        this.loadMyData();
+      }
+    } else if (this.bindPollCount >= Config.bindPollMaxTimes) {
+      this.stopBindPoll();
+      this.bindPhase = 'timeout';
+    }
+  }
+
+  cancelRebind(): void {
+    this.stopBindPoll();
+    this.bindPhase = 'idle';
+    this.pairCode = '';
+  }
+
+  async copyCode(): Promise<void> {
+    if (this.pairCode.length === 0) {
+      return;
+    }
+    try {
+      const pasteData: pasteboard.PasteData = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, this.pairCode);
+      const sp: pasteboard.SystemPasteboard = pasteboard.getSystemPasteboard();
+      await sp.setData(pasteData);
+      this.getUIContext().getPromptAction().showToast({ message: '已复制配对码' });
+    } catch (e) {
+      this.getUIContext().getPromptAction().showToast({ message: '复制失败' });
+    }
   }
 
   async loadMyData(): Promise<void> {
@@ -164,8 +281,48 @@ struct SettingsPage {
             Text('绑定信息')
               .fontSize(16)
               .fontWeight(FontWeight.Medium)
-            Text(this.boundTail.length > 0 ? '已绑定（' + this.boundTail + '）' : '未绑定').fontSize(13)
+            Text(this.bindText()).fontSize(13)
             Text('服务端数据概览：' + (this.myData.length > 0 ? this.myData : '加载中…')).fontSize(13)
+
+            if (this.bindPhase === 'idle') {
+              Button(this.bound ? '重新绑定 / 换号' : '去绑定 QQ')
+                .onClick(() => {
+                  this.startRebind();
+                })
+            } else if (this.bindPhase === 'waiting') {
+              Text(this.pairCode)
+                .fontSize(40)
+                .fontWeight(FontWeight.Bold)
+              Text(this.bindHint)
+                .fontSize(14)
+              Row({ space: 12 }) {
+                Button('复制配对码')
+                  .onClick(() => {
+                    this.copyCode();
+                  })
+                Button('取消')
+                  .onClick(() => {
+                    this.cancelRebind();
+                  })
+              }
+              Text(this.bound ? '当前已绑定，请用要换成的那个 QQ 号私聊机器人发送上面的配对码，发送后即换成新号（2 分钟内有效）' : '等待绑定中…请在 QQ 里私聊机器人发送上面的配对码（2 分钟内有效）')
+                .fontSize(12)
+                .fontColor(Color.Gray)
+            } else if (this.bindPhase === 'success') {
+              Text('绑定成功' + (this.boundTail.length > 0 ? '（' + this.boundTail + '）' : ''))
+                .fontColor(Color.Green)
+              Button('完成')
+                .onClick(() => {
+                  this.cancelRebind();
+                })
+            } else {
+              Text('没检测到绑定，请重新生成配对码')
+                .fontColor(Color.Orange)
+              Button('重新生成配对码')
+                .onClick(() => {
+                  this.startRebind();
+                })
+            }
           }
           .alignItems(HorizontalAlign.Start)
           .width('100%')
