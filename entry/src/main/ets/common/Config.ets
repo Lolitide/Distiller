@@ -1,5 +1,5 @@
 export class Config {
-  static baseUrl: string = 'http://192.168.1.106:8730';
+  static baseUrl: string = 'http://192.168.1.104:8730';
   static discoveryPort: number = 8730;
   static healthPath: string = '/api/relay/health';
   static pollIntervalMs: number = 1000;
