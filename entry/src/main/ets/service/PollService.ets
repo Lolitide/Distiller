@@ -136,7 +136,21 @@ export class PollService {
       Store.saveMessages(finalList);
     }
     Store.setMaxSeq(data.max_seq);
-    return merged.length;
+    return PollService.notifiableCount(merged);
+  }
+
+  /** 计入「收到 N 条新消息」提示的条数：隐藏开关打开时，自己发的消息不提醒。 */
+  private static notifiableCount(list: RobotMessage[]): number {
+    if (!Store.getHideSelf()) {
+      return list.length;
+    }
+    let n = 0;
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].is_self !== true) {
+        n++;
+      }
+    }
+    return n;
   }
 
   private static async notifyNew(count: number): Promise<void> {
