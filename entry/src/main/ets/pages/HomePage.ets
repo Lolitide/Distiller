@@ -1,7 +1,9 @@
 import { PollService } from '../service/PollService';
 import { Store } from '../common/Store';
-import { RobotMessage, DetailParams, ParsedEntity, formatTime } from '../common/Types';
+import { RobotMessage, DetailParams, ParsedEntity, formatTime, hasImageAttachment } from '../common/Types';
 import { EntityIcon } from '../common/UiParts';
+import { CampusEvent, isActionable, EVENT_NOTICE, EVENT_PLAN, EVENT_TODO } from '../nlp/EventTypes';
+import { timeSlotDisplay } from '../nlp/TimeParser';
 
 @Entry
 @Component
@@ -71,7 +73,91 @@ struct HomePage {
     const parsedMark: string = item.parsedAt ?? '';
     const readMark: string = item.read ? '1' : '0';
     const handledMark: string = item.handled ? '1' : '0';
-    return item.msg_id + '|' + parsedMark + '|' + readMark + '|' + handledMark;
+    const imageMark: string = item.imageText ?? '';
+    const kindMark: string = item.imageKind ?? '';
+    const evMark: string = (item.event?.kind ?? '') + '#' + this.evConf(item);
+    return item.msg_id + '|' + parsedMark + '|' + readMark + '|' + handledMark + '|' + imageMark
+      + '|' + kindMark + '|' + evMark;
+  }
+
+  hasImage(item: RobotMessage): boolean {
+    return hasImageAttachment(item.attachments);
+  }
+
+  imageLabel(item: RobotMessage): string {
+    return item.imageKind === 'qr' ? '二维码' : '图片';
+  }
+
+  /** 这条消息是否做成了结构化事件卡片 */
+  hasEventCard(item: RobotMessage): boolean {
+    const e: CampusEvent | undefined = item.event;
+    return e !== undefined && isActionable(e.kind);
+  }
+
+  evKind(item: RobotMessage): string {
+    return item.event?.kind ?? '';
+  }
+
+  evTitle(item: RobotMessage): string {
+    return item.event?.title ?? '';
+  }
+
+  evTimeText(item: RobotMessage): string {
+    const e: CampusEvent | undefined = item.event;
+    if (e === undefined || e.time === null) {
+      return '';
+    }
+    return timeSlotDisplay(e.time);
+  }
+
+  evPlace(item: RobotMessage): string {
+    return item.event?.place ?? '';
+  }
+
+  evDeadline(item: RobotMessage): string {
+    return item.event?.deadline ?? '';
+  }
+
+  evSource(item: RobotMessage): string {
+    return item.event?.sourceText ?? '';
+  }
+
+  evConf(item: RobotMessage): number {
+    return item.event?.confidence ?? 0;
+  }
+
+  evNeedConfirm(item: RobotMessage): boolean {
+    return this.evConf(item) < 0.5;
+  }
+
+  evConfText(item: RobotMessage): string {
+    const c: number = this.evConf(item);
+    if (c >= 0.8) {
+      return '高置信';
+    }
+    return c >= 0.5 ? c.toFixed(2) : '待确认';
+  }
+
+  evConfColor(item: RobotMessage): string {
+    const c: number = this.evConf(item);
+    if (c >= 0.8) {
+      return '#3E9E6B';
+    }
+    return c >= 0.5 ? '#888888' : '#C1663D';
+  }
+
+  evKindColor(item: RobotMessage): string {
+    const k: string = this.evKind(item);
+    if (k === EVENT_TODO) {
+      return '#2E75B6';
+    }
+    if (k === EVENT_NOTICE) {
+      return '#B8434E';
+    }
+    if (k === EVENT_PLAN) {
+      return '#2F8F9D';
+    }
+    return '#8A5CC7';
   }
 
   aboutToDisappear(): void {
@@ -283,58 +369,99 @@ struct HomePage {
                   }
                   .width('100%')
 
-                  if (item.parseOk === true && this.summaryText(item).length > 0) {
+                  if (this.hasEventCard(item)) {
                     Row({ space: 6 }) {
-                      if (this.categoryText(item).length > 0) {
-                        Text(this.categoryText(item))
+                      Text(this.evKind(item))
+                        .fontSize(11)
+                        .fontColor(Color.White)
+                        .backgroundColor(this.evKindColor(item))
+                        .borderRadius(4)
+                        .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+                      if (this.hasImage(item)) {
+                        Text(this.imageLabel(item))
                           .fontSize(11)
-                          .fontColor(Color.White)
-                          .backgroundColor('#2E75B6')
+                          .fontColor('#2E75B6')
+                          .backgroundColor('#EAF1FA')
                           .borderRadius(4)
                           .padding({ left: 6, right: 6, top: 2, bottom: 2 })
                       }
-                      Text(this.summaryText(item))
+                      Text(this.evTitle(item))
                         .fontSize(15)
+                        .fontWeight(FontWeight.Medium)
                         .maxLines(2)
                         .textOverflow({ overflow: TextOverflow.Ellipsis })
                         .layoutWeight(1)
+                      Text(this.evConfText(item))
+                        .fontSize(11)
+                        .fontColor(this.evConfColor(item))
                     }
                     .width('100%')
                     .alignItems(VerticalAlign.Top)
 
-                    if (this.entityListFor(item).length > 0) {
-                      Flex({ wrap: FlexWrap.Wrap }) {
-                        ForEach(this.entityListFor(item), (e: ParsedEntity, index: number) => {
-                          Row({ space: 3 }) {
-                            EntityIcon({ type: e.type, size: 13, color: '#2E75B6' })
-                            Text(e.text)
-                              .fontSize(11)
-                              .fontColor('#2E75B6')
-                              .maxLines(1)
-                              .textOverflow({ overflow: TextOverflow.Ellipsis })
-                          }
-                          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-                          .backgroundColor('#EAF1FA')
-                          .borderRadius(4)
-                          .margin({ right: 6, bottom: 4 })
-                        }, (e: ParsedEntity, index: number) => index + '_' + e.type + '_' + e.text)
+                    if (this.evTimeText(item).length > 0) {
+                      Row({ space: 4 }) {
+                        EntityIcon({ type: 'datetime', size: 13, color: '#2E75B6' })
+                        Text(this.evTimeText(item))
+                          .fontSize(12)
+                          .fontColor('#333333')
+                          .layoutWeight(1)
                       }
                       .width('100%')
                     }
+                    if (this.evPlace(item).length > 0) {
+                      Row({ space: 4 }) {
+                        EntityIcon({ type: 'location', size: 13, color: '#2E75B6' })
+                        Text(this.evPlace(item))
+                          .fontSize(12)
+                          .fontColor('#333333')
+                          .layoutWeight(1)
+                      }
+                      .width('100%')
+                    }
+                    if (this.evDeadline(item).length > 0) {
+                      Text('截止：' + this.evDeadline(item))
+                        .fontSize(12)
+                        .fontColor('#B8434E')
+                        .width('100%')
+                    }
+                    if (this.evNeedConfirm(item)) {
+                      Text('字段不完整，建议人工确认')
+                        .fontSize(11)
+                        .fontColor('#C1663D')
+                        .width('100%')
+                    }
+                    Text('「' + this.evSource(item) + '」')
+                      .fontSize(12)
+                      .fontColor('#888888')
+                      .maxLines(2)
+                      .textOverflow({ overflow: TextOverflow.Ellipsis })
+                      .width('100%')
                   } else if (this.isPending(item)) {
                     Text('解析中…')
                       .fontSize(14)
                       .fontColor(Color.Gray)
                       .width('100%')
-                  } else {
-                    Text(item.sender + '：' + item.content)
-                      .fontSize(15)
-                      .maxLines(2)
-                      .textOverflow({ overflow: TextOverflow.Ellipsis })
-                      .width('100%')
-                    Text('未解析 · 显示原文')
-                      .fontSize(11)
+                  } else if (this.hasImage(item) && this.evSource(item).length === 0) {
+                    Text('[图片] 未识别出文字')
+                      .fontSize(14)
                       .fontColor(Color.Gray)
+                      .width('100%')
+                  } else {
+                    if (this.evKind(item).length > 0) {
+                      Row({ space: 6 }) {
+                        Text(this.evKind(item))
+                          .fontSize(11)
+                          .fontColor('#888888')
+                          .backgroundColor('#F0F0F0')
+                          .borderRadius(4)
+                          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+                      }
+                    }
+                    Text(this.evSource(item).length > 0 ? this.evSource(item) : item.content)
+                      .fontSize(14)
+                      .fontColor('#666666')
+                      .maxLines(3)
+                      .textOverflow({ overflow: TextOverflow.Ellipsis })
                       .width('100%')
                   }
 

@@ -1,17 +1,22 @@
 /**
- * 知了 · 消息解析服务（端侧，走 Natural Language Kit）
+ * 知了 · 消息解析服务（端侧，走 Natural Language Kit + Core Vision Kit OCR）
  *
  * 依据「知了调研.md」：
- *   - 实体抽取 / 分词都不支持模拟器 -> 所有调用 try/catch 降级，失败只标 parseOk=false，不影响主流程；
+ *   - 实体抽取 / 分词 / OCR 都不支持模拟器 -> 所有调用 try/catch 降级，失败只标 parseOk=false，不影响主流程；
  *   - 实体抽取文本长度不超过 1000 字符 -> sliceText 切片后逐段抽取并合并；
- *   - 事项判断没有现成能力 -> 交给 ParseRules 的本地关键词规则。
+ *   - 事项判断没有现成能力 -> 交给 ParseRules 的本地关键词规则；
+ *   - 图片消息 content 为空 -> 按附件 URL 下载后 OCR，识别出的文字作为解析输入。
  */
 
 import { EntityType, textProcessing } from '@kit.NaturalLanguageKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Store } from './Store';
-import { ParsedEntity, ParsedInfo, RobotMessage } from './Types';
+import { ParsedEntity, ParsedInfo, RobotMessage, firstImageUrl } from './Types';
 import { buildSummary, classifyCategory } from './ParseRules';
+import { ImageRecognizer, ImageRecognizeResult } from './ImageRecognizer';
+import { withTimeout } from './AsyncUtil';
+import { buildEvent, eventOneLine } from '../nlp/EventBuilder';
+import { CampusEvent } from '../nlp/EventTypes';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'ParseService';
@@ -122,7 +127,7 @@ export class ParseService {
         EntityType.PHONE_NO, EntityType.URL, EntityType.EMAIL]
     };
     const result: textProcessing.Entity[] | null =
-      await ParseService.withTimeout<textProcessing.Entity[]>(textProcessing.getEntity(chunk, config), NLP_TIMEOUT_MS);
+      await withTimeout<textProcessing.Entity[]>(textProcessing.getEntity(chunk, config), NLP_TIMEOUT_MS);
     if (result === null) {
       throw new Error('nlp entity timeout');
     }
@@ -139,7 +144,7 @@ export class ParseService {
 
   private static async extractNounWords(chunk: string): Promise<string[]> {
     const segs: textProcessing.WordSegment[] | null =
-      await ParseService.withTimeout<textProcessing.WordSegment[]>(textProcessing.getWordSegment(chunk), NLP_TIMEOUT_MS);
+      await withTimeout<textProcessing.WordSegment[]>(textProcessing.getWordSegment(chunk), NLP_TIMEOUT_MS);
     if (segs === null) {
       return [];
     }
@@ -153,28 +158,23 @@ export class ParseService {
     return out;
   }
 
-  /**
-   * 给 NL Kit 调用加超时保护：该能力在部分设备/模拟器上可能不返回，
-   * 不加超时会把 parsePending 的 busy 标志永久锁死，导致所有消息停在「解析中」。
-   */
-  private static async withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
-    let timerId: number = -1;
-    const timer: Promise<T | null> = new Promise<T | null>((resolve: (value: T | null) => void) => {
-      timerId = setTimeout(() => {
-        resolve(null);
-      }, ms);
-    });
-    const result: T | null = await Promise.race<T | null>([p, timer]);
-    if (timerId >= 0) {
-      clearTimeout(timerId);
-    }
-    return result;
-  }
-
-  /** 解析单条正文；任何异常都降级为 parseOk=false，绝不向上抛出。 */
-  static async parseOne(content: string): Promise<ParsedInfo> {
+  /** 解析单条消息；任何异常都降级为 parseOk=false，绝不向上抛出。 */
+  static async parseOne(msg: RobotMessage): Promise<ParsedInfo> {
     const at: string = new Date().toISOString();
+    let imageText: string = '';
+    let imageKind: string = '';
     try {
+      let content: string = msg.content;
+      const imageUrl: string = firstImageUrl(msg.attachments);
+      if (imageUrl.length > 0) {
+        const rec: ImageRecognizeResult = await ImageRecognizer.recognize(imageUrl);
+        imageKind = rec.kind;
+        imageText = rec.text;
+        if (imageText.trim().length > 0) {
+          // 图文同时存在时两者都保留：原正文在前，识别结果在后
+          content = content.trim().length > 0 ? content + '\n' + imageText : imageText;
+        }
+      }
       const chunks: string[] = ParseService.sliceText(content);
       const entities: ParsedEntity[] = [];
       for (let c = 0; c < chunks.length; c++) {
@@ -190,12 +190,19 @@ export class ParseService {
       } catch (e) {
         nounWords = [];
       }
+      // T0–T2：把正文整理成事件对象（分级过滤 + 槽位抽取 + 模板成句）
+      const ev: CampusEvent = buildEvent(content, msg.sender, msg.timestamp, msg.msg_id);
       const info: ParsedInfo = {
         parsedAt: at,
         parseOk: true,
+        // 类别：用户画像的载体（教务/活动/招聘/二手/闲聊）
         category: classifyCategory(content, nounWords),
-        summary: buildSummary(content, SUMMARY_MAX_CHARS),
-        entities: entities
+        // 摘要：由事件模板拼出的一句话（不是模型生成的）
+        summary: eventOneLine(ev),
+        entities: entities,
+        imageText: imageText,
+        imageKind: imageKind,
+        event: ev
       };
       return info;
     } catch (e) {
@@ -206,7 +213,9 @@ export class ParseService {
         parseOk: false,
         category: '',
         summary: '',
-        entities: []
+        entities: [],
+        imageText: imageText,
+        imageKind: imageKind
       };
       return failed;
     }
@@ -249,7 +258,7 @@ export class ParseService {
         if (m.parsedAt !== undefined && m.parsedAt.length > 0) {
           continue;
         }
-        infos.push(await ParseService.parseOne(m.content));
+        infos.push(await ParseService.parseOne(m));
         ids.push(m.msg_id);
         hilog.info(DOMAIN, TAG, 'parseOne done ok=%{public}s id=%{public}s',
           String(infos[infos.length - 1].parseOk), m.msg_id);
@@ -272,7 +281,7 @@ export class ParseService {
     const snapshot: RobotMessage[] = Store.getMessages();
     for (let i = 0; i < snapshot.length; i++) {
       if (snapshot[i].msg_id === msgId) {
-        const info: ParsedInfo = await ParseService.parseOne(snapshot[i].content);
+        const info: ParsedInfo = await ParseService.parseOne(snapshot[i]);
         ParseService.commit([msgId], [info]);
         return true;
       }
@@ -306,6 +315,9 @@ export class ParseService {
     msg.category = info.category;
     msg.summary = info.summary;
     msg.entities = info.entities;
+    msg.imageText = info.imageText ?? '';
+    msg.imageKind = info.imageKind ?? '';
+    msg.event = info.event;
   }
 
   private static bumpVersion(): void {

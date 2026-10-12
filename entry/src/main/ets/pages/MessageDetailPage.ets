@@ -1,14 +1,17 @@
 import { pasteboard } from '@kit.BasicServicesKit';
 import { Store } from '../common/Store';
 import { ParseService } from '../common/ParseService';
-import { RobotMessage, DetailParams, ParsedEntity } from '../common/Types';
+import { RobotMessage, DetailParams, ParsedEntity, firstImageUrl } from '../common/Types';
 import { EntityIcon } from '../common/UiParts';
+import { CampusEvent, EVENT_NOTICE, EVENT_PLAN, EVENT_TODO } from '../nlp/EventTypes';
+import { timeSlotDisplay } from '../nlp/TimeParser';
 
 @Entry
 @Component
 struct MessageDetailPage {
   @State msg: RobotMessage | undefined = undefined;
   @State reparsing: boolean = false;
+  @State imageFailed: boolean = false;
   private currentId: string = '';
 
   aboutToAppear(): void {
@@ -24,6 +27,7 @@ struct MessageDetailPage {
     const list: RobotMessage[] = Store.getMessages();
     for (let i = 0; i < list.length; i++) {
       if (list[i].msg_id === this.currentId) {
+        this.imageFailed = false;
         this.msg = list[i];
         return;
       }
@@ -48,6 +52,76 @@ struct MessageDetailPage {
 
   entityList(): ParsedEntity[] {
     return this.msg?.entities ?? [];
+  }
+
+  imageUrl(): string {
+    return this.msg === undefined ? '' : firstImageUrl(this.msg.attachments);
+  }
+
+  hasImage(): boolean {
+    return this.imageUrl().length > 0;
+  }
+
+  imageText(): string {
+    return this.msg?.imageText ?? '';
+  }
+
+  imageSectionTitle(): string {
+    return this.msg?.imageKind === 'qr' ? '二维码内容' : '图片文字（OCR）';
+  }
+
+  hasEvent(): boolean {
+    return this.msg?.event !== undefined;
+  }
+
+  evKind(): string {
+    return this.msg?.event?.kind ?? '';
+  }
+
+  evTitle(): string {
+    return this.msg?.event?.title ?? '';
+  }
+
+  evTimeText(): string {
+    const e: CampusEvent | undefined = this.msg?.event;
+    if (e === undefined || e.time === null) {
+      return '';
+    }
+    return timeSlotDisplay(e.time);
+  }
+
+  evPlace(): string {
+    return this.msg?.event?.place ?? '';
+  }
+
+  evWho(): string {
+    return this.msg?.event?.who ?? '';
+  }
+
+  evDeadline(): string {
+    return this.msg?.event?.deadline ?? '';
+  }
+
+  evConf(): number {
+    return this.msg?.event?.confidence ?? 0;
+  }
+
+  evTags(): string[] {
+    return this.msg?.event?.tags ?? [];
+  }
+
+  evKindColor(): string {
+    const k: string = this.evKind();
+    if (k === EVENT_TODO) {
+      return '#2E75B6';
+    }
+    if (k === EVENT_NOTICE) {
+      return '#B8434E';
+    }
+    if (k === EVENT_PLAN) {
+      return '#2F8F9D';
+    }
+    return '#8A5CC7';
   }
 
   handleToTask(): void {
@@ -135,6 +209,101 @@ struct MessageDetailPage {
         Scroll() {
           Column({ space: 16 }) {
             Column({ space: 8 }) {
+              Text('事件')
+                .fontSize(16)
+                .fontWeight(FontWeight.Medium)
+                .width('100%')
+              if (!this.hasEvent()) {
+                Text('尚未整理（本条不是待办/通知/出行计划）')
+                  .fontSize(13)
+                  .fontColor(Color.Gray)
+                  .width('100%')
+              } else {
+                Row({ space: 6 }) {
+                  Text(this.evKind())
+                    .fontSize(12)
+                    .fontColor(Color.White)
+                    .backgroundColor(this.evKindColor())
+                    .borderRadius(4)
+                    .padding({ left: 8, right: 8, top: 2, bottom: 2 })
+                  Text(this.evTitle())
+                    .fontSize(16)
+                    .fontWeight(FontWeight.Medium)
+                    .layoutWeight(1)
+                }
+                .width('100%')
+                .alignItems(VerticalAlign.Top)
+
+                if (this.evTimeText().length > 0) {
+                  Row({ space: 6 }) {
+                    EntityIcon({ type: 'datetime', size: 15, color: '#2E75B6' })
+                    Text(this.evTimeText())
+                      .fontSize(14)
+                      .fontColor('#333333')
+                      .layoutWeight(1)
+                  }
+                  .width('100%')
+                }
+                if (this.evPlace().length > 0) {
+                  Row({ space: 6 }) {
+                    EntityIcon({ type: 'location', size: 15, color: '#2E75B6' })
+                    Text(this.evPlace())
+                      .fontSize(14)
+                      .fontColor('#333333')
+                      .layoutWeight(1)
+                  }
+                  .width('100%')
+                }
+                if (this.evWho().length > 0) {
+                  Row({ space: 6 }) {
+                    EntityIcon({ type: 'name', size: 15, color: '#2E75B6' })
+                    Text(this.evWho())
+                      .fontSize(14)
+                      .fontColor('#333333')
+                      .layoutWeight(1)
+                  }
+                  .width('100%')
+                }
+                if (this.evDeadline().length > 0) {
+                  Text('截止：' + this.evDeadline())
+                    .fontSize(14)
+                    .fontColor('#B8434E')
+                    .width('100%')
+                }
+                if (this.summaryText().length > 0) {
+                  Text(this.summaryText())
+                    .fontSize(14)
+                    .fontColor('#333333')
+                    .width('100%')
+                }
+                if (this.evTags().length > 0) {
+                  Flex({ wrap: FlexWrap.Wrap }) {
+                    ForEach(this.evTags(), (t: string, index: number) => {
+                      Text(t)
+                        .fontSize(11)
+                        .fontColor('#3E9E6B')
+                        .backgroundColor('#EAF6EF')
+                        .borderRadius(4)
+                        .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+                        .margin({ right: 6, bottom: 6 })
+                    }, (t: string, index: number) => index + '_' + t)
+                  }
+                  .width('100%')
+                }
+                Text(this.evConf() < 0.5
+                  ? '置信度 ' + this.evConf().toFixed(2) + '（字段不完整，建议人工确认）'
+                  : '置信度 ' + this.evConf().toFixed(2))
+                  .fontSize(12)
+                  .fontColor('#888888')
+                  .width('100%')
+              }
+            }
+            .width('100%')
+            .alignItems(HorizontalAlign.Start)
+
+            Divider()
+
+            Column({ space: 8 }) {
               Text('解析结果')
                 .fontSize(16)
                 .fontWeight(FontWeight.Medium)
@@ -185,6 +354,22 @@ struct MessageDetailPage {
                   .fontColor(Color.Gray)
                   .width('100%')
               }
+
+              if (this.imageText().length > 0) {
+                Text(this.imageSectionTitle())
+                  .fontSize(13)
+                  .fontColor(Color.Gray)
+                  .width('100%')
+                Text(this.imageText())
+                  .fontSize(14)
+                  .fontColor('#333333')
+                  .width('100%')
+              } else if (this.hasImage() && !this.isPending()) {
+                Text('图片未识别出文字')
+                  .fontSize(13)
+                  .fontColor(Color.Gray)
+                  .width('100%')
+              }
             }
             .width('100%')
             .alignItems(HorizontalAlign.Start)
@@ -205,10 +390,28 @@ struct MessageDetailPage {
               Text('时间：' + this.msg.timestamp)
                 .fontSize(14)
                 .fontColor(Color.Gray)
-              Text(this.msg.content)
-                .fontSize(16)
-                .width('100%')
-                .textAlign(TextAlign.Start)
+
+              if (this.hasImage() && !this.imageFailed) {
+                Image(this.imageUrl())
+                  .width('100%')
+                  .constraintSize({ maxHeight: 320 })
+                  .objectFit(ImageFit.Contain)
+                  .onError(() => {
+                    this.imageFailed = true;
+                  })
+              } else if (this.hasImage()) {
+                Text('[图片加载失败或链接已过期]')
+                  .fontSize(13)
+                  .fontColor(Color.Gray)
+                  .width('100%')
+              }
+
+              if (this.msg.content.length > 0) {
+                Text(this.msg.content)
+                  .fontSize(16)
+                  .width('100%')
+                  .textAlign(TextAlign.Start)
+              }
             }
             .width('100%')
             .alignItems(HorizontalAlign.Start)

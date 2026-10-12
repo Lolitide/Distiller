@@ -2,6 +2,8 @@
  * 知了 · 机器人通道 —— 接口类型定义（Types.ets）
  */
 
+import { CampusEvent } from '../nlp/EventTypes';
+
 // ============================================================ 统一响应包
 
 export interface ApiError {
@@ -74,6 +76,18 @@ export interface SubscribeData {
   group_openid: string;
 }
 
+/** 消息附件（图片等）。服务端随消息下发；图片正文靠这个 URL 取回后做 OCR。 */
+export interface MessageAttachment {
+  content_type?: string;
+  filename?: string;
+  url?: string;
+  height?: number;
+  width?: number;
+  size?: number;
+  voice_wav_url?: string;
+  asr_refer_text?: string;
+}
+
 /** GET /api/relay/messages?after=<seq>&limit=<n> */
 export interface ServeMessage {
   seq: number;
@@ -86,6 +100,8 @@ export interface ServeMessage {
   event_type: string;
   /** 是否为本机绑定用户本人发的消息（服务端据 sender_openid 判定） */
   is_self?: boolean;
+  /** 附件列表；图片消息的 content 为空，正文在附件 URL 里 */
+  attachments?: MessageAttachment[];
 }
 
 export interface MessagesData {
@@ -149,6 +165,12 @@ export interface ParsedInfo {
   category: string;
   summary: string;
   entities: ParsedEntity[];
+  /** 图片消息经识别得到的文字；非图片消息为空串 */
+  imageText?: string;
+  /** 图片识别来源：'qr'（二维码/条形码）或 'text'（OCR） */
+  imageKind?: string;
+  /** T0–T2 整理出的事件对象（结构化字段 + 原话） */
+  event?: CampusEvent;
 }
 
 /** 存进本机的消息：服务端字段 + 本地状态字段 + 本地解析字段 */
@@ -160,6 +182,12 @@ export interface RobotMessage extends ServeMessage {
   category?: string;
   summary?: string;
   entities?: ParsedEntity[];
+  /** 图片消息识别出来的文字（二维码码值或 OCR 文字） */
+  imageText?: string;
+  /** 图片识别来源：'qr' / 'text' */
+  imageKind?: string;
+  /** T0–T2 整理出的事件对象 */
+  event?: CampusEvent;
 }
 
 /** 本地订阅缓存 */
@@ -207,6 +235,7 @@ export function toRobotMessages(remote: ServeMessage[]): RobotMessage[] {
       msg_id: m.msg_id,
       event_type: m.event_type,
       is_self: m.is_self === true,
+      attachments: m.attachments ?? [],
       read: false,
       handled: false
     });
@@ -227,4 +256,24 @@ export function formatTime(timestamp: string): string {
 
 function pad2(n: number): string {
   return n < 10 ? '0' + n : '' + n;
+}
+
+/** 取第一条图片附件的 URL；没有图片返回空串。 */
+export function firstImageUrl(list: MessageAttachment[] | undefined): string {
+  if (list === undefined) {
+    return '';
+  }
+  for (let i = 0; i < list.length; i++) {
+    const ct: string = list[i].content_type ?? '';
+    const url: string = list[i].url ?? '';
+    if (ct.indexOf('image/') === 0 && url.length > 0) {
+      return url;
+    }
+  }
+  return '';
+}
+
+/** 该消息是否带图片附件。 */
+export function hasImageAttachment(list: MessageAttachment[] | undefined): boolean {
+  return firstImageUrl(list).length > 0;
 }

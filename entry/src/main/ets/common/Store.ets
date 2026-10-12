@@ -17,8 +17,10 @@ const K_HIDE_SELF = 'hide_self';
 
 export class Store {
   private static pref: preferences.Preferences | null = null;
+  private static appContext: Context | null = null;
 
   static init(context: Context): void {
+    Store.appContext = context;
     if (Store.pref === null) {
       const options: preferences.Options = { name: STORE_NAME };
       Store.pref = preferences.getPreferencesSync(context, options);
@@ -44,6 +46,11 @@ export class Store {
     }
     Store.pref.putSync(key, value);
     Store.pref.flushSync();
+  }
+
+  /** 应用上下文：图片识码/OCR 需要它来读写沙箱临时文件。 */
+  static getAppContext(): Context | null {
+    return Store.appContext;
   }
 
   static hasIdentity(): boolean {
