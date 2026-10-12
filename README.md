@@ -62,10 +62,12 @@ entry/build/                 # 构建产物
 
 ## 三、打开与运行
 
-1. DevEco Studio → Open 本工程根目录。
+1. DevEco Studio → Open **直接包含 `build-profile.json5` 的那一层目录**（也就是仓库根目录）。
 2. 等它自动 Sync（或手动执行 `ohpm install`）。
 3. 配置签名（见上）。
 4. 连设备/模拟器 → Run。
+
+> ⚠️ 打开错层级 = 工程同步失败，见下面第五节。`git clone` 会把仓库放进以仓库名命名的子目录，别在外层打开。
 
 ---
 
@@ -79,3 +81,42 @@ entry/build/                 # 构建产物
 App 是纯 HTTP 轮询（1 秒），不需要 WebSocket / 推送 / 长连接。
 
 > 后端如何启动、如何部署，见后端项目 `qqbot-backend`（不包含在本仓库，也已加入 `.gitignore`，不会被误提交）。
+
+---
+
+## 五、常见问题：DevEco Studio 报「工程同步失败」
+
+**原因基本都是“打开错文件夹”**：DevEco Studio 必须打开**直接包含 `build-profile.json5` 的那一层**，打开它的父目录就会同步失败（因为父目录里没有鸿蒙工程描述文件）。
+
+以克隆到 `D:\code\clone-demo\` 后再 clone 仓库为例：
+
+```
+D:\code\clone-demo\            ← ❌ 打开这里 → 工程同步失败
+└── Distiller\                 ← ✅ 打开这里 → 同步正常
+    ├── build-profile.json5    ← 判断依据：这一层要有它
+    ├── oh-package.json5
+    ├── hvigor\
+    └── entry\
+```
+
+对应日志（`Help → Show Log in Explorer` 里的 `idea.log`）特征是：
+
+```
+WARN - ProjectModelLoader - can not find ProjectModelHandler <你打开的那个文件夹名>
+WARN - OhosSyncInvoker - load project data error. Cause:project model is null
+```
+
+**怎么修**：
+
+1. 在文件资源管理器里确认：`build-profile.json5`、`oh-package.json5`、`entry\` 三个是**同一层**。
+2. DevEco Studio → `File → Close Project`，回到欢迎页。
+3. `Open` → 选中**第 1 步确认的那一层**目录（不是它的父目录）。
+4. 等 Sync 完成（首次会下载依赖，稍慢）。
+
+> 同理，从 GitHub 下载 ZIP 解压后目录名通常带后缀（如 `Distiller-main`），要打开 `Distiller-main` 这一层，别打开它外面的目录。
+
+### 其它可能让同步失败的项（工程本身已确认无问题）
+
+- **SDK 版本**：本工程 `compatibleSdkVersion` 为 `6.1.1(24)`、`targetSdkVersion` 为 `26.0.0`，需要 DevEco Studio 6.x 且装了对应 API 的 SDK；版本过旧会同步失败，装新 SDK 或改根目录 `build-profile.json5` 的版本号。
+- **签名**：`signingConfigs` 为空是正常的，只是不能真机运行；同步本身不受影响。
+- **依赖下载**：网络不通时 `ohpm install` 失败，可手动在工程根目录执行 `ohpm install` 看具体报错。

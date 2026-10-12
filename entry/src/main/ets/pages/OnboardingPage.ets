@@ -2,7 +2,8 @@ import { pasteboard } from '@kit.BasicServicesKit';
 import { Config } from '../common/Config';
 import { ApiClient } from '../common/ApiClient';
 import { Store } from '../common/Store';
-import { HealthData, RegisterData, BindCodeData, BindStatusData, RegisterBody, BindCodeBody } from '../common/Types';
+import { Discovery } from '../common/Discovery';
+import { ApiResult, HealthData, RegisterData, BindCodeData, BindStatusData, RegisterBody, BindCodeBody } from '../common/Types';
 
 @Entry
 @Component
@@ -16,6 +17,7 @@ struct OnboardingPage {
   @State baseUrlInput: string = '';
   private bindTimerId: number = -1;
   private bindPollCount: number = 0;
+  private discoveryTried: boolean = false;
 
   aboutToAppear(): void {
     Store.init(getContext(this));
@@ -33,10 +35,55 @@ struct OnboardingPage {
     if (res.ok) {
       this.phase = 'connected';
       this.healthMsg = '已连接到后端的服务';
-      this.registerDevice();
+      await this.ensureIdentity();
+      return;
+    }
+    if (!this.discoveryTried) {
+      this.discoveryTried = true;
+      const found: string = await this.autoFind();
+      if (found.length > 0) {
+        await this.checkHealth();
+        return;
+      }
+    }
+    this.phase = 'error';
+    this.healthMsg = res.error?.message ?? '连不上服务器';
+  }
+
+  async ensureIdentity(): Promise<void> {
+    if (Store.hasIdentity()) {
+      const probe: ApiResult<BindStatusData> = await ApiClient.get<BindStatusData>('/api/relay/bind/status');
+      if (probe.ok) {
+        return;
+      }
+      const code: string = probe.error?.code ?? '';
+      if (code !== 'unauthorized') {
+        return;
+      }
+      Store.clearIdentity();
+    }
+    await this.registerDevice();
+  }
+
+  async autoFind(): Promise<string> {
+    this.phase = 'discovering';
+    this.healthMsg = '正在扫描局域网中的电脑…';
+    const found: string = await Discovery.autoFind();
+    if (found.length > 0) {
+      Store.setBaseUrl(found);
+      this.baseUrlInput = found;
+    }
+    return found;
+  }
+
+  async rescan(): Promise<void> {
+    this.discoveryTried = true;
+    const found: string = await this.autoFind();
+    if (found.length > 0) {
+      await this.checkHealth();
     } else {
       this.phase = 'error';
-      this.healthMsg = res.error?.message ?? '连不上服务器';
+      this.healthMsg = '没找到电脑上的服务，请确认手机与电脑在同一 Wi-Fi，且电脑已启动后端';
     }
   }
 
@@ -133,9 +180,18 @@ struct OnboardingPage {
 
       if (this.phase === 'checking') {
         Text('正在连接电脑上的服务…')
+      } else if (this.phase === 'discovering') {
+        Text(this.healthMsg)
+        Text('扫描约需 5~10 秒')
+          .fontSize(12)
+          .fontColor(Color.Gray)
       } else if (this.phase === 'error') {
         Text(this.healthMsg)
           .fontColor(Color.Red)
+        Button('自动扫描局域网')
+          .onClick(() => {
+            this.rescan();
+          })
         Text('当前地址：' + Config.baseUrl)
           .fontSize(12)
         TextInput({ placeholder: 'http://192.168.1.106:8730', text: this.baseUrlInput })
@@ -147,7 +203,7 @@ struct OnboardingPage {
           .onClick(() => {
             this.saveAndRetry();
           })
-        Text('排查：手机与电脑连同一 Wi-Fi；电脑防火墙放行 8730 端口；确认后端服务已启动')
+        Text('排查：手机与电脑连同一 Wi-Fi；电脑防火墙放行 ' + Config.discoveryPort + ' 端口；确认后端服务已启动')
           .fontSize(12)
           .fontColor(Color.Gray)
         Button('重试')

@@ -1,5 +1,7 @@
 import { ApiClient } from '../common/ApiClient';
+import { Config } from '../common/Config';
 import { Store } from '../common/Store';
+import { Discovery } from '../common/Discovery';
 import { PollService } from '../service/PollService';
 import { MyData, DeletedData } from '../common/Types';
 
@@ -17,6 +19,7 @@ struct SettingsPage {
   @State lastSync: string = '';
   @State boundTail: string = '';
   @State myData: string = '';
+  @State scanning: boolean = false;
 
   aboutToAppear(): void {
     this.baseUrlInput = Store.getBaseUrl();
@@ -50,6 +53,22 @@ struct SettingsPage {
     PollService.stop();
     PollService.start();
     this.getUIContext().getPromptAction().showToast({ message: '已保存并重启轮询' });
+  }
+
+  async autoScan(): Promise<void> {
+    this.scanning = true;
+    this.getUIContext().getPromptAction().showToast({ message: '正在扫描局域网，约 5~10 秒…' });
+    const found: string = await Discovery.autoFind();
+    this.scanning = false;
+    if (found.length > 0) {
+      this.baseUrlInput = found;
+      Store.setBaseUrl(found);
+      PollService.stop();
+      PollService.start();
+      this.getUIContext().getPromptAction().showToast({ message: '已找到并切换到 ' + found });
+    } else {
+      this.getUIContext().getPromptAction().showToast({ message: '没找到电脑上的服务' });
+    }
   }
 
   clearLocalMessages(): void {
@@ -118,6 +137,14 @@ struct SettingsPage {
               .onClick(() => {
                 this.saveBaseUrl();
               })
+            Button(this.scanning ? '扫描中…' : '自动扫描局域网地址')
+              .enabled(!this.scanning)
+              .onClick(() => {
+                this.autoScan();
+              })
+            Text('自动在手机所在的 Wi-Fi 网段里查找电脑上的后端（端口 ' + Config.discoveryPort + '）')
+              .fontSize(12)
+              .fontColor(Color.Gray)
           }
           .alignItems(HorizontalAlign.Start)
           .width('100%')
