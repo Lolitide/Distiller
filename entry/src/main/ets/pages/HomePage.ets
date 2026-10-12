@@ -1,6 +1,7 @@
 import { PollService } from '../service/PollService';
 import { Store } from '../common/Store';
-import { RobotMessage, DetailParams, formatTime } from '../common/Types';
+import { RobotMessage, DetailParams, ParsedEntity, formatTime } from '../common/Types';
+import { EntityIcon } from '../common/UiParts';
 
 @Entry
 @Component
@@ -42,6 +43,35 @@ struct HomePage {
       }
     }
     return out;
+  }
+
+  summaryText(item: RobotMessage): string {
+    return item.summary ?? '';
+  }
+
+  categoryText(item: RobotMessage): string {
+    return item.category ?? '';
+  }
+
+  entityListFor(item: RobotMessage): ParsedEntity[] {
+    const list: ParsedEntity[] = item.entities ?? [];
+    return list.length > 4 ? list.slice(0, 4) : list;
+  }
+
+  isPending(item: RobotMessage): boolean {
+    return item.parsedAt === undefined || item.parsedAt.length === 0;
+  }
+
+  /**
+   * ForEach 的 key：必须包含会影响列表项渲染的状态。
+   * 若只用 msg_id，解析完成/已读/已处理发生变化时 key 不变，ArkUI 会复用旧节点而不重建，
+   * 导致列表项一直停留在「解析中…」。
+   */
+  itemKey(item: RobotMessage): string {
+    const parsedMark: string = item.parsedAt ?? '';
+    const readMark: string = item.read ? '1' : '0';
+    const handledMark: string = item.handled ? '1' : '0';
+    return item.msg_id + '|' + parsedMark + '|' + readMark + '|' + handledMark;
   }
 
   aboutToDisappear(): void {
@@ -253,11 +283,60 @@ struct HomePage {
                   }
                   .width('100%')
 
-                  Text(item.sender + '：' + item.content)
-                    .fontSize(15)
-                    .maxLines(2)
-                    .textOverflow({ overflow: TextOverflow.Ellipsis })
+                  if (item.parseOk === true && this.summaryText(item).length > 0) {
+                    Row({ space: 6 }) {
+                      if (this.categoryText(item).length > 0) {
+                        Text(this.categoryText(item))
+                          .fontSize(11)
+                          .fontColor(Color.White)
+                          .backgroundColor('#2E75B6')
+                          .borderRadius(4)
+                          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+                      }
+                      Text(this.summaryText(item))
+                        .fontSize(15)
+                        .maxLines(2)
+                        .textOverflow({ overflow: TextOverflow.Ellipsis })
+                        .layoutWeight(1)
+                    }
                     .width('100%')
+                    .alignItems(VerticalAlign.Top)
+
+                    if (this.entityListFor(item).length > 0) {
+                      Flex({ wrap: FlexWrap.Wrap }) {
+                        ForEach(this.entityListFor(item), (e: ParsedEntity, index: number) => {
+                          Row({ space: 3 }) {
+                            EntityIcon({ type: e.type, size: 13, color: '#2E75B6' })
+                            Text(e.text)
+                              .fontSize(11)
+                              .fontColor('#2E75B6')
+                              .maxLines(1)
+                              .textOverflow({ overflow: TextOverflow.Ellipsis })
+                          }
+                          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+                          .backgroundColor('#EAF1FA')
+                          .borderRadius(4)
+                          .margin({ right: 6, bottom: 4 })
+                        }, (e: ParsedEntity, index: number) => index + '_' + e.type + '_' + e.text)
+                      }
+                      .width('100%')
+                    }
+                  } else if (this.isPending(item)) {
+                    Text('解析中…')
+                      .fontSize(14)
+                      .fontColor(Color.Gray)
+                      .width('100%')
+                  } else {
+                    Text(item.sender + '：' + item.content)
+                      .fontSize(15)
+                      .maxLines(2)
+                      .textOverflow({ overflow: TextOverflow.Ellipsis })
+                      .width('100%')
+                    Text('未解析 · 显示原文')
+                      .fontSize(11)
+                      .fontColor(Color.Gray)
+                      .width('100%')
+                  }
 
                   Row({ space: 12 }) {
                     if (!item.handled) {
@@ -285,7 +364,7 @@ struct HomePage {
                   this.openDetail(item);
                 })
               }
-            }, (item: RobotMessage) => item.msg_id)
+            }, (item: RobotMessage) => this.itemKey(item))
           }
           .width('100%')
         }
