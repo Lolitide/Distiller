@@ -75,7 +75,14 @@ struct GroupSubPage {
   }
 
   goBack(): void {
-    this.getUIContext().getRouter().back();
+    const router = this.getUIContext().getRouter();
+    // 首次安装经 OnboardingPage replaceUrl 进来时，本页是栈底，back() 会直接退出应用；
+    // 这种情况回到主页面（消息页）。
+    if (router.getStackSize() > 1) {
+      router.back();
+    } else {
+      router.replaceUrl({ url: 'pages/HomePage' });
+    }
   }
 
   build() {
