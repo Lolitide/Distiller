@@ -4,6 +4,7 @@
     "pages/OnboardingPage",
     "pages/HomePage",
     "pages/MessageDetailPage",
+    "pages/DigestPage",
     "pages/GroupSubPage",
     "pages/SettingsPage"
   ]

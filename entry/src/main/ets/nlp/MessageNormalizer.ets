@@ -90,3 +90,40 @@ export function isNoise(text: string): boolean {
   }
   return false;
 }
+
+/**
+ * 把识别出来的图片文字（OCR / 二维码）压成一句可读摘要。
+ *
+ * OCR 结果常常是整屏文字，直接铺出来就是「一堵墙」。这里按行拆开、
+ * 丢掉噪声行（纯符号、序号、"OK" 这类），再取前几行拼成一句。
+ * **纯抽取，不做任何改写**，所以不会编造内容。
+ */
+export function summarizeRecognizedText(text: string, maxLen: number): string {
+  const lines: string[] = text.split('\n');
+  const kept: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line: string = normalize(lines[i]);
+    if (line.length === 0 || isNoise(line)) {
+      continue;
+    }
+    kept.push(line);
+  }
+  let out: string = '';
+  for (let i = 0; i < kept.length; i++) {
+    const piece: string = kept[i];
+    const candidate: string = out.length === 0 ? piece : out + ' · ' + piece;
+    if (candidate.length > maxLen) {
+      if (out.length === 0) {
+        out = piece.length > maxLen ? piece.substring(0, maxLen) + '…' : piece;
+      }
+      break;
+    }
+    out = candidate;
+  }
+  if (out.length === 0) {
+    // 全部行都是噪声：退回把整段压成一行后的前 N 个字符
+    const flat: string = normalize(text).replace(/[\n\r]+/g, ' ').trim();
+    return flat.length > maxLen ? flat.substring(0, maxLen) + '…' : flat;
+  }
+  return out;
+}

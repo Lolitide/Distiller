@@ -12,11 +12,12 @@ import { EntityType, textProcessing } from '@kit.NaturalLanguageKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Store } from './Store';
 import { ParsedEntity, ParsedInfo, RobotMessage, firstImageUrl } from './Types';
-import { buildSummary, classifyCategory } from './ParseRules';
+import { classifyCategory } from './ParseRules';
 import { ImageRecognizer, ImageRecognizeResult } from './ImageRecognizer';
 import { withTimeout } from './AsyncUtil';
 import { buildEvent, eventOneLine } from '../nlp/EventBuilder';
 import { CampusEvent } from '../nlp/EventTypes';
+import { summarizeRecognizedText } from '../nlp/MessageNormalizer';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'ParseService';
@@ -24,8 +25,8 @@ const TAG: string = 'ParseService';
 const NLP_MAX_CHARS: number = 1000;
 /** 每拍最多解析的条数，避免长列表一次性阻塞 */
 const PARSE_BATCH: number = 20;
-/** 列表摘要最大字数 */
-const SUMMARY_MAX_CHARS: number = 24;
+/** 图片识别文字的摘要最大长度（字符） */
+const IMAGE_SUMMARY_MAX_CHARS: number = 40;
 /** 单次 NL Kit 调用超时（毫秒），超时按失败降级，避免卡死解析队列 */
 const NLP_TIMEOUT_MS: number = 8000;
 
@@ -192,6 +193,9 @@ export class ParseService {
       }
       // T0–T2：把正文整理成事件对象（分级过滤 + 槽位抽取 + 模板成句）
       const ev: CampusEvent = buildEvent(content, msg.sender, msg.timestamp, msg.msg_id);
+      // 图片识别出来的整屏文字先压成摘要再展示，避免界面变成一堵墙
+      const imageSummary: string = imageText.length > 0
+        ? summarizeRecognizedText(imageText, IMAGE_SUMMARY_MAX_CHARS) : '';
       const info: ParsedInfo = {
         parsedAt: at,
         parseOk: true,
@@ -202,6 +206,7 @@ export class ParseService {
         entities: entities,
         imageText: imageText,
         imageKind: imageKind,
+        imageSummary: imageSummary,
         event: ev
       };
       return info;
@@ -215,7 +220,8 @@ export class ParseService {
         summary: '',
         entities: [],
         imageText: imageText,
-        imageKind: imageKind
+        imageKind: imageKind,
+        imageSummary: ''
       };
       return failed;
     }
@@ -317,6 +323,7 @@ export class ParseService {
     msg.entities = info.entities;
     msg.imageText = info.imageText ?? '';
     msg.imageKind = info.imageKind ?? '';
+    msg.imageSummary = info.imageSummary ?? '';
     msg.event = info.event;
   }
 

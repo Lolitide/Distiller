@@ -169,6 +169,8 @@ export interface ParsedInfo {
   imageText?: string;
   /** 图片识别来源：'qr'（二维码/条形码）或 'text'（OCR） */
   imageKind?: string;
+  /** 图片识别文字的压缩摘要（整屏 OCR 直接展示会是一堵墙） */
+  imageSummary?: string;
   /** T0–T2 整理出的事件对象（结构化字段 + 原话） */
   event?: CampusEvent;
 }
@@ -186,6 +188,8 @@ export interface RobotMessage extends ServeMessage {
   imageText?: string;
   /** 图片识别来源：'qr' / 'text' */
   imageKind?: string;
+  /** 图片识别文字的压缩摘要 */
+  imageSummary?: string;
   /** T0–T2 整理出的事件对象 */
   event?: CampusEvent;
 }

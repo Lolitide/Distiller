@@ -12,6 +12,7 @@ struct MessageDetailPage {
   @State msg: RobotMessage | undefined = undefined;
   @State reparsing: boolean = false;
   @State imageFailed: boolean = false;
+  @State showFullImageText: boolean = false;
   private currentId: string = '';
 
   aboutToAppear(): void {
@@ -28,6 +29,7 @@ struct MessageDetailPage {
     for (let i = 0; i < list.length; i++) {
       if (list[i].msg_id === this.currentId) {
         this.imageFailed = false;
+        this.showFullImageText = false;
         this.msg = list[i];
         return;
       }
@@ -64,6 +66,11 @@ struct MessageDetailPage {
 
   imageText(): string {
     return this.msg?.imageText ?? '';
+  }
+
+  /** 识别文字的压缩摘要（整屏 OCR 直接展示是一堵墙） */
+  imageSummary(): string {
+    return this.msg?.imageSummary ?? '';
   }
 
   imageSectionTitle(): string {
@@ -360,10 +367,26 @@ struct MessageDetailPage {
                   .fontSize(13)
                   .fontColor(Color.Gray)
                   .width('100%')
-                Text(this.imageText())
-                  .fontSize(14)
+                Text(this.imageSummary().length > 0 ? this.imageSummary() : this.imageText())
+                  .fontSize(15)
                   .fontColor('#333333')
                   .width('100%')
+                if (this.imageSummary().length > 0) {
+                  Text(this.showFullImageText ? '收起完整文字' : '查看完整文字 ›')
+                    .fontSize(12)
+                    .fontColor('#2E75B6')
+                    .width('100%')
+                    .onClick(() => {
+                      this.showFullImageText = !this.showFullImageText;
+                    })
+                  if (this.showFullImageText) {
+                    Text(this.imageText())
+                      .fontSize(13)
+                      .fontColor('#666666')
+                      .width('100%')
+                      .padding({ top: 4 })
+                  }
+                }
               } else if (this.hasImage() && !this.isPending()) {
                 Text('图片未识别出文字')
                   .fontSize(13)

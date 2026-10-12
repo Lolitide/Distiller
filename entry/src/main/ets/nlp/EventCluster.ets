@@ -10,7 +10,7 @@
  *   4. 每簇取信息量最大的一条当代表。
  */
 
-import { CampusEvent, EVENT_IGNORE } from './EventTypes';
+import { CampusEvent, EVENT_CHAT, EVENT_IGNORE, isActionable } from './EventTypes';
 import { tsToMillis } from './TimeParser';
 import { eventOneLine } from './EventBuilder';
 
@@ -35,6 +35,31 @@ function hasStopChar(g: string): boolean {
     }
   }
   return false;
+}
+
+/** 汇总展示用的筛选 + 排序：丢掉单条闲聊，待办/通知/出行计划优先。 */
+export function pickDigestClusters(clusters: EventCluster[]): EventCluster[] {
+  const picked: EventCluster[] = [];
+  for (let i = 0; i < clusters.length; i++) {
+    const c: EventCluster = clusters[i];
+    // 单条闲聊不算「事件」，不进汇总
+    if (c.kind === EVENT_CHAT && c.count < 2) {
+      continue;
+    }
+    picked.push(c);
+  }
+  picked.sort((a: EventCluster, b: EventCluster): number => {
+    const pa: number = isActionable(a.kind) ? 0 : 1;
+    const pb: number = isActionable(b.kind) ? 0 : 1;
+    if (pa !== pb) {
+      return pa - pb;
+    }
+    if (a.count !== b.count) {
+      return b.count - a.count;
+    }
+    return b.confidence - a.confidence;
+  });
+  return picked;
 }
 
 /** 极简关键词：中文按 2-4 字滑窗 + 去停用词。端侧不需要分词库也能用。 */

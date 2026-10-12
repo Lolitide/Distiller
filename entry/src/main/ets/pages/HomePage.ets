@@ -4,7 +4,7 @@ import { RobotMessage, DetailParams, ParsedEntity, formatTime, hasImageAttachmen
 import { EntityIcon } from '../common/UiParts';
 import { CampusEvent, isActionable, EVENT_NOTICE, EVENT_PLAN, EVENT_TODO } from '../nlp/EventTypes';
 import { timeSlotDisplay } from '../nlp/TimeParser';
-import { clusterEvents, EventCluster } from '../nlp/EventCluster';
+import { clusterEvents, pickDigestClusters, EventCluster } from '../nlp/EventCluster';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 const DOMAIN: number = 0x0000;
@@ -22,6 +22,8 @@ struct HomePage {
   @State hideSelf: boolean = false;
   /** T3 汇总：把零散消息聚成若干事件 */
   @State digest: EventCluster[] = [];
+  /** 汇总里总共有多少个事件（卡片只展示前 3 个） */
+  @State digestTotal: number = 0;
   private statusTimer: number = -1;
   private bannerTimer: number = -1;
   private digestSig: string = '';
@@ -55,27 +57,8 @@ struct HomePage {
       }
     }
     const clusters: EventCluster[] = clusterEvents(evs);
-    const picked: EventCluster[] = [];
-    for (let i = 0; i < clusters.length; i++) {
-      const c: EventCluster = clusters[i];
-      // 单条闲聊不算「事件」，不进汇总
-      if (c.kind === '闲聊' && c.count < 2) {
-        continue;
-      }
-      picked.push(c);
-    }
-    // 待办/通知/出行计划优先，其次按条数、置信度
-    picked.sort((a: EventCluster, b: EventCluster): number => {
-      const pa: number = isActionable(a.kind) ? 0 : 1;
-      const pb: number = isActionable(b.kind) ? 0 : 1;
-      if (pa !== pb) {
-        return pa - pb;
-      }
-      if (a.count !== b.count) {
-        return b.count - a.count;
-      }
-      return b.confidence - a.confidence;
-    });
+    const picked: EventCluster[] = pickDigestClusters(clusters);
+    this.digestTotal = picked.length;
     this.digest = picked.slice(0, 3);
     // 只在汇总内容变化时打一条日志，便于排查又不刷屏
     let sig: string = '';
@@ -175,6 +158,16 @@ struct HomePage {
 
   evSource(item: RobotMessage): string {
     return item.event?.sourceText ?? '';
+  }
+
+  /** 列表正文：图片消息优先显示识别文字的「摘要」，其次事件原话，最后才是原文 */
+  displayText(item: RobotMessage): string {
+    const imgSummary: string = item.imageSummary ?? '';
+    if (imgSummary.length > 0) {
+      return imgSummary;
+    }
+    const src: string = this.evSource(item);
+    return src.length > 0 ? src : item.content;
   }
 
   evConf(item: RobotMessage): number {
@@ -283,6 +276,10 @@ struct HomePage {
     this.setRead(item.msg_id);
     const p: DetailParams = { msgId: item.msg_id };
     this.getUIContext().getRouter().pushUrl({ url: 'pages/MessageDetailPage', params: p });
+  }
+
+  openDigest(): void {
+    this.getUIContext().getRouter().pushUrl({ url: 'pages/DigestPage' });
   }
 
   handleToTask(item: RobotMessage): void {
@@ -414,9 +411,12 @@ struct HomePage {
                       .fontSize(14)
                       .fontWeight(FontWeight.Medium)
                       .layoutWeight(1)
-                    Text(this.messages.length + ' 条消息')
+                    Text(this.digestTotal + ' 个事件 · ' + this.messages.length + ' 条消息')
                       .fontSize(12)
                       .fontColor(Color.Gray)
+                    Text('查看全部 ›')
+                      .fontSize(12)
+                      .fontColor('#2E75B6')
                   }
                   .width('100%')
 
@@ -445,6 +445,9 @@ struct HomePage {
                 .alignItems(HorizontalAlign.Start)
                 .backgroundColor('#F5F3FA')
                 .borderRadius(8)
+                .onClick(() => {
+                  this.openDigest();
+                })
               }
             }
 
@@ -555,7 +558,7 @@ struct HomePage {
                           .padding({ left: 6, right: 6, top: 2, bottom: 2 })
                       }
                     }
-                    Text(this.evSource(item).length > 0 ? this.evSource(item) : item.content)
+                    Text(this.displayText(item))
                       .fontSize(14)
                       .fontColor('#666666')
                       .maxLines(3)
