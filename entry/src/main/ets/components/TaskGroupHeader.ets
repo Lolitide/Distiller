@@ -1,9 +1,15 @@
 /*
- * UI Design Kit 无对应组件：HDS 没有「列表分组头」。
- * 组头用官方 ArkUI 的「系统预置 UI 组件库」SubHeader（@kit.ArkUI）承载
- * 「标题 + 副标题 + 右侧按钮」，未自造任何控件。
+ * 组头 = 官方 SubHeader（系统预置 UI 组件库，@kit.ArkUI）负责「标题 + 副标题」的官方排版。
+ *
+ * 为什么展开/收起按钮**不在** SubHeader 里：
+ *   SubHeader 的 `operationItem` 参数**没有装饰器**（官方 API 文档「装饰器类型」栏是 `-`，
+ *   而 primaryTitle / secondaryTitle / operationType 都是 `@Prop`），
+ *   按 ArkUI V1 的规矩，未加装饰器的子组件参数只在初始化时赋一次，父组件后续更新不会同步 ——
+ *   所以放在 operationItem 里的图标永远停在初始态，做不出「点一下换图标」。
+ *   按钮因此改用官方 SymbolGlyph 放在 SubHeader 外侧的同一行。
+ *   依据：`docs/开发指南.md` §四 规则 3 —— 官方件做不了时用 ArkUI 基础组件，并在文件头注明。
  */
-import { OperationType, SubHeader } from '@kit.ArkUI';
+import { LengthMetrics, SubHeader } from '@kit.ArkUI';
 import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
 
 const WEEKDAY_LABELS: Resource[] = [
@@ -45,13 +51,13 @@ export struct TaskGroupHeader {
     return $r('app.string.group_progress', this.group.pendingCount, this.group.totalCount);
   }
 
-  /** 右：展开 / 收起。展开态是向上箭头，收起态是向下箭头 */
+  /** 右：展开 / 收起两个图标。展开态朝上，收起态朝下 */
   @Computed
   get toggleSymbol(): Resource {
     return this.group.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down');
   }
 
-  /** 右下角图标没有文字，必须给无障碍文本 */
+  /** 图标按钮没有文字，必须给无障碍文本（否则读屏选中时不播报） */
   @Computed
   get toggleAccessibility(): Resource {
     return this.group.expanded ? $r('app.string.group_collapse') : $r('app.string.group_expand');
@@ -71,19 +77,25 @@ export struct TaskGroupHeader {
   }
 
   build() {
-    SubHeader({
-      secondaryTitle: this.subtitleLabel,
-      titleBuilder: () => {
-        this.titleArea();
-      },
-      operationType: OperationType.ICON_GROUP,
-      operationItem: [{
-        value: this.toggleSymbol,
-        action: () => {
+    Row() {
+      Column() {
+        SubHeader({
+          secondaryTitle: this.subtitleLabel,
+          titleBuilder: () => {
+            this.titleArea();
+          }
+        })
+      }
+      .layoutWeight(1)
+
+      SymbolGlyph(this.toggleSymbol)
+        .accessibilityText(this.toggleAccessibility)
+        .onClick(() => {
           this.onToggle();
-        },
-        accessibilityText: this.toggleAccessibility
-      }]
-    })
+        })
+    }
+    .width('100%')
+    .alignItems(VerticalAlign.Center)
+    .padding({ end: LengthMetrics.resource($r('sys.float.padding_level8')) })
   }
 }
