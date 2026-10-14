@@ -2,19 +2,15 @@ import { notificationManager } from '@kit.NotificationKit';
 import { Config } from '../common/Config';
 import { ApiClient } from '../common/ApiClient';
 import { Store } from '../common/Store';
-import { Discovery } from '../common/Discovery';
 import { ParseService } from '../common/ParseService';
 import { MessagesData, RobotMessage, toRobotMessages } from '../common/Types';
 
 const NET_FAIL_THRESHOLD: number = 3;
-const REDISCOVER_COOLDOWN_MS: number = 30000;
 
 export class PollService {
   private static timerId: number = -1;
   private static running: boolean = false;
   private static netFailCount: number = 0;
-  private static discovering: boolean = false;
-  private static lastDiscoveryAt: number = 0;
   static lastSyncAt: string = '';
   static lastError: string = '';
 
@@ -67,7 +63,6 @@ export class PollService {
       }
       if (code === 'network') {
         PollService.netFailCount++;
-        PollService.maybeRediscover();
       } else {
         PollService.netFailCount = 0;
       }
@@ -82,36 +77,6 @@ export class PollService {
       PollService.notifyNew(added);
     }
     return added;
-  }
-
-  private static maybeRediscover(): void {
-    if (PollService.netFailCount < NET_FAIL_THRESHOLD) {
-      return;
-    }
-    if (PollService.discovering) {
-      return;
-    }
-    const now: number = Date.now();
-    if (now - PollService.lastDiscoveryAt < REDISCOVER_COOLDOWN_MS) {
-      return;
-    }
-    PollService.discovering = true;
-    PollService.lastDiscoveryAt = now;
-    PollService.rediscover();
-  }
-
-  private static async rediscover(): Promise<void> {
-    try {
-      const found: string = await Discovery.autoFind();
-      if (found.length > 0 && found !== Config.baseUrl) {
-        Store.setBaseUrl(found);
-        PollService.lastError = '';
-      }
-    } catch (e) {
-      // 发现失败，保持原地址继续重试
-    } finally {
-      PollService.discovering = false;
-    }
   }
 
   private static merge(data: MessagesData): number {
