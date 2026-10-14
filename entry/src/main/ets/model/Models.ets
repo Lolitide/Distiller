@@ -10,9 +10,9 @@
  * 这份契约**就是最终落库的字段**（需求方 2026-10-14 明确），同时兼作 UI 的 Mock 数据形状。
  * 与 `docs/开发指南.md` §9.2 的列名对应关系逐个写在字段注释里。
  *
- * 其中 `id` / `status` 也是本契约的一部分，但**不是用户填的**，由 repository / 落库提供。
+ * 其中 `id` / `status` / `reminderId` 也是本契约的一部分，但**不是用户填的**，由 repository 提供。
  * 不在本契约里的持久化字段（`raw_text` / `raw_json` / `confidence` / `missing_fields` /
- * `created_at` / `updated_at` / `reminder_id`）仍按 §9.2 由 repository 附加。
+ * `created_at` / `updated_at`）仍按 §9.2 由 repository 附加。
  *
  * 纪律：本层只放类型与常量，不放行为；字段名改动必须同步 §9.2 那张表。
  */
@@ -54,34 +54,45 @@ export interface TaskStep {
   content: string;
 }
 
-/** 任务 */
-export interface Task {
+/**
+ * 任务
+ *
+ * 用 `@ObservedV2` + `@Trace`（需求方 2026-10-14 定）：卡片上点圆圈、拨「响铃提醒」开关
+ * 都是**直接改字段**，靠这套装饰器刷新界面；否则得靠替换整个对象/数组来逼出新渲染。
+ */
+@ObservedV2
+export class Task {
   /** 任务 id，**必填**，非用户填。§9.2 是 `AUTOINCREMENT` 主键，落库时由 repository 提供 */
-  id: number;
+  id: number = 0;
   /** 状态，**必填**，非用户填。对应 §9.2 的 `status`（`NOT NULL`），取值见 `TaskStatus` */
-  status: TaskStatus;
+  @Trace status: TaskStatus = TaskStatus.PENDING_CONFIRM;
   /** 任务名称，**必填**。对应 §9.2 的 `title` */
-  title: string;
+  @Trace title: string = '';
   /** 步骤，可选。§9.2 没有对应列 */
-  steps?: TaskStep[];
+  @Trace steps?: TaskStep[];
   /** 到期时间，可选。界面按 MM月DD日周几 选（只到日，不带时分），存毫秒时间戳。对应 §9.2 的 `due_at` */
-  dueAt?: number;
+  @Trace dueAt?: number;
   /** 提醒时间，可选。界面按 MM月DD日周几 HH:mm 选，存毫秒时间戳。对应 §9.2 的 `remind_at` */
-  remindAt?: number;
+  @Trace remindAt?: number;
+  /**
+   * 已发布的本地提醒键，未发布为空。对应 §9.2 的 `reminder_id`。
+   * 卡片右侧的「响铃提醒」开关**由它派生**（有值＝开）
+   */
+  @Trace reminderId?: number;
   /** 重复，可选。对应 §9.2 的 `repeat` */
-  repeat?: TaskRepeat;
+  @Trace repeat?: TaskRepeat;
   /** 重复选「自定义」时用户自填的原文，可选。与 `repeat` 同列 */
-  repeatText?: string;
+  @Trace repeatText?: string;
   /** 预计耗时，可选，单位小时（界面按 HH小时 填）。§9.2 没有对应列 */
-  estimatedHours?: number;
+  @Trace estimatedHours?: number;
   /** 紧急程度，**必填**（§9.2 是 `NOT NULL`）。对应 §9.2 的 `priority` */
-  priority: TaskPriority;
+  @Trace priority: TaskPriority = TaskPriority.NORMAL;
   /** 来源通道，可选。对应 §9.2 的 `source`；取值见 TASK_SOURCE_PRESETS，也可为自定义文本 */
-  source?: string;
+  @Trace source?: string;
   /** 类型，可选。§9.2 没有对应列；取值见 TASK_CATEGORY_PRESETS，也可为自定义文本 */
-  category?: string;
+  @Trace category?: string;
   /** 标签，可选，自定义。§9.2 没有对应列 */
-  tags?: string[];
+  @Trace tags?: string[];
   /** 备注，可选，纯文本。对应 §9.2 的 `detail` */
-  detail?: string;
+  @Trace detail?: string;
 }

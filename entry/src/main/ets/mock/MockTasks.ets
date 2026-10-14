@@ -1,6 +1,6 @@
 /*
  * Mock 数据 —— **只为 UI 联调 / 走查用，不是真实数据，不许当数据源接进调用链**。
- * 形状与 `entry/src/main/ets/model/Models.ets` 的 `Task` 完全一致（13 个字段）。
+ * 形状与 `entry/src/main/ets/model/Models.ets` 的 `Task` 完全一致（14 个字段）。
  * 覆盖面：`docs/开发指南.md` §9.3 状态机的全部 6 态 + 契约里各种字段组合 + 最小合法数据。
  */
 import { Task, TaskPriority, TaskRepeat, TaskStatus } from '../model';
@@ -22,6 +22,7 @@ export const MOCK_TASKS: Task[] = [
     ],
     dueAt: at(10, 16, 23, 59),
     remindAt: at(10, 16, 19, 0),
+    reminderId: 101,
     repeat: TaskRepeat.NONE,
     estimatedHours: 3,
     priority: TaskPriority.IMPORTANT,
@@ -61,6 +62,7 @@ export const MOCK_TASKS: Task[] = [
     status: TaskStatus.COMPLETED,
     title: '社团例会',
     remindAt: at(10, 16, 18, 30),
+    reminderId: 104,
     repeat: TaskRepeat.WEEKLY,
     estimatedHours: 1,
     priority: TaskPriority.NORMAL,
