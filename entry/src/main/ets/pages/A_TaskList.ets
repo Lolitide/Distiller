@@ -1,3 +1,4 @@
+import { LengthMetrics } from '@kit.ArkUI';
 import { Task, TaskStatus } from '../model';
 import { MOCK_TASKS } from '../mock/MockTasks';
 import { MainTitleBar } from '../components/MainTitleBar';
@@ -26,20 +27,35 @@ export struct A_TaskList {
     task.reminderId = isOn ? -1 : undefined;
   }
 
+  /**
+   * 分组头。
+   *
+   * 外面套一层 `Column` 是为了加**分组头与卡片之间的间隔**：`ListItemGroup` 的 `space`/`spaceWidth`
+   * 只管「列表项之间」，不含分组头，官方没给「头与首项之间」的选项。
+   * `SubHeader` 自己不能设通用属性（官方文档明说会多生成 `__Common__` 节点，属性可能不生效），
+   * 所以间隔只能加在外层的这层壳上。
+   */
   @Builder
   groupHeader(group: TaskDayGroup) {
-    TaskGroupHeader({
-      group: group,
-      onToggle: () => {
-        group.expanded = !group.expanded;
-      }
-    })
+    Column() {
+      TaskGroupHeader({
+        group: group,
+        onToggle: () => {
+          group.expanded = !group.expanded;
+        }
+      })
+    }
+    .width('100%')
+    .padding({ bottom: LengthMetrics.resource($r('sys.float.padding_level8')) })
   }
 
   build() {
     List() {
       ForEach(this.groups, (group: TaskDayGroup) => {
-        ListItemGroup({ header: this.groupHeader(group) }) {
+        ListItemGroup({
+          header: this.groupHeader(group),
+          spaceWidth: $r('sys.float.padding_level8')
+        }) {
           if (group.expanded) {
             ForEach(group.tasks, (task: Task) => {
               ListItem() {
