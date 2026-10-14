@@ -77,6 +77,6 @@ export struct A_TaskList {
     .width('100%')
     .height('100%')
     .contentStartOffset(MainTitleBar.CONTENT_TOP_OFFSET_VP)
-    .contentEndOffset($r('sys.float.padding_level8'))
+    .contentEndOffset($r('sys.float.padding_level4'))
   }
 }
