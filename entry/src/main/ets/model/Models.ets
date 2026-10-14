@@ -10,11 +10,23 @@
  * 这份契约**就是最终落库的字段**（需求方 2026-10-14 明确），同时兼作 UI 的 Mock 数据形状。
  * 与 `docs/开发指南.md` §9.2 的列名对应关系逐个写在字段注释里。
  *
- * 不在本契约里的持久化字段（`id` / `status` / `raw_text` / `raw_json` / `confidence` /
- * `missing_fields` / `created_at` / `updated_at` / `reminder_id`）仍按 §9.2 由 repository 附加。
+ * 其中 `id` / `status` 也是本契约的一部分，但**不是用户填的**，由 repository / 落库提供。
+ * 不在本契约里的持久化字段（`raw_text` / `raw_json` / `confidence` / `missing_fields` /
+ * `created_at` / `updated_at` / `reminder_id`）仍按 §9.2 由 repository 附加。
  *
  * 纪律：本层只放类型与常量，不放行为；字段名改动必须同步 §9.2 那张表。
  */
+
+/** 状态机（照 `docs/开发指南.md` §9.3）：待确认 → 已确认 → 进行中 → 已完成；已过期只有系统能写 */
+export enum TaskStatus {
+  PENDING_CONFIRM = 0,
+  CONFIRMED = 1,
+  IN_PROGRESS = 2,
+  COMPLETED = 3,
+  EXPIRED = 4,
+  DELETED = 5
+}
+
 /** 重复：不重复 / 每 1 天 / 每 1 周 / 每 1 个月 / 自定义 */
 export enum TaskRepeat {
   NONE = 0,
@@ -44,6 +56,10 @@ export interface TaskStep {
 
 /** 任务 */
 export interface Task {
+  /** 任务 id，**必填**，非用户填。§9.2 是 `AUTOINCREMENT` 主键，落库时由 repository 提供 */
+  id: number;
+  /** 状态，**必填**，非用户填。对应 §9.2 的 `status`（`NOT NULL`），取值见 `TaskStatus` */
+  status: TaskStatus;
   /** 任务名称，**必填**。对应 §9.2 的 `title` */
   title: string;
   /** 步骤，可选。§9.2 没有对应列 */
