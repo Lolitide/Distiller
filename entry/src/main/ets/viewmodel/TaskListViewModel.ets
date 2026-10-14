@@ -27,7 +27,7 @@ const PRIORITY_LABELS: string[] = ['普通', '重要', '紧急'];
  * 所以先在 ViewModel 里用常量拼字符串。要改成资源，得把描述行换成 Span 拼接，
  * 或用 resourceManager 把资源解成字符串。
  */
-const TIME_SUFFIX: string = '截止';
+const TIME_SUFFIX: string = ' 截止';
 const TIME_PREFIX: string = '在 ';
 const REMIND_PREFIX: string = '响铃还有 ';
 const REMIND_HOUR_UNIT: string = ' 小时 ';
