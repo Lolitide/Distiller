@@ -24,8 +24,10 @@ export enum TaskRepeat {
   CUSTOM = 4
 }
 
-/** 紧急程度。需求方目前只定了「紧急」，其余档位未定（0 / 1 预留给待定的较低档位） */
-export enum TaskUrgency {
+/** 紧急程度。取值照 `docs/开发指南.md` §9.2 的 `priority` 列注释：0 普通 / 1 重要 / 2 紧急 */
+export enum TaskPriority {
+  NORMAL = 0,
+  IMPORTANT = 1,
   URGENT = 2
 }
 
@@ -56,8 +58,8 @@ export interface Task {
   repeatText?: string;
   /** 预计耗时，可选，单位小时（界面按 HH小时 填）。§9.2 没有对应列 */
   estimatedHours?: number;
-  /** 紧急程度，可选。对应 §9.2 的 `priority` */
-  urgency?: TaskUrgency;
+  /** 紧急程度，**必填**（§9.2 是 `NOT NULL`）。对应 §9.2 的 `priority` */
+  priority: TaskPriority;
   /** 来源通道，可选。对应 §9.2 的 `source`；取值见 TASK_SOURCE_PRESETS，也可为自定义文本 */
   source?: string;
   /** 类型，可选。§9.2 没有对应列；取值见 TASK_CATEGORY_PRESETS，也可为自定义文本 */
