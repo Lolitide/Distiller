@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="510" viewBox="0 0 920 510" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <defs>
+    <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#4A90D9"/>
+    </marker>
+    <marker id="a4o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#E8A33D"/>
+    </marker>
+  </defs>
+  <style>
+    .bx{fill:#EAF2FF;stroke:#4A90D9;stroke-width:1.5}
+    .acc{fill:#FFF4E5;stroke:#E8A33D;stroke-width:1.5}
+    .grn{fill:#E8F6EC;stroke:#46A758;stroke-width:1.5}
+    .dia{fill:#EEF1F6;stroke:#6B7280;stroke-width:1.5}
+    .t{fill:#1F2937;font-size:14px}
+    .ts{fill:#4B5563;font-size:12px}
+    .tt{fill:#111827;font-size:18px;font-weight:bold}
+    .ln{stroke:#4A90D9;stroke-width:1.8;fill:none;marker-end:url(#a4)}
+    .dash{stroke:#E8A33D;stroke-width:1.6;fill:none;stroke-dasharray:5 4;marker-end:url(#a4o)}
+    .badge{fill:#E5484D}
+    .bgt{fill:#FFFFFF;font-size:11px;font-weight:bold}
+  </style>
+
+  <text x="26" y="34" class="tt">候选 → 本地任务 与 反馈回传</text>
+
+  <rect x="340" y="58" width="240" height="64" rx="8" class="acc"/>
+  <text x="460" y="84" class="t" text-anchor="middle">Candidate（待确认卡片）</text>
+  <text x="460" y="104" class="ts" text-anchor="middle">列表里未确认的候选</text>
+  <line x1="460" y1="122" x2="460" y2="148" class="ln"/>
+
+  <polygon points="460,150 580,205 460,260 340,205" class="dia"/>
+  <text x="460" y="210" class="ts" text-anchor="middle">用户操作</text>
+
+  <path d="M340,205 L180,205 L180,270" class="ln" fill="none"/>
+  <text x="238" y="196" class="ts" fill="#2F6FB0">接受</text>
+  <path d="M580,205 L740,205 L740,270" class="ln" fill="none"/>
+  <text x="668" y="196" class="ts" fill="#2F6FB0">忽略</text>
+
+  <rect x="90" y="272" width="180" height="86" rx="8" class="grn"/>
+  <text x="180" y="300" class="t" text-anchor="middle">本地 Task（1 : 1）</text>
+  <text x="180" y="322" class="ts" text-anchor="middle">步骤/提醒/到期/完成</text>
+  <text x="180" y="340" class="ts" text-anchor="middle">纯本地，无接口</text>
+
+  <rect x="650" y="272" width="180" height="86" rx="8" class="bx"/>
+  <text x="740" y="300" class="t" text-anchor="middle">dismiss</text>
+  <text x="740" y="322" class="ts" text-anchor="middle">丢弃候选</text>
+  <text x="740" y="340" class="ts" text-anchor="middle">不再转任务</text>
+
+  <path d="M180,358 L180,432 L296,432" class="dash" fill="none"/>
+  <path d="M740,358 L740,432 L624,432" class="dash" fill="none"/>
+
+  <rect x="300" y="400" width="320" height="64" rx="8" class="acc"/>
+  <text x="460" y="426" class="t" text-anchor="middle">POST /api/relay/feedback（可选）</text>
+  <text x="460" y="446" class="ts" text-anchor="middle">{ candidate_id, action, edited_fields }</text>
+  <rect x="624" y="386" width="58" height="22" rx="11" class="badge"/>
+  <text x="653" y="401" class="bgt" text-anchor="middle">❌ 未实现</text>
+
+  <text x="26" y="492" class="ts">已定：候选 ↔ 任务基数 1:1，一键转任务，转完后候选不再影响任务。</text>
+</svg>

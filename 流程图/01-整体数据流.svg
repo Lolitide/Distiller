@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="472" viewBox="0 0 1100 472" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <defs>
+    <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#4A90D9"/>
+    </marker>
+  </defs>
+  <style>
+    .bx{fill:#EAF2FF;stroke:#4A90D9;stroke-width:1.5}
+    .acc{fill:#FFF4E5;stroke:#E8A33D;stroke-width:1.5}
+    .grn{fill:#E8F6EC;stroke:#46A758;stroke-width:1.5}
+    .warn{fill:#FDECEC;stroke:#E5484D;stroke-width:1.5}
+    .t{fill:#1F2937;font-size:14px}
+    .ts{fill:#4B5563;font-size:12px}
+    .tt{fill:#111827;font-size:18px;font-weight:bold}
+    .ln{stroke:#4A90D9;stroke-width:1.8;fill:none;marker-end:url(#a1)}
+    .dash{stroke:#E8A33D;stroke-width:1.6;fill:none;stroke-dasharray:5 4;marker-end:url(#a1)}
+  </style>
+
+  <text x="26" y="36" class="tt">知了 · 整体数据流（消息 → 候选 → 本地任务）</text>
+
+  <!-- Node A -->
+  <rect x="26" y="190" width="140" height="72" rx="8" class="bx"/>
+  <text x="96" y="220" class="t" text-anchor="middle">QQ 群消息</text>
+  <text x="96" y="240" class="ts" text-anchor="middle">（机器人接收）</text>
+  <line x1="166" y1="226" x2="198" y2="226" class="ln"/>
+
+  <!-- Backend pipeline -->
+  <rect x="200" y="112" width="320" height="230" rx="10" fill="none" stroke="#9BB7D9" stroke-width="1.4" stroke-dasharray="6 5"/>
+  <text x="216" y="136" class="t" font-weight="bold">后端智能管道（服务端）</text>
+  <rect x="216" y="150" width="288" height="38" rx="6" class="bx"/>
+  <text x="228" y="174" class="ts">① 去重（同群 + 完全/近似重复）</text>
+  <rect x="216" y="194" width="288" height="38" rx="6" class="bx"/>
+  <text x="228" y="218" class="ts">② 聚类：联合上下文 Thread</text>
+  <rect x="216" y="238" width="288" height="38" rx="6" class="bx"/>
+  <text x="228" y="262" class="ts">③ 结构化抽取 + 综合总结</text>
+  <rect x="216" y="282" width="288" height="38" rx="6" class="acc"/>
+  <text x="228" y="306" class="ts">④ 产出候选 Candidate</text>
+  <line x1="520" y1="226" x2="556" y2="226" class="dash"/>
+
+  <!-- Candidate -->
+  <rect x="558" y="184" width="212" height="84" rx="8" class="acc"/>
+  <text x="664" y="212" class="t" text-anchor="middle">Candidate 候选流</text>
+  <text x="664" y="232" class="ts" text-anchor="middle">游标 rev_seq · 仅内存 30 min</text>
+  <text x="664" y="252" class="ts" text-anchor="middle">GET /api/relay/candidates</text>
+  <line x1="770" y1="226" x2="806" y2="226" class="ln"/>
+
+  <!-- Frontend -->
+  <rect x="808" y="150" width="248" height="90" rx="8" class="grn"/>
+  <text x="824" y="180" class="t">前端：候选 → 本地 Task</text>
+  <text x="824" y="200" class="ts">用户确认才转（1 : 1），未确认显示为卡片</text>
+  <text x="824" y="220" class="ts">Candidate→Task 映射见 §6.1</text>
+  <line x1="932" y1="240" x2="932" y2="276" class="ln"/>
+  <rect x="808" y="278" width="248" height="96" rx="8" class="grn"/>
+  <text x="824" y="304" class="t">任务管理（全本地）</text>
+  <text x="824" y="326" class="ts">CRUD / 步骤 / 提醒 / 到期 / 重复</text>
+  <text x="824" y="346" class="ts">筛选 / 搜索 / 日期分组 / 通知</text>
+  <text x="824" y="366" class="ts">Task 数据模型见 §5.3</text>
+
+  <!-- bottom rules -->
+  <rect x="26" y="392" width="360" height="52" rx="8" class="warn"/>
+  <text x="40" y="414" class="ts">铁律 1：后端不存任务、不存原文正文；</text>
+  <text x="40" y="432" class="ts">候选只活在内存 30 分钟窗口内。</text>
+  <rect x="400" y="392" width="382" height="52" rx="8" class="warn"/>
+  <text x="414" y="414" class="ts">铁律 2：任务数据只存在手机本地；</text>
+  <text x="414" y="432" class="ts">后端永远不下发「任务」，只有「候选」。</text>
+  <rect x="808" y="392" width="248" height="52" rx="8" class="bx"/>
+  <text x="824" y="422" class="ts">仅持久化在手机本地</text>
+</svg>

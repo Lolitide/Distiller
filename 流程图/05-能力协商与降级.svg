@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="430" viewBox="0 0 920 430" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <defs>
+    <marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#4A90D9"/>
+    </marker>
+  </defs>
+  <style>
+    .bx{fill:#EAF2FF;stroke:#4A90D9;stroke-width:1.5}
+    .acc{fill:#FFF4E5;stroke:#E8A33D;stroke-width:1.5}
+    .grn{fill:#E8F6EC;stroke:#46A758;stroke-width:1.5}
+    .dia{fill:#EEF1F6;stroke:#6B7280;stroke-width:1.5}
+    .t{fill:#1F2937;font-size:14px}
+    .ts{fill:#4B5563;font-size:12px}
+    .tt{fill:#111827;font-size:18px;font-weight:bold}
+    .ln{stroke:#4A90D9;stroke-width:1.8;fill:none;marker-end:url(#a5)}
+    .badge{fill:#E5484D}
+    .bgt{fill:#FFFFFF;font-size:11px;font-weight:bold}
+  </style>
+
+  <text x="26" y="34" class="tt">能力协商与优雅降级（/health → capabilities）</text>
+
+  <rect x="330" y="58" width="260" height="54" rx="8" class="bx"/>
+  <text x="460" y="90" class="t" text-anchor="middle">App 启动 / 连接</text>
+  <line x1="460" y1="112" x2="460" y2="140" class="ln"/>
+
+  <rect x="330" y="142" width="260" height="54" rx="8" class="bx"/>
+  <text x="460" y="174" class="t" text-anchor="middle">GET /api/relay/health</text>
+  <line x1="460" y1="196" x2="460" y2="222" class="ln"/>
+
+  <polygon points="460,222 620,278 460,334 300,278" class="dia"/>
+  <text x="460" y="274" class="ts" text-anchor="middle">capabilities</text>
+  <text x="460" y="292" class="ts" text-anchor="middle">是否含 candidates？</text>
+
+  <path d="M300,278 L180,278 L180,346" class="ln" fill="none"/>
+  <text x="196" y="270" class="ts" fill="#B26A00">否（老后端）</text>
+  <path d="M620,278 L740,278 L740,346" class="ln" fill="none"/>
+  <text x="646" y="270" class="ts" fill="#2F6FB0">是</text>
+
+  <rect x="80" y="348" width="200" height="62" rx="8" class="acc"/>
+  <text x="180" y="374" class="t" text-anchor="middle">v1：退回本地规则</text>
+  <text x="180" y="394" class="ts" text-anchor="middle">功能降级但不出错</text>
+
+  <rect x="640" y="348" width="200" height="62" rx="8" class="grn"/>
+  <text x="740" y="374" class="t" text-anchor="middle">v2：任务列表</text>
+  <text x="740" y="394" class="ts" text-anchor="middle">消费 /candidates</text>
+
+  <rect x="560" y="142" width="230" height="24" rx="12" class="badge"/>
+  <text x="675" y="159" class="bgt" text-anchor="middle">❌ 字段未实现 → 恒走 v1</text>
+
+  <text x="26" y="424" class="ts">现状：health 仅返回 version/time/bot_running/window，无 api_version 与 capabilities。</text>
+</svg>

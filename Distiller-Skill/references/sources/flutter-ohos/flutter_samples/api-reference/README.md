@@ -1,0 +1,148 @@
+**Flutter ETS API Documentation v1.0.0**
+
+***
+
+# Flutter ETS API Documentation v1.0.0
+
+> 本目录为 Flutter **OpenHarmony 适配层**（包名 `@ohos/flutter_ohos`）对外暴露的 ArkTS API 参考，非 Flutter 框架本身的 Dart API。
+
+## 阅读建议
+
+- 入门请先读 [flutter-ohos-api-guide.md](./flutter-ohos-api-guide.md)：以核心对象（`FlutterAbility` / `FlutterEngine` / `FlutterPlugin` / `MethodChannel` / `PlatformView` 等）为主线，附使用示例与生命周期说明。
+- 查阅具体类/方法签名时，按下表进入对应子目录的 `README.md`。
+
+## Modules
+
+- <a href="app/FlutterPluginRegistry/README.md" style="text-decoration:none !important">app/FlutterPluginRegistry</a>
+- <a href="component/FlutterComponent/README.md" style="text-decoration:none !important">component/FlutterComponent</a>
+- <a href="component/XComponentStruct/README.md" style="text-decoration:none !important">component/XComponentStruct</a>
+- <a href="embedding/engine/dart/DartExecutor/README.md" style="text-decoration:none !important">embedding/engine/dart/DartExecutor</a>
+- <a href="embedding/engine/dart/DartMessenger/README.md" style="text-decoration:none !important">embedding/engine/dart/DartMessenger</a>
+- <a href="embedding/engine/dart/PlatformMessageHandler/README.md" style="text-decoration:none !important">embedding/engine/dart/PlatformMessageHandler</a>
+- <a href="embedding/engine/FlutterEngine/README.md" style="text-decoration:none !important">embedding/engine/FlutterEngine</a>
+- <a href="embedding/engine/FlutterEngineCache/README.md" style="text-decoration:none !important">embedding/engine/FlutterEngineCache</a>
+- <a href="embedding/engine/FlutterEngineConnectionRegistry/README.md" style="text-decoration:none !important">embedding/engine/FlutterEngineConnectionRegistry</a>
+- <a href="embedding/engine/FlutterEngineGroup/README.md" style="text-decoration:none !important">embedding/engine/FlutterEngineGroup</a>
+- <a href="embedding/engine/FlutterEngineGroupCache/README.md" style="text-decoration:none !important">embedding/engine/FlutterEngineGroupCache</a>
+- <a href="embedding/engine/FlutterEnginePreload/README.md" style="text-decoration:none !important">embedding/engine/FlutterEnginePreload</a>
+- <a href="embedding/engine/FlutterNapi/README.md" style="text-decoration:none !important">embedding/engine/FlutterNapi</a>
+- <a href="embedding/engine/FlutterOverlaySurface/README.md" style="text-decoration:none !important">embedding/engine/FlutterOverlaySurface</a>
+- <a href="embedding/engine/FlutterShellArgs/README.md" style="text-decoration:none !important">embedding/engine/FlutterShellArgs</a>
+- <a href="embedding/engine/loader/ApplicationInfoLoader/README.md" style="text-decoration:none !important">embedding/engine/loader/ApplicationInfoLoader</a>
+- <a href="embedding/engine/loader/FlutterApplicationInfo/README.md" style="text-decoration:none !important">embedding/engine/loader/FlutterApplicationInfo</a>
+- <a href="embedding/engine/loader/FlutterLoader/README.md" style="text-decoration:none !important">embedding/engine/loader/FlutterLoader</a>
+- <a href="embedding/engine/mutatorsstack/FlutterMutatorsStack/README.md" style="text-decoration:none !important">embedding/engine/mutatorsstack/FlutterMutatorsStack</a>
+- <a href="embedding/engine/mutatorsstack/FlutterMutatorView/README.md" style="text-decoration:none !important">embedding/engine/mutatorsstack/FlutterMutatorView</a>
+- <a href="embedding/engine/plugins/ability/AbilityAware/README.md" style="text-decoration:none !important">embedding/engine/plugins/ability/AbilityAware</a>
+- <a href="embedding/engine/plugins/ability/AbilityControlSurface/README.md" style="text-decoration:none !important">embedding/engine/plugins/ability/AbilityControlSurface</a>
+- <a href="embedding/engine/plugins/ability/AbilityPluginBinding/README.md" style="text-decoration:none !important">embedding/engine/plugins/ability/AbilityPluginBinding</a>
+- <a href="embedding/engine/plugins/FlutterPlugin/README.md" style="text-decoration:none !important">embedding/engine/plugins/FlutterPlugin</a>
+- <a href="embedding/engine/plugins/PluginRegistry/README.md" style="text-decoration:none !important">embedding/engine/plugins/PluginRegistry</a>
+- <a href="embedding/engine/renderer/FlutterRenderer/README.md" style="text-decoration:none !important">embedding/engine/renderer/FlutterRenderer</a>
+- <a href="embedding/engine/renderer/FlutterUiDisplayListener/README.md" style="text-decoration:none !important">embedding/engine/renderer/FlutterUiDisplayListener</a>
+- <a href="embedding/engine/systemchannels/AccessibilityChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/AccessibilityChannel</a>
+- <a href="embedding/engine/systemchannels/DisplayMetricsChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/DisplayMetricsChannel</a>
+- <a href="embedding/engine/systemchannels/KeyboardChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/KeyboardChannel</a>
+- <a href="embedding/engine/systemchannels/KeyEventChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/KeyEventChannel</a>
+- <a href="embedding/engine/systemchannels/LifecycleChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/LifecycleChannel</a>
+- <a href="embedding/engine/systemchannels/LocalizationChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/LocalizationChannel</a>
+- <a href="embedding/engine/systemchannels/MouseCursorChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/MouseCursorChannel</a>
+- <a href="embedding/engine/systemchannels/NativeVsyncChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/NativeVsyncChannel</a>
+- <a href="embedding/engine/systemchannels/NavigationChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/NavigationChannel</a>
+- <a href="embedding/engine/systemchannels/PlatformChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/PlatformChannel</a>
+- <a href="embedding/engine/systemchannels/PlatformViewsChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/PlatformViewsChannel</a>
+- <a href="embedding/engine/systemchannels/RestorationChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/RestorationChannel</a>
+- <a href="embedding/engine/systemchannels/SensitiveContentChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/SensitiveContentChannel</a>
+- <a href="embedding/engine/systemchannels/SettingsChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/SettingsChannel</a>
+- <a href="embedding/engine/systemchannels/StatusBarClickChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/StatusBarClickChannel</a>
+- <a href="embedding/engine/systemchannels/SystemChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/SystemChannel</a>
+- <a href="embedding/engine/systemchannels/TestChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/TestChannel</a>
+- <a href="embedding/engine/systemchannels/TextInputChannel/README.md" style="text-decoration:none !important">embedding/engine/systemchannels/TextInputChannel</a>
+- <a href="embedding/engine/workers/PlatformChannelWorker/README.md" style="text-decoration:none !important">embedding/engine/workers/PlatformChannelWorker</a>
+- <a href="embedding/ohos/EmbeddingNodeController/README.md" style="text-decoration:none !important">embedding/ohos/EmbeddingNodeController</a>
+- <a href="embedding/ohos/ExclusiveAppComponent/README.md" style="text-decoration:none !important">embedding/ohos/ExclusiveAppComponent</a>
+- <a href="embedding/ohos/FlutterAbility/README.md" style="text-decoration:none !important">embedding/ohos/FlutterAbility</a>
+- <a href="embedding/ohos/FlutterAbilityAndEntryDelegate/README.md" style="text-decoration:none !important">embedding/ohos/FlutterAbilityAndEntryDelegate</a>
+- <a href="embedding/ohos/FlutterAbilityLaunchConfigs/README.md" style="text-decoration:none !important">embedding/ohos/FlutterAbilityLaunchConfigs</a>
+- <a href="embedding/ohos/FlutterEngineConfigurator/README.md" style="text-decoration:none !important">embedding/ohos/FlutterEngineConfigurator</a>
+- <a href="embedding/ohos/FlutterEngineProvider/README.md" style="text-decoration:none !important">embedding/ohos/FlutterEngineProvider</a>
+- <a href="embedding/ohos/FlutterEntry/README.md" style="text-decoration:none !important">embedding/ohos/FlutterEntry</a>
+- <a href="embedding/ohos/FlutterManager/README.md" style="text-decoration:none !important">embedding/ohos/FlutterManager</a>
+- <a href="embedding/ohos/FlutterPage/README.md" style="text-decoration:none !important">embedding/ohos/FlutterPage</a>
+- <a href="embedding/ohos/KeyboardManager/README.md" style="text-decoration:none !important">embedding/ohos/KeyboardManager</a>
+- <a href="embedding/ohos/KeyboardMap/README.md" style="text-decoration:none !important">embedding/ohos/KeyboardMap</a>
+- <a href="embedding/ohos/KeyData/README.md" style="text-decoration:none !important">embedding/ohos/KeyData</a>
+- <a href="embedding/ohos/KeyEmbedderResponder/README.md" style="text-decoration:none !important">embedding/ohos/KeyEmbedderResponder</a>
+- <a href="embedding/ohos/KeyEventHandler/README.md" style="text-decoration:none !important">embedding/ohos/KeyEventHandler</a>
+- <a href="embedding/ohos/OhosTouchProcessor/README.md" style="text-decoration:none !important">embedding/ohos/OhosTouchProcessor</a>
+- <a href="embedding/ohos/PiPVisibilityBridge/README.md" style="text-decoration:none !important">embedding/ohos/PiPVisibilityBridge</a>
+- <a href="embedding/ohos/PlatformViewInfo/README.md" style="text-decoration:none !important">embedding/ohos/PlatformViewInfo</a>
+- <a href="embedding/ohos/Settings/README.md" style="text-decoration:none !important">embedding/ohos/Settings</a>
+- <a href="embedding/ohos/TouchEventProcessor/README.md" style="text-decoration:none !important">embedding/ohos/TouchEventProcessor</a>
+- <a href="embedding/ohos/TouchEventTracker/README.md" style="text-decoration:none !important">embedding/ohos/TouchEventTracker</a>
+- <a href="embedding/ohos/WindowInfoRepositoryCallbackAdapterWrapper/README.md" style="text-decoration:none !important">embedding/ohos/WindowInfoRepositoryCallbackAdapterWrapper</a>
+- <a href="FlutterInjector/README.md" style="text-decoration:none !important">FlutterInjector</a>
+- <a href="plugin/common/BackgroundBasicMessageChannel/README.md" style="text-decoration:none !important">plugin/common/BackgroundBasicMessageChannel</a>
+- <a href="plugin/common/BackgroundMethodChannel/README.md" style="text-decoration:none !important">plugin/common/BackgroundMethodChannel</a>
+- <a href="plugin/common/BasicMessageChannel/README.md" style="text-decoration:none !important">plugin/common/BasicMessageChannel</a>
+- <a href="plugin/common/BinaryCodec/README.md" style="text-decoration:none !important">plugin/common/BinaryCodec</a>
+- <a href="plugin/common/BinaryMessenger/README.md" style="text-decoration:none !important">plugin/common/BinaryMessenger</a>
+- <a href="plugin/common/EventChannel/README.md" style="text-decoration:none !important">plugin/common/EventChannel</a>
+- <a href="plugin/common/FlutterException/README.md" style="text-decoration:none !important">plugin/common/FlutterException</a>
+- <a href="plugin/common/JSONMessageCodec/README.md" style="text-decoration:none !important">plugin/common/JSONMessageCodec</a>
+- <a href="plugin/common/JSONMethodCodec/README.md" style="text-decoration:none !important">plugin/common/JSONMethodCodec</a>
+- <a href="plugin/common/MessageCodec/README.md" style="text-decoration:none !important">plugin/common/MessageCodec</a>
+- <a href="plugin/common/MethodCall/README.md" style="text-decoration:none !important">plugin/common/MethodCall</a>
+- <a href="plugin/common/MethodChannel/README.md" style="text-decoration:none !important">plugin/common/MethodChannel</a>
+- <a href="plugin/common/MethodCodec/README.md" style="text-decoration:none !important">plugin/common/MethodCodec</a>
+- <a href="plugin/common/SendableBinaryCodec/README.md" style="text-decoration:none !important">plugin/common/SendableBinaryCodec</a>
+- <a href="plugin/common/SendableBinaryMessageHandler/README.md" style="text-decoration:none !important">plugin/common/SendableBinaryMessageHandler</a>
+- <a href="plugin/common/SendableJSONMessageCodec/README.md" style="text-decoration:none !important">plugin/common/SendableJSONMessageCodec</a>
+- <a href="plugin/common/SendableJSONMethodCodec/README.md" style="text-decoration:none !important">plugin/common/SendableJSONMethodCodec</a>
+- <a href="plugin/common/SendableMessageCodec/README.md" style="text-decoration:none !important">plugin/common/SendableMessageCodec</a>
+- <a href="plugin/common/SendableMessageHandler/README.md" style="text-decoration:none !important">plugin/common/SendableMessageHandler</a>
+- <a href="plugin/common/SendableMethodCallHandler/README.md" style="text-decoration:none !important">plugin/common/SendableMethodCallHandler</a>
+- <a href="plugin/common/SendableMethodCodec/README.md" style="text-decoration:none !important">plugin/common/SendableMethodCodec</a>
+- <a href="plugin/common/SendableStandardMessageCodec/README.md" style="text-decoration:none !important">plugin/common/SendableStandardMessageCodec</a>
+- <a href="plugin/common/SendableStandardMethodCodec/README.md" style="text-decoration:none !important">plugin/common/SendableStandardMethodCodec</a>
+- <a href="plugin/common/SendableStringCodec/README.md" style="text-decoration:none !important">plugin/common/SendableStringCodec</a>
+- <a href="plugin/common/StandardMessageCodec/README.md" style="text-decoration:none !important">plugin/common/StandardMessageCodec</a>
+- <a href="plugin/common/StandardMethodCodec/README.md" style="text-decoration:none !important">plugin/common/StandardMethodCodec</a>
+- <a href="plugin/common/StringCodec/README.md" style="text-decoration:none !important">plugin/common/StringCodec</a>
+- <a href="plugin/editing/ListenableEditingState/README.md" style="text-decoration:none !important">plugin/editing/ListenableEditingState</a>
+- <a href="plugin/editing/PreviewSpanCoalescing/README.md" style="text-decoration:none !important">plugin/editing/PreviewSpanCoalescing</a>
+- <a href="plugin/editing/PreviewTextCoordinator/README.md" style="text-decoration:none !important">plugin/editing/PreviewTextCoordinator</a>
+- <a href="plugin/editing/PreviewTextMergeContext/README.md" style="text-decoration:none !important">plugin/editing/PreviewTextMergeContext</a>
+- <a href="plugin/editing/PreviewTextStringMerge/README.md" style="text-decoration:none !important">plugin/editing/PreviewTextStringMerge</a>
+- <a href="plugin/editing/PreviewTextSupport/README.md" style="text-decoration:none !important">plugin/editing/PreviewTextSupport</a>
+- <a href="plugin/editing/TextEditingDelta/README.md" style="text-decoration:none !important">plugin/editing/TextEditingDelta</a>
+- <a href="plugin/editing/TextInputPlugin/README.md" style="text-decoration:none !important">plugin/editing/TextInputPlugin</a>
+- <a href="plugin/editing/TextUtils/README.md" style="text-decoration:none !important">plugin/editing/TextUtils</a>
+- <a href="plugin/localization/LocalizationPlugin/README.md" style="text-decoration:none !important">plugin/localization/LocalizationPlugin</a>
+- <a href="plugin/mouse/MouseCursorPlugin/README.md" style="text-decoration:none !important">plugin/mouse/MouseCursorPlugin</a>
+- <a href="plugin/platform/CustomTouchEvent/README.md" style="text-decoration:none !important">plugin/platform/CustomTouchEvent</a>
+- <a href="plugin/platform/PlatformView/README.md" style="text-decoration:none !important">plugin/platform/PlatformView</a>
+- <a href="plugin/platform/PlatformViewFactory/README.md" style="text-decoration:none !important">plugin/platform/PlatformViewFactory</a>
+- <a href="plugin/platform/PlatformViewRegistry/README.md" style="text-decoration:none !important">plugin/platform/PlatformViewRegistry</a>
+- <a href="plugin/platform/PlatformViewRegistryImpl/README.md" style="text-decoration:none !important">plugin/platform/PlatformViewRegistryImpl</a>
+- <a href="plugin/platform/PlatformViewsController/README.md" style="text-decoration:none !important">plugin/platform/PlatformViewsController</a>
+- <a href="plugin/platform/PlatformViewWrapper/README.md" style="text-decoration:none !important">plugin/platform/PlatformViewWrapper</a>
+- <a href="plugin/platform/RawPointerCoord/README.md" style="text-decoration:none !important">plugin/platform/RawPointerCoord</a>
+- <a href="plugin/platform/RootDvModelManager/README.md" style="text-decoration:none !important">plugin/platform/RootDvModelManager</a>
+- <a href="plugin/PlatformPlugin/README.md" style="text-decoration:none !important">plugin/PlatformPlugin</a>
+- <a href="plugin/view/SensitiveContentPlugin/README.md" style="text-decoration:none !important">plugin/view/SensitiveContentPlugin</a>
+- <a href="util/ByteBuffer/README.md" style="text-decoration:none !important">util/ByteBuffer</a>
+- <a href="util/Json5ToJson/README.md" style="text-decoration:none !important">util/Json5ToJson</a>
+- <a href="util/Log/README.md" style="text-decoration:none !important">util/Log</a>
+- <a href="util/MessageChannelUtils/README.md" style="text-decoration:none !important">util/MessageChannelUtils</a>
+- <a href="util/PasteboardUtils/README.md" style="text-decoration:none !important">util/PasteboardUtils</a>
+- <a href="util/PathUtils/README.md" style="text-decoration:none !important">util/PathUtils</a>
+- <a href="util/StringUtils/README.md" style="text-decoration:none !important">util/StringUtils</a>
+- <a href="util/ToolUtils/README.md" style="text-decoration:none !important">util/ToolUtils</a>
+- <a href="util/TraceSection/README.md" style="text-decoration:none !important">util/TraceSection</a>
+- <a href="view/DynamicView/dynamicView/README.md" style="text-decoration:none !important">view/DynamicView/dynamicView</a>
+- <a href="view/DynamicView/dynamicViewJson/README.md" style="text-decoration:none !important">view/DynamicView/dynamicViewJson</a>
+- <a href="view/FlutterCallbackInformation/README.md" style="text-decoration:none !important">view/FlutterCallbackInformation</a>
+- <a href="view/FlutterRunArguments/README.md" style="text-decoration:none !important">view/FlutterRunArguments</a>
+- <a href="view/FlutterView/README.md" style="text-decoration:none !important">view/FlutterView</a>
+- <a href="view/TextureRegistry/README.md" style="text-decoration:none !important">view/TextureRegistry</a>

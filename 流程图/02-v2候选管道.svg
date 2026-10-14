@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="560" viewBox="0 0 720 560" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <defs>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#4A90D9"/>
+    </marker>
+  </defs>
+  <style>
+    .bx{fill:#EAF2FF;stroke:#4A90D9;stroke-width:1.5}
+    .acc{fill:#FFF4E5;stroke:#E8A33D;stroke-width:1.5}
+    .grn{fill:#E8F6EC;stroke:#46A758;stroke-width:1.5}
+    .t{fill:#1F2937;font-size:14px}
+    .ts{fill:#4B5563;font-size:12px}
+    .tt{fill:#111827;font-size:18px;font-weight:bold}
+    .ln{stroke:#4A90D9;stroke-width:1.8;fill:none;marker-end:url(#a2)}
+    .badge{fill:#E5484D}
+    .bgt{fill:#FFFFFF;font-size:12px;font-weight:bold}
+  </style>
+
+  <text x="26" y="34" class="tt">v2 · 候选生成管道（后端）</text>
+
+  <rect x="560" y="16" width="130" height="26" rx="13" class="badge"/>
+  <text x="625" y="34" class="bgt" text-anchor="middle">❌ 未实现</text>
+
+  <rect x="150" y="66" width="420" height="52" rx="8" class="bx"/>
+  <text x="360" y="90" class="t" text-anchor="middle">群消息进入 30 min 内存窗口</text>
+  <text x="360" y="108" class="ts" text-anchor="middle">POST /api/relay/internal/ingest（机器人进程推送）</text>
+  <line x1="360" y1="118" x2="360" y2="142" class="ln"/>
+
+  <rect x="150" y="144" width="420" height="52" rx="8" class="acc"/>
+  <text x="360" y="168" class="t" text-anchor="middle">① 去重 dedup</text>
+  <text x="360" y="186" class="ts" text-anchor="middle">同群 + 归一化文本相同 / SimHash 近似，间隔 &lt; 10 min → 合并 source.msg_ids</text>
+  <line x1="360" y1="196" x2="360" y2="220" class="ln"/>
+
+  <rect x="150" y="222" width="420" height="52" rx="8" class="acc"/>
+  <text x="360" y="246" class="t" text-anchor="middle">② 聚类 Thread（联合上下文）</text>
+  <text x="360" y="264" class="ts" text-anchor="middle">同群 + 相邻间隔 ≤ 30 min + 共享关键词/实体/指代关联</text>
+  <line x1="360" y1="274" x2="360" y2="298" class="ln"/>
+
+  <rect x="150" y="300" width="420" height="52" rx="8" class="acc"/>
+  <text x="360" y="324" class="t" text-anchor="middle">③ 对整簇调模型 → 综合总结（1 条候选）</text>
+  <text x="360" y="342" class="ts" text-anchor="middle">「比赛定在后天」+「啥比赛」+「传智杯」→ 1 条：传智杯比赛在后天</text>
+  <line x1="360" y1="352" x2="360" y2="376" class="ln"/>
+
+  <rect x="150" y="378" width="420" height="52" rx="8" class="grn"/>
+  <text x="360" y="402" class="t" text-anchor="middle">④ GET /api/relay/candidates?after=&lt;rev_seq&gt;&amp;limit=</text>
+  <text x="360" y="420" class="ts" text-anchor="middle">返回 candidates[] + cursor（= 本次最大 rev_seq）</text>
+  <line x1="360" y1="430" x2="360" y2="454" class="ln"/>
+
+  <rect x="150" y="456" width="420" height="52" rx="8" class="bx"/>
+  <text x="360" y="480" class="t" text-anchor="middle">App 按 candidate_id upsert（非按 msg_id）</text>
+  <text x="360" y="498" class="ts" text-anchor="middle">更新会重新下发并带更大 rev_seq，避免「游标跑过头」</text>
+
+  <text x="26" y="540" class="ts">现状：pipeline_proto.py 仅含离线回测原型 cluster()，未接入 server.py；单条消息解析挂 parse 字段。</text>
+</svg>

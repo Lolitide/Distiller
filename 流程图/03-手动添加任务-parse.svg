@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1010" height="380" viewBox="0 0 1010 380" font-family="Microsoft YaHei, PingFang SC, sans-serif">
+  <defs>
+    <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#4A90D9"/>
+    </marker>
+    <marker id="a3o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#E8A33D"/>
+    </marker>
+  </defs>
+  <style>
+    .bx{fill:#EAF2FF;stroke:#4A90D9;stroke-width:1.5}
+    .acc{fill:#FFF4E5;stroke:#E8A33D;stroke-width:1.5}
+    .grn{fill:#E8F6EC;stroke:#46A758;stroke-width:1.5}
+    .t{fill:#1F2937;font-size:14px}
+    .ts{fill:#4B5563;font-size:12px}
+    .tt{fill:#111827;font-size:18px;font-weight:bold}
+    .ln{stroke:#4A90D9;stroke-width:1.8;fill:none;marker-end:url(#a3)}
+    .dash{stroke:#E8A33D;stroke-width:1.6;fill:none;stroke-dasharray:5 4;marker-end:url(#a3o)}
+    .badge{fill:#E5484D}
+    .bgt{fill:#FFFFFF;font-size:12px;font-weight:bold}
+  </style>
+
+  <text x="26" y="34" class="tt">「添加任务」→ POST /api/relay/parse（无状态抽取）</text>
+  <rect x="836" y="16" width="150" height="26" rx="13" class="badge"/>
+  <text x="911" y="34" class="bgt" text-anchor="middle">❌ 接口未实现</text>
+
+  <rect x="26" y="140" width="160" height="88" rx="8" class="bx"/>
+  <text x="106" y="170" class="t" text-anchor="middle">输入来源</text>
+  <text x="106" y="192" class="ts" text-anchor="middle">截图 / 录音 / 文本</text>
+  <text x="106" y="212" class="ts" text-anchor="middle">（添加任务页三来源 tab）</text>
+
+  <line x1="186" y1="184" x2="218" y2="184" class="ln"/>
+  <rect x="220" y="140" width="180" height="88" rx="8" class="bx"/>
+  <text x="310" y="170" class="t" text-anchor="middle">端侧 OCR / ASR</text>
+  <text x="310" y="192" class="ts" text-anchor="middle">Core Vision Kit</text>
+  <text x="310" y="210" class="ts" text-anchor="middle">Core Speech Kit</text>
+
+  <line x1="400" y1="184" x2="432" y2="184" class="ln"/>
+  <rect x="434" y="140" width="190" height="88" rx="8" class="acc"/>
+  <text x="529" y="168" class="t" text-anchor="middle">POST /api/relay/parse</text>
+  <text x="529" y="190" class="ts" text-anchor="middle">{ text, source: "manual" }</text>
+  <text x="529" y="210" class="ts" text-anchor="middle">只处理、不存储</text>
+
+  <line x1="624" y1="184" x2="656" y2="184" class="ln"/>
+  <rect x="658" y="140" width="150" height="88" rx="8" class="acc"/>
+  <text x="733" y="170" class="t" text-anchor="middle">Candidate</text>
+  <text x="733" y="192" class="ts" text-anchor="middle">candidate_id 为临时值</text>
+  <text x="733" y="210" class="ts" text-anchor="middle">source.msg_ids = []</text>
+
+  <line x1="808" y1="184" x2="840" y2="184" class="ln"/>
+  <rect x="842" y="140" width="144" height="88" rx="8" class="grn"/>
+  <text x="914" y="170" class="t" text-anchor="middle">本地 Task</text>
+  <text x="914" y="192" class="ts" text-anchor="middle">sourceKind =</text>
+  <text x="914" y="210" class="ts" text-anchor="middle">manual_text/image/voice</text>
+
+  <!-- text bypass -->
+  <path d="M106 228 C106 300 529 300 529 230" class="dash"/>
+  <text x="300" y="320" class="ts" fill="#B26A00">文本来源跳过 OCR/ASR，直接送 /parse</text>
+
+  <text x="26" y="360" class="ts">隐私：截图/录音的 OCR/ASR 全在端侧完成，只有文本上云；建 Task 时忽略临时 candidate_id。</text>
+</svg>
