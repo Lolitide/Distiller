@@ -35,6 +35,66 @@
     {
       "name": "menu_about",
       "value": "关于"
+    },
+    {
+      "name": "group_today",
+      "value": "今天"
+    },
+    {
+      "name": "group_tomorrow",
+      "value": "明天"
+    },
+    {
+      "name": "group_undated",
+      "value": "未安排日期"
+    },
+    {
+      "name": "group_title_sep",
+      "value": " · "
+    },
+    {
+      "name": "group_progress",
+      "value": "未完成 %d 项 / 共 %d 项"
+    },
+    {
+      "name": "group_expand",
+      "value": "展开"
+    },
+    {
+      "name": "group_collapse",
+      "value": "收起"
+    },
+    {
+      "name": "date_month_day",
+      "value": "%d月%d日"
+    },
+    {
+      "name": "weekday_sun",
+      "value": "周日"
+    },
+    {
+      "name": "weekday_mon",
+      "value": "周一"
+    },
+    {
+      "name": "weekday_tue",
+      "value": "周二"
+    },
+    {
+      "name": "weekday_wed",
+      "value": "周三"
+    },
+    {
+      "name": "weekday_thu",
+      "value": "周四"
+    },
+    {
+      "name": "weekday_fri",
+      "value": "周五"
+    },
+    {
+      "name": "weekday_sat",
+      "value": "周六"
     }
   ]
 }
