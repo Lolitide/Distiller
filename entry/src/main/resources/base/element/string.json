@@ -19,6 +19,22 @@
     {
       "name": "tab_settings",
       "value": "设置"
+    },
+    {
+      "name": "action_more",
+      "value": "更多"
+    },
+    {
+      "name": "menu_edit",
+      "value": "编辑"
+    },
+    {
+      "name": "menu_search",
+      "value": "搜索"
+    },
+    {
+      "name": "menu_about",
+      "value": "关于"
     }
   ]
 }
