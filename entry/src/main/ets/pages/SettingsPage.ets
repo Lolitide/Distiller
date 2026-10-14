@@ -2,6 +2,7 @@ import { ApiClient } from '../common/ApiClient';
 import { Config } from '../common/Config';
 import { Store } from '../common/Store';
 import { Discovery } from '../common/Discovery';
+import { BottomNav } from '../common/BottomNav';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { PollService } from '../service/PollService';
 import { BindCodeData, BindCodeBody, BindStatusData, MyData, DeletedData } from '../common/Types';
@@ -385,6 +386,8 @@ struct SettingsPage {
       .width('100%')
       .layoutWeight(1)
       .align(Alignment.Top)
+
+      BottomNav({ current: 'settings' })
     }
     .width('100%')
     .height('100%')

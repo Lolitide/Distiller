@@ -6,6 +6,8 @@
     "pages/MessageDetailPage",
     "pages/DigestPage",
     "pages/GroupSubPage",
+    "pages/GroupListPage",
+    "pages/GroupDetailPage",
     "pages/SettingsPage"
   ]
 }

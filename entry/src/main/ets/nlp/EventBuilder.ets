@@ -54,7 +54,7 @@ export function buildEvent(rawText: string, sender: string, timestamp: string, m
   if (kind === EVENT_IGNORE) {
     return {
       kind: EVENT_IGNORE, title: '', action: '', time: null, place: '', who: '',
-      deadline: '', confidence: 0, sourceText: text, sender: sender, timestamp: timestamp,
+      deadline: '', items: [], confidence: 0, sourceText: text, sender: sender, timestamp: timestamp,
       msgId: msgId, tags: []
     };
   }
@@ -95,6 +95,7 @@ export function buildEvent(rawText: string, sender: string, timestamp: string, m
     place: slots.place,
     who: slots.who,
     deadline: slots.deadline,
+    items: [],
     confidence: conf,
     sourceText: text,
     sender: sender,

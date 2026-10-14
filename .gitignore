@@ -11,6 +11,7 @@
 /.clang-tidy
 **/.test
 /.appanalyzer
+/.deveco
 
 # ---- 后端（qqbot-backend）只留在作者电脑，不进本仓库 ----
 /qqbot-backend/

@@ -2,6 +2,7 @@ import { Store } from '../common/Store';
 import { RobotMessage, formatTime } from '../common/Types';
 import { CampusEvent, EVENT_NOTICE, EVENT_PLAN, EVENT_TODO } from '../nlp/EventTypes';
 import { clusterEvents, pickDigestClusters, EventCluster } from '../nlp/EventCluster';
+import { clip } from '../nlp/TextUtil';
 
 /**
  * 群汇总详情：展开全部事件簇。
@@ -113,16 +114,26 @@ struct DigestPage {
                 .alignItems(VerticalAlign.Top)
 
                 if (c.oneLine.length > 0) {
-                  Text(c.oneLine)
+                  Text(clip(c.oneLine))
                     .fontSize(13)
                     .fontColor('#333333')
                     .width('100%')
+                    .maxLines(3)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
                 }
                 if (c.tags.length > 0) {
                   Text(this.tagText(c))
                     .fontSize(11)
                     .fontColor('#3E9E6B')
                     .width('100%')
+                }
+                if (c.place.length > 0) {
+                  Text('地点：' + c.place)
+                    .fontSize(12)
+                    .fontColor('#333333')
+                    .width('100%')
+                    .maxLines(1)
+                    .textOverflow({ overflow: TextOverflow.Ellipsis })
                 }
                 Text(formatTime(c.spanStart) + ' → ' + formatTime(c.spanEnd))
                   .fontSize(11)

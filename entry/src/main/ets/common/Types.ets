@@ -3,6 +3,7 @@
  */
 
 import { CampusEvent } from '../nlp/EventTypes';
+import { TimeSlot } from '../nlp/TimeParser';
 
 // ============================================================ 统一响应包
 
@@ -88,6 +89,35 @@ export interface MessageAttachment {
   asr_refer_text?: string;
 }
 
+/**
+ * 后端解析结果（`/api/relay/messages` 里每条消息的可选字段 `parse`）。
+ *
+ * 后端用小模型（Ollama）优先、失败回退规则，字段值都校验过「必须是原文子串」，
+ * 所以不会出现编造的时间/地点。App 拿到它就直接用，**不再跑端侧规则**（端侧规则保留为兜底）。
+ */
+export interface ServeParse {
+  /** 来源：'llm'（后端小模型）| 'rules'（后端规则回退） */
+  engine: string;
+  kind: string;
+  category: string;
+  title: string;
+  action: string;
+  /** 模板拼出的结构化一句话（不是模型自由生成） */
+  summary: string;
+  /** 后端已归一化的正文（表情/@ 已还原），可直接当「原话」展示 */
+  sourceText: string;
+  timeText: string;
+  timeNormalized: string;
+  timeUnresolved: boolean;
+  place: string;
+  who: string;
+  deadline: string;
+  /** 需带物品 / 关键注意事项（每条都是原文子串） */
+  items: string[];
+  confidence: number;
+  tags: string[];
+}
+
 /** GET /api/relay/messages?after=<seq>&limit=<n> */
 export interface ServeMessage {
   seq: number;
@@ -102,6 +132,8 @@ export interface ServeMessage {
   is_self?: boolean;
   /** 附件列表；图片消息的 content 为空，正文在附件 URL 里 */
   attachments?: MessageAttachment[];
+  /** 后端结构化解析结果；缺省表示后端未开启解析，App 走端侧规则兜底 */
+  parse?: ServeParse;
 }
 
 export interface MessagesData {
@@ -225,11 +257,41 @@ export function parseApi<T>(text: string): ApiResult<T> {
   return obj;
 }
 
+/** 后端 parse -> 端侧 CampusEvent（字段已由后端保证是原文子串，这里只做搬运）。 */
+function serverEvent(m: RobotMessage, p: ServeParse): CampusEvent {
+  let slot: TimeSlot | null = null;
+  if (p.timeText.length > 0) {
+    slot = {
+      text: p.timeText,
+      normalized: p.timeNormalized,
+      unresolved: p.timeUnresolved,
+      sourceDate: ''
+    };
+  }
+  const ev: CampusEvent = {
+    kind: p.kind,
+    title: p.title,
+    action: p.action,
+    time: slot,
+    place: p.place,
+    who: p.who,
+    deadline: p.deadline,
+    items: p.items ?? [],
+    confidence: p.confidence,
+    sourceText: p.sourceText.length > 0 ? p.sourceText : m.content,
+    sender: m.sender,
+    timestamp: m.timestamp,
+    msgId: m.msg_id,
+    tags: p.tags
+  };
+  return ev;
+}
+
 export function toRobotMessages(remote: ServeMessage[]): RobotMessage[] {
   const out: RobotMessage[] = [];
   for (let i = 0; i < remote.length; i++) {
     const m: ServeMessage = remote[i];
-    out.push({
+    const msg: RobotMessage = {
       seq: m.seq,
       group_openid: m.group_openid,
       group_label: m.group_label,
@@ -242,7 +304,18 @@ export function toRobotMessages(remote: ServeMessage[]): RobotMessage[] {
       attachments: m.attachments ?? [],
       read: false,
       handled: false
-    });
+    };
+    // 后端已解析：直接采用，并置 parsedAt 让端侧 ParseService 跳过这条（端侧规则只作兜底）
+    const p: ServeParse | undefined = m.parse;
+    if (p !== undefined) {
+      msg.category = p.category;
+      msg.summary = p.summary;
+      msg.event = serverEvent(msg, p);
+      msg.entities = [];
+      msg.parseOk = true;
+      msg.parsedAt = new Date().toISOString();
+    }
+    out.push(msg);
   }
   return out;
 }

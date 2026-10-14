@@ -83,22 +83,79 @@ interface Clock {
   minute: number;
 }
 
-/** 找「9点」「上午9点」「下午3点半」「15:30」。 */
+/** 中文数字 -> 数字（0~59）："两"->2、"十一点"->11、"二十三"->23、"廿"->20、"半"->30。 */
+function cn2int(s: string): number {
+  if (s.length === 0) {
+    return -1;
+  }
+  if (s === '半') {
+    return 30;
+  }
+  if (/^\d+$/.test(s)) {
+    return parseInt(s, 10);
+  }
+  const digit: Record<string, number> = {
+    '零': 0, '〇': 0, '一': 1, '两': 2, '二': 2, '三': 3, '四': 4,
+    '五': 5, '六': 6, '七': 7, '八': 8, '九': 9
+  };
+  if (s.indexOf('十') >= 0) {
+    const i: number = s.indexOf('十');
+    const tensPart: string = s.substring(0, i);
+    const onesPart: string = s.substring(i + 1);
+    const tens: number = tensPart.length === 0 ? 1 : (digit[tensPart] ?? -1);
+    const ones: number = onesPart.length === 0 ? 0 : (digit[onesPart] ?? -1);
+    if (tens < 0 || ones < 0) {
+      return -1;
+    }
+    return tens * 10 + ones;
+  }
+  if (s === '廿') {
+    return 20;
+  }
+  return s.length === 1 ? (digit[s] ?? -1) : -1;
+}
+
+/** 裸「X点」里不是时间的常见词（"一点"=稍微、"地点"、"特点"…）。与后端 _CLOCK_STOP 一致。 */
+const CLOCK_STOP: string[] = [
+  '一点', '有点', '差点', '地点', '起点', '终点', '特点', '重点', '观点',
+  '缺点', '优点', '焦点', '热点', '难点', '早点', '晚点', '快点', '慢点',
+  '疑点', '卖点', '景点', '盘点', '顶点', '极点', '视点', '考点', '论点'
+];
+
+/**
+ * 找「9点」「上午9点」「下午3点半」「15:30」「下午两点」「十一点」。
+ * 分隔符只认 `点 / : / ：`（**不认「时」**：否则「一时/小时/同时/随时」都会被当成时间）。
+ */
 function findClock(t: string): Clock | null {
-  const m: RegExpExecArray | null = /(上午|早上|中午|下午|晚上|傍晚)?\s*(\d{1,2})[:：点](\d{1,2})?/.exec(t);
+  const re: RegExp = /(上午|早上|清晨|中午|下午|晚上|傍晚)?\s*(\d{1,2}|[零〇一二两三四五六七八九十廿]{1,3})\s*([:：点])\s*(半|\d{1,2}|[零〇一二两三四五六七八九十]{1,2})?\s*(分)?/;
+  const m: RegExpExecArray | null = re.exec(t);
   if (m === null) {
     return null;
   }
-  let hour: number = parseInt(m[2], 10);
-  const minute: number = m[3] !== undefined ? parseInt(m[3], 10) : 0;
+  const matched: string = m[0].trim();
+  if (CLOCK_STOP.indexOf(matched) >= 0) {
+    return null;   // 裸「一点/地点/特点…」不是时间
+  }
+  let hour: number = cn2int(m[2]);
+  if (hour < 0) {
+    return null;
+  }
+  const minute: number = m[4] !== undefined ? cn2int(m[4]) : 0;
+  if (minute < 0) {
+    return null;
+  }
   const period: string = m[1] ?? '';
   if ((period === '下午' || period === '晚上' || period === '傍晚') && hour < 12) {
+    hour += 12;
+  } else if ((period === '凌晨' || period === '早上' || period === '清晨') && hour === 12) {
+    hour = 0;
+  } else if (period === '中午' && hour < 6) {
     hour += 12;
   }
   if (hour > 23 || minute > 59) {
     return null;
   }
-  return { text: m[0].trim(), hour: hour, minute: minute };
+  return { text: matched, hour: hour, minute: minute };
 }
 
 function two(n: number): string {
@@ -155,6 +212,17 @@ export function parseTime(text: string, base: Ymd): TimeSlot | null {
   }
   // (a2) 10月20日 / 10/20（按当前日期判断年份）
   m = /(\d{1,2})[月/](\d{1,2})[日号]?/.exec(t);
+  if (m !== null) {
+    const mo: number = parseInt(m[1], 10);
+    const d: number = parseInt(m[2], 10);
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      const y: number = mo >= base.mo ? base.y : base.y + 1;
+      return slotOf(m[0], formatYmd({ y: y, mo: mo, d: d }), base);
+    }
+  }
+
+  // (a3) 点分日期 10.31 / 12.11（群里极常见）：两侧不接数字，避免匹配 3.14159
+  m = /(?<!\d)(\d{1,2})[.．](\d{1,2})(?!\d)/.exec(t);
   if (m !== null) {
     const mo: number = parseInt(m[1], 10);
     const d: number = parseInt(m[2], 10);

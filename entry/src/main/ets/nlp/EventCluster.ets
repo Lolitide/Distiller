@@ -21,6 +21,8 @@ export interface EventCluster {
   count: number;
   spanStart: string;
   spanEnd: string;
+  /** 整簇拼合出的地点（地点常被拆在另一条消息里） */
+  place: string;
   senders: string[];
   tags: string[];
   confidence: number;
@@ -156,6 +158,19 @@ interface WorkingCluster {
   kind: string;
 }
 
+/** 通用标签（由 kind 推导，不承载话题信息）——聚类时不参与相似度判断。 */
+const GENERIC_TAGS: string[] = ['通知', '待办', '活动', '出行计划', '闲聊', '忽略'];
+
+function specificTags(tags: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < tags.length; i++) {
+    if (GENERIC_TAGS.indexOf(tags[i]) < 0) {
+      out.push(tags[i]);
+    }
+  }
+  return out;
+}
+
 /** 把事件列表聚成若干「事件簇」。 */
 export function clusterEvents(events: CampusEvent[], gapMinutes: number = 30): EventCluster[] {
   const items: CampusEvent[] = [];
@@ -177,7 +192,10 @@ export function clusterEvents(events: CampusEvent[], gapMinutes: number = 30): E
     for (let c = 0; c < work.length; c++) {
       const cl: WorkingCluster = work[c];
       const last: number = tsToMillis(cl.lastTs);
-      const shareTag: boolean = intersects(cl.tags, ev.tags);
+      // 只用**具体标签**判相似：EventBuilder 会给每条通知都加一个通用标签「通知」，
+      // 拿它参与判断会让任意两条不相干的正式通知因共享「通知」被并成一条
+      // （与后端 candidate_engine._tags_of 的修法保持一致）。
+      const shareTag: boolean = intersects(specificTags(cl.tags), specificTags(ev.tags));
       const shareKw: boolean = intersects(cl.keywords, kw);
       // 同义归并后的概念相同也算「同一件事」（换个说法也能聚上）
       const shareConcept: boolean = intersects(cl.concepts, concepts);
@@ -218,6 +236,16 @@ export function clusterEvents(events: CampusEvent[], gapMinutes: number = 30): E
         best = e;
       }
     }
+    // 地点跨消息拼合：地点常被拆在**另一条消息**里
+    // （`咱们下一次社团培训是啥时候呀` … `具体是在哪呢` `主楼A103`）。
+    // 只取 best 的 place 会丢掉它 —— 与后端 candidate_engine._place_of 一致。
+    let place: string = best.place;
+    for (let k = 0; k < cl.events.length; k++) {
+      const p: string = cl.events[k].place;
+      if (p.length > place.length) {
+        place = p;
+      }
+    }
     out.push({
       title: best.title,
       oneLine: eventOneLine(best),
@@ -225,6 +253,7 @@ export function clusterEvents(events: CampusEvent[], gapMinutes: number = 30): E
       count: cl.events.length,
       spanStart: cl.events[0].timestamp,
       spanEnd: cl.lastTs,
+      place: place,
       senders: mergeUnique([], cl.senders),
       tags: cl.tags,
       confidence: best.confidence

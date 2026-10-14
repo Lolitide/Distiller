@@ -5,6 +5,8 @@ import { EntityIcon } from '../common/UiParts';
 import { CampusEvent, isActionable, EVENT_NOTICE, EVENT_PLAN, EVENT_TODO } from '../nlp/EventTypes';
 import { timeSlotDisplay } from '../nlp/TimeParser';
 import { clusterEvents, pickDigestClusters, EventCluster } from '../nlp/EventCluster';
+import { clip } from '../nlp/TextUtil';
+import { BottomNav } from '../common/BottomNav';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 const DOMAIN: number = 0x0000;
@@ -156,18 +158,24 @@ struct HomePage {
     return item.event?.deadline ?? '';
   }
 
+  /** 需带物品 / 注意事项：由后端小模型抽取（每条都是原文子串），拼成一行 */
+  evItems(item: RobotMessage): string {
+    const arr: string[] = item.event?.items ?? [];
+    return arr.join('、');
+  }
+
   evSource(item: RobotMessage): string {
     return item.event?.sourceText ?? '';
   }
 
-  /** 列表正文：图片消息优先显示识别文字的「摘要」，其次事件原话，最后才是原文 */
+  /** 列表正文：图片消息优先显示识别文字的「摘要」，其次事件原话，最后才是原文（都做长度截断） */
   displayText(item: RobotMessage): string {
     const imgSummary: string = item.imageSummary ?? '';
     if (imgSummary.length > 0) {
-      return imgSummary;
+      return clip(imgSummary);
     }
     const src: string = this.evSource(item);
-    return src.length > 0 ? src : item.content;
+    return clip(src.length > 0 ? src : item.content);
   }
 
   evConf(item: RobotMessage): number {
@@ -525,6 +533,12 @@ struct HomePage {
                         .fontColor('#B8434E')
                         .width('100%')
                     }
+                    if (this.evItems(item).length > 0) {
+                      Text('需带/注意：' + this.evItems(item))
+                        .fontSize(12)
+                        .fontColor('#2F8F9D')
+                        .width('100%')
+                    }
                     if (this.evNeedConfirm(item)) {
                       Text('字段不完整，建议人工确认')
                         .fontSize(11)
@@ -602,6 +616,8 @@ struct HomePage {
           this.onRefresh();
         })
       }
+
+      BottomNav({ current: 'todo' })
     }
     .width('100%')
     .height('100%')

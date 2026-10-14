@@ -19,6 +19,22 @@ struct MessageDetailPage {
     const params = this.getUIContext().getRouter().getParams() as DetailParams;
     this.currentId = params?.msgId ?? '';
     this.loadMsg();
+    this.ensureEntities();
+  }
+
+  /**
+   * 批处理已不跑 NL Kit（那套只在详情页按需跑），所以进详情页时补一次实体抽取。
+   * `ensureNlp` 内部按 msg_id 去重，重复进入不会重复跑。
+   */
+  async ensureEntities(): Promise<void> {
+    const before: ParsedEntity[] = this.msg?.entities ?? [];
+    if (before.length > 0) {
+      return;
+    }
+    const done: boolean = await ParseService.ensureNlp(this.currentId);
+    if (done) {
+      this.loadMsg();
+    }
   }
 
   loadMsg(): void {

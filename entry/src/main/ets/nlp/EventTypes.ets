@@ -26,6 +26,8 @@ export interface CampusEvent {
   place: string;
   who: string;
   deadline: string;
+  /** 需带物品 / 关键注意事项（每条都是原文里逐字出现的短句；端侧规则不产出，通常为空） */
+  items: string[];
   /** 0~1，低于阈值前端要标「待确认」 */
   confidence: number;
   /** **必须保留**：卡片要能回到原话 */

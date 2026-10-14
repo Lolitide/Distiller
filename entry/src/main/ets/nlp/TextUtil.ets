@@ -30,3 +30,15 @@ export function anyIn(text: string, words: string[]): boolean {
   }
   return false;
 }
+
+/**
+ * 汇总/列表里的正文预览上限（字符数）。
+ * 群汇总不要把原文整段展开——长通知（如奖学金通知有 500+ 字）会把卡片撑爆。
+ */
+export const PREVIEW_MAX: number = 60;
+
+/** 把文本压成一行预览：换行折叠成空格，超过 max 就截断加省略号。 */
+export function clip(text: string, max: number = PREVIEW_MAX): string {
+  const flat: string = replaceAllLiteral(replaceAllLiteral(text, '\n', ' '), '\r', ' ').trim();
+  return flat.length <= max ? flat : flat.substring(0, max) + '…';
+}

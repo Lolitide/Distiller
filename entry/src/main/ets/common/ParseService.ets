@@ -33,6 +33,9 @@ const NLP_TIMEOUT_MS: number = 8000;
 export class ParseService {
   private static busy: boolean = false;
 
+  /** 已经按需跑过 NL Kit 的消息（同一次进程内不重复跑）。 */
+  private static nlpDone: Set<string> = new Set<string>();
+
   /** 按句读边界把长文本切成不超过 NLP_MAX_CHARS 的片段。 */
   static sliceText(text: string): string[] {
     const chunks: string[] = [];
@@ -160,7 +163,7 @@ export class ParseService {
   }
 
   /** 解析单条消息；任何异常都降级为 parseOk=false，绝不向上抛出。 */
-  static async parseOne(msg: RobotMessage): Promise<ParsedInfo> {
+  static async parseOne(msg: RobotMessage, withNlp: boolean): Promise<ParsedInfo> {
     const at: string = new Date().toISOString();
     let imageText: string = '';
     let imageKind: string = '';
@@ -176,20 +179,25 @@ export class ParseService {
           content = content.trim().length > 0 ? content + '\n' + imageText : imageText;
         }
       }
-      const chunks: string[] = ParseService.sliceText(content);
-      const entities: ParsedEntity[] = [];
-      for (let c = 0; c < chunks.length; c++) {
-        const part: ParsedEntity[] = await ParseService.extractEntities(chunks[c]);
-        for (let i = 0; i < part.length; i++) {
-          entities.push(part[i]);
-        }
-      }
+      // NL Kit（实体抽取 + 分词）**只在详情页按需跑**（withNlp === true）。
+      // 它唯一的消费方是详情页那个实体列表，放进「每条消息都跑」的批处理里是用错场景：
+      // 既贵（每条约 3 次 Kit 调用 + 逐片超时）又没人看（HomePage.entityListFor 是死代码）。
+      let entities: ParsedEntity[] = [];
       let nounWords: string[] = [];
-      try {
-        const first: string = chunks.length > 0 ? chunks[0] : content;
-        nounWords = await ParseService.extractNounWords(first);
-      } catch (e) {
-        nounWords = [];
+      if (withNlp) {
+        const chunks: string[] = ParseService.sliceText(content);
+        for (let c = 0; c < chunks.length; c++) {
+          const part: ParsedEntity[] = await ParseService.extractEntities(chunks[c]);
+          for (let i = 0; i < part.length; i++) {
+            entities.push(part[i]);
+          }
+        }
+        try {
+          const first: string = chunks.length > 0 ? chunks[0] : content;
+          nounWords = await ParseService.extractNounWords(first);
+        } catch (e) {
+          nounWords = [];
+        }
       }
       // T0–T2：把正文整理成事件对象（分级过滤 + 槽位抽取 + 模板成句）
       const ev: CampusEvent = buildEvent(content, msg.sender, msg.timestamp, msg.msg_id);
@@ -264,7 +272,7 @@ export class ParseService {
         if (m.parsedAt !== undefined && m.parsedAt.length > 0) {
           continue;
         }
-        infos.push(await ParseService.parseOne(m));
+        infos.push(await ParseService.parseOne(m, false));   // 批处理不跑 NL Kit
         ids.push(m.msg_id);
         hilog.info(DOMAIN, TAG, 'parseOne done ok=%{public}s id=%{public}s',
           String(infos[infos.length - 1].parseOk), m.msg_id);
@@ -282,17 +290,29 @@ export class ParseService {
     }
   }
 
-  /** 强制重新解析指定消息（详情页「重新解析」）。 */
+  /** 强制重新解析指定消息（详情页「重新解析」）。跑满 NL Kit。 */
   static async reparse(msgId: string): Promise<boolean> {
     const snapshot: RobotMessage[] = Store.getMessages();
     for (let i = 0; i < snapshot.length; i++) {
       if (snapshot[i].msg_id === msgId) {
-        const info: ParsedInfo = await ParseService.parseOne(snapshot[i]);
+        ParseService.nlpDone.add(msgId);
+        const info: ParsedInfo = await ParseService.parseOne(snapshot[i], true);
         ParseService.commit([msgId], [info]);
         return true;
       }
     }
     return false;
+  }
+
+  /**
+   * 详情页进入时调用：只对**这一条**跑一次 NL Kit（实体 + 分词），跑过就不重复。
+   * 批处理已不再跑 NL Kit，所以实体列表靠这里按需补上。
+   */
+  static async ensureNlp(msgId: string): Promise<boolean> {
+    if (msgId.length === 0 || ParseService.nlpDone.has(msgId)) {
+      return false;
+    }
+    return await ParseService.reparse(msgId);
   }
 
   /**
