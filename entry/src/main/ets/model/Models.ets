@@ -15,7 +15,6 @@
  *
  * 纪律：本层只放类型与常量，不放行为；字段名改动必须同步 §9.2 那张表。
  */
-
 /** 重复：不重复 / 每 1 天 / 每 1 周 / 每 1 个月 / 自定义 */
 export enum TaskRepeat {
   NONE = 0,
@@ -47,6 +46,8 @@ export interface Task {
   title: string;
   /** 步骤，可选。§9.2 没有对应列 */
   steps?: TaskStep[];
+  /** 到期时间，可选。界面按 MM月DD日周几 选（只到日，不带时分），存毫秒时间戳。对应 §9.2 的 `due_at` */
+  dueAt?: number;
   /** 提醒时间，可选。界面按 MM月DD日周几 HH:mm 选，存毫秒时间戳。对应 §9.2 的 `remind_at` */
   remindAt?: number;
   /** 重复，可选。对应 §9.2 的 `repeat` */
