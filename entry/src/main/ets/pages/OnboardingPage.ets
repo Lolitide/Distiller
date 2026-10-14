@@ -7,7 +7,7 @@ import { ApiResult, HealthData, RegisterData, BindCodeData, BindStatusData, Regi
 @Entry
 @Component
 struct OnboardingPage {
-  @State phase: string = 'checking';
+  @State phase: string = 'input';
   @State healthMsg: string = '';
   @State pairCode: string = '';
   @State bindHint: string = '';
@@ -20,7 +20,7 @@ struct OnboardingPage {
   aboutToAppear(): void {
     Store.init(getContext(this));
     this.baseUrlInput = Store.getBaseUrl();
-    this.checkHealth();
+    // 不自动探测后端：直接让用户手动填地址（只认手填，避免被局域网里的假后端接管）
   }
 
   aboutToDisappear(): void {
@@ -148,9 +148,15 @@ struct OnboardingPage {
 
       if (this.phase === 'checking') {
         Text('正在连接电脑上的服务…')
-      } else if (this.phase === 'error') {
-        Text(this.healthMsg)
-          .fontColor(Color.Red)
+      } else if (this.phase === 'input' || this.phase === 'error') {
+        if (this.phase === 'error') {
+          Text(this.healthMsg)
+            .fontColor(Color.Red)
+        } else {
+          Text('请填写后端地址')
+            .fontSize(14)
+            .fontColor(Color.Gray)
+        }
         Text('当前地址：' + Config.baseUrl)
           .fontSize(12)
         TextInput({ placeholder: 'https://你的穿透地址', text: this.baseUrlInput })
@@ -158,17 +164,13 @@ struct OnboardingPage {
             this.baseUrlInput = value;
           })
           .width('100%')
-        Button('保存地址并重试')
+        Button('保存并连接')
           .onClick(() => {
             this.saveAndRetry();
           })
-        Text('请手动填入后端地址（内网穿透的固定地址）。为安全起见不再自动扫描局域网。')
+        Text('为安全起见不自动扫描局域网，请手动填入后端地址。')
           .fontSize(12)
           .fontColor(Color.Gray)
-        Button('重试')
-          .onClick(() => {
-            this.checkHealth();
-          })
       } else {
         Text(this.healthMsg)
           .fontColor(Color.Green)
