@@ -11,6 +11,14 @@
     {
       "name": "EntryAbility_label",
       "value": "label"
+    },
+    {
+      "name": "tab_task_list",
+      "value": "任务列表"
+    },
+    {
+      "name": "tab_settings",
+      "value": "设置"
     }
   ]
 }
