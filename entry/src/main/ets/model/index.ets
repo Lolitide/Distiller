@@ -16,7 +16,7 @@ export {
   Task,
   TaskStep,
   TaskRepeat,
-  TaskUrgency,
+  TaskPriority,
   TASK_SOURCE_PRESETS,
   TASK_CATEGORY_PRESETS
 } from './Models';
