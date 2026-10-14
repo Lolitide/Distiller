@@ -1,5 +1,6 @@
 import { Task } from '../model';
 import { MOCK_TASKS } from '../mock/MockTasks';
+import { MainTitleBar } from '../components/MainTitleBar';
 import { TaskGroupHeader } from '../components/TaskGroupHeader';
 import { TaskDayGroup, TaskListViewModel } from '../viewmodel/TaskListViewModel';
 
@@ -33,5 +34,6 @@ export struct A_TaskList {
     }
     .width('100%')
     .height('100%')
+    .contentStartOffset(MainTitleBar.CONTENT_TOP_OFFSET_VP)
   }
 }
