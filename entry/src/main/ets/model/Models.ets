@@ -1,17 +1,19 @@
 /*
  * TODO(需求方): 本文件在 `model/` 下，按 `docs/开发指南.md` §7.3 归架构。
- * 2026-10-14 由需求方口述任务字段，先落成契约草稿；请架构核对后再并入 §9.2 的字段表
- * （本机 Task 表 / 云端 BotTask 对齐），并把我这边与 §9.2 的差异一并处置。
+ * 2026-10-14 由需求方口述任务字段，先落成契约草稿；请架构核对后同步 §9.2 那张表
+ * （本机 Task 表 / 云端 BotTask 对齐）。
  */
 
 /**
  * 任务字段契约（需求方 2026-10-14 口述）
  *
- * 只装**用户在确认页能填的字段**。持久化字段（`id` / `status` / `raw_text` / `raw_json` /
- * `confidence` / `missing_fields` / `created_at` / `updated_at` / `reminder_id`）不在本契约里，
- * 仍按 `docs/开发指南.md` §9.2 由 repository 附加。
+ * 这份契约**就是最终落库的字段**（需求方 2026-10-14 明确），同时兼作 UI 的 Mock 数据形状。
+ * 与 `docs/开发指南.md` §9.2 的列名对应关系逐个写在字段注释里。
  *
- * 纪律：本层只放类型与常量，不放行为。字段名改动必须同步 §9.2 那张表。
+ * 不在本契约里的持久化字段（`id` / `status` / `raw_text` / `raw_json` / `confidence` /
+ * `missing_fields` / `created_at` / `updated_at` / `reminder_id`）仍按 §9.2 由 repository 附加。
+ *
+ * 纪律：本层只放类型与常量，不放行为；字段名改动必须同步 §9.2 那张表。
  */
 
 /** 重复：不重复 / 每 1 天 / 每 1 周 / 每 1 个月 / 自定义 */
@@ -41,26 +43,26 @@ export interface TaskStep {
 
 /** 任务 */
 export interface Task {
-  /** 任务名称，**必填** */
+  /** 任务名称，**必填**。对应 §9.2 的 `title` */
   title: string;
-  /** 步骤，可选 */
+  /** 步骤，可选。§9.2 没有对应列 */
   steps?: TaskStep[];
-  /** 提醒时间，可选。界面按 MM月DD日周几 HH:mm 选，存毫秒时间戳 */
+  /** 提醒时间，可选。界面按 MM月DD日周几 HH:mm 选，存毫秒时间戳。对应 §9.2 的 `remind_at` */
   remindAt?: number;
-  /** 重复，可选 */
+  /** 重复，可选。对应 §9.2 的 `repeat` */
   repeat?: TaskRepeat;
-  /** 重复选「自定义」时用户自填的原文，可选 */
+  /** 重复选「自定义」时用户自填的原文，可选。与 `repeat` 同列 */
   repeatText?: string;
-  /** 预计耗时，可选。单位：小时（界面按 HH小时 填） */
+  /** 预计耗时，可选，单位小时（界面按 HH小时 填）。§9.2 没有对应列 */
   estimatedHours?: number;
-  /** 紧急程度，可选 */
+  /** 紧急程度，可选。对应 §9.2 的 `priority` */
   urgency?: TaskUrgency;
-  /** 来源，可选。取值见 TASK_SOURCE_PRESETS，也可为自定义文本 */
+  /** 来源通道，可选。对应 §9.2 的 `source`；取值见 TASK_SOURCE_PRESETS，也可为自定义文本 */
   source?: string;
-  /** 类型，可选。取值见 TASK_CATEGORY_PRESETS，也可为自定义文本 */
+  /** 类型，可选。§9.2 没有对应列；取值见 TASK_CATEGORY_PRESETS，也可为自定义文本 */
   category?: string;
-  /** 标签，可选，自定义 */
+  /** 标签，可选，自定义。§9.2 没有对应列 */
   tags?: string[];
-  /** 备注，可选，纯文本 */
-  note?: string;
+  /** 备注，可选，纯文本。对应 §9.2 的 `detail` */
+  detail?: string;
 }
