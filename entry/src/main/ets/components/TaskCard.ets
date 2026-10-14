@@ -56,6 +56,7 @@ export struct TaskCard {
 
   build() {
     HdsListItemCard({
+      cardBackgroundColor: $r('sys.color.ohos_id_color_card_bg'),
       prefixItem: new PrefixCustomBuilder((): void => {
         this.prefixCircle();
       }),
