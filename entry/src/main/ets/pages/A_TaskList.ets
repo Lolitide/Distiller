@@ -54,7 +54,7 @@ export struct A_TaskList {
       ForEach(this.groups, (group: TaskDayGroup) => {
         ListItemGroup({
           header: this.groupHeader(group),
-          spaceWidth: $r('sys.float.padding_level8')
+          spaceWidth: $r('sys.float.padding_level7')
         }) {
           if (group.expanded) {
             ForEach(group.tasks, (task: Task) => {
