@@ -31,10 +31,16 @@ export struct TaskCard {
     return this.completed ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.circle_dashed');
   }
 
-  /** 完成态整卡灰化：卡片底换官方「组件灰背板」，未完成用官方卡片白 */
+  /**
+   * 完成态整卡灰化：官方色阶的第三档。
+   * 踩过：一开始用 `comp_background_gray`，它解析后是 `#f1f3f5`，**和页面背景
+   * `ohos_id_color_sub_background`(#fff1f3f5) 一模一样** → 卡片一灰就等于融进背景、看不见了。
+   * 官方浅色灰阶（真值查自预览器资源表）：`#f1f3f5`(页面) → `#e5e5ea`(gray_02) → `#d1d1d6`(gray_03)
+   * → 取 `gray_03`，与卡片白 `#ffffff` 和页面灰都分得开；它有深色档（#3F4246 一带）。
+   */
   @Computed
   get cardBackground(): Resource {
-    return this.completed ? $r('sys.color.comp_background_gray') : $r('sys.color.ohos_id_color_card_bg');
+    return this.completed ? $r('sys.color.gray_03') : $r('sys.color.ohos_id_color_card_bg');
   }
 
   /** 完成态三行文字一起变灰：官方次级文字色 */

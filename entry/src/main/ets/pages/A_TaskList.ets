@@ -17,18 +17,23 @@ export struct A_TaskList {
    */
   private statusBeforeCompleted: Map<number, TaskStatus> = new Map();
 
-  /** 点圆圈：未完成 → 完成（同时关掉响铃提醒）；已完成 → 退回完成前的状态 */
+  /** 点圆圈：未完成 → 完成（同时关掉响铃提醒）；已完成 → 退回完成前的状态，并把响铃提醒重新打开 */
   private toggleComplete(task: Task): void {
     if (task.status === TaskStatus.COMPLETED) {
       const previous: TaskStatus | undefined = this.statusBeforeCompleted.get(task.id);
       task.status = previous === undefined ? TaskStatus.CONFIRMED : previous;
       this.statusBeforeCompleted.delete(task.id);
+      // 退回未完成时把响铃提醒重新打开（需求方 2026-10-14）。
+      // 有提醒时间的任务才有开关，所以只在这种情况置值；置 -1 是占位的假提醒键，
+      // TODO(需求方): 真接 ReminderService 后要改成「发布提醒」并拿服务返回的键。
+      if (task.remindAt !== undefined) {
+        task.reminderId = -1;
+      }
       return;
     }
     this.statusBeforeCompleted.set(task.id, task.status);
     task.status = TaskStatus.COMPLETED;
-    // 完成时自动关掉响铃提醒（需求方 2026-10-14）：开关由 reminderId 派生，清空即关。
-    // 注意：这里**不还原** reminderId——退回未完成时提醒也是关着的，要开得用户自己再拨一次。
+    // 完成时自动关掉响铃提醒：开关由 reminderId 派生，清空即关
     task.reminderId = undefined;
   }
 
