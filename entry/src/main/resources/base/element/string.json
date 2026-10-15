@@ -87,6 +87,10 @@
     {
       "name": "group_collapse",
       "value": "收起"
+    },
+    {
+      "name": "action_add_task",
+      "value": "添加任务"
     }
   ]
 }
