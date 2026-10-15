@@ -91,7 +91,10 @@ export struct TaskCard {
 
   @Builder
   prefixCircle() {
+    // 圆圈尺寸：HDS 给卡片前缀图标的规格上限只有 24vp（IconSize.SYSTEM_ICON），
+    // 袁正锟 2026-10-15 要求再大一档 → 借官方「圆形按钮图标」尺寸 token（28vp，视觉上大一圈）。
     SymbolGlyph(this.circleSymbol)
+      .fontSize($r('sys.float.ohos_id_min_circle_button_icon_size'))
       .fontColor([this.circleColor])
       .onClick(() => {
         this.onToggleComplete();
