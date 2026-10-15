@@ -5,6 +5,7 @@ import { BottomNav } from '../common/BottomNav';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { PollService } from '../service/PollService';
 import { BindCodeData, BindCodeBody, BindStatusData, MyData, DeletedData } from '../common/Types';
+import { safeToast, safeReplace } from '../common/UiParts';
 
 const PRIVACY_TEXT = '本应用通过 QQ 机器人接收您主动订阅的群聊中公开可见的文本消息，用于生成您个人待办与提醒。\n' +
   '我们的服务器不保存聊天消息正文：消息仅用于判断是否属于您的订阅范围，并只在服务器内存中保留最多 30 分钟供您同步；超过 30 分钟未同步的消息将被自动删除且无法找回。\n' +
@@ -93,7 +94,7 @@ struct SettingsPage {
       this.startBindPoll();
     } else {
       this.bindPhase = 'idle';
-      this.getUIContext().getPromptAction().showToast({ message: res.error?.message ?? '生成配对码失败，请检查服务器地址' });
+      safeToast(this.getUIContext(), res.error?.message ?? '生成配对码失败，请检查服务器地址');
     }
   }
 
@@ -146,9 +147,9 @@ struct SettingsPage {
       const pasteData: pasteboard.PasteData = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, this.pairCode);
       const sp: pasteboard.SystemPasteboard = pasteboard.getSystemPasteboard();
       await sp.setData(pasteData);
-      this.getUIContext().getPromptAction().showToast({ message: '已复制配对码' });
+      safeToast(this.getUIContext(), '已复制配对码');
     } catch (e) {
-      this.getUIContext().getPromptAction().showToast({ message: '复制失败' });
+      safeToast(this.getUIContext(), '复制失败');
     }
   }
 
@@ -164,20 +165,20 @@ struct SettingsPage {
 
   saveBaseUrl(): void {
     if (this.baseUrlInput.length === 0) {
-      this.getUIContext().getPromptAction().showToast({ message: '地址不能为空' });
+      safeToast(this.getUIContext(), '地址不能为空');
       return;
     }
     Store.setBaseUrl(this.baseUrlInput);
     PollService.stop();
     PollService.start();
-    this.getUIContext().getPromptAction().showToast({ message: '已保存并重启轮询' });
+    safeToast(this.getUIContext(), '已保存并重启轮询');
   }
 
   clearLocalMessages(): void {
     Store.clearMessages();
     AppStorage.setOrCreate<number>('msgVersion', (AppStorage.get<number>('msgVersion') ?? 0) + 1);
     this.refreshLocal();
-    this.getUIContext().getPromptAction().showToast({ message: '已清空本机消息' });
+    safeToast(this.getUIContext(), '已清空本机消息');
   }
 
   confirmDeleteServer(): void {
@@ -203,10 +204,10 @@ struct SettingsPage {
     if (res.ok) {
       Store.clearAll();
       AppStorage.setOrCreate<number>('msgVersion', (AppStorage.get<number>('msgVersion') ?? 0) + 1);
-      this.getUIContext().getPromptAction().showToast({ message: '已删除服务端数据' });
-      this.getUIContext().getRouter().replaceUrl({ url: 'pages/OnboardingPage' });
+      safeToast(this.getUIContext(), '已删除服务端数据');
+      safeReplace(this.getUIContext(), 'pages/OnboardingPage');
     } else {
-      this.getUIContext().getPromptAction().showToast({ message: res.error?.message ?? '删除失败' });
+      safeToast(this.getUIContext(), res.error?.message ?? '删除失败');
     }
   }
 

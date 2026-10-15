@@ -1,17 +1,22 @@
 import { Store } from '../common/Store';
+import { safeReplace } from '../common/UiParts';
 
 @Entry
 @Component
 struct Index {
   aboutToAppear(): void {
-    Store.init(getContext(this));
+    // getContext(this) 已废弃：改用 getHostContext()（可能为空，需判空）
+    const ctx: Context | undefined = this.getUIContext().getHostContext();
+    if (ctx !== undefined) {
+      Store.init(ctx);
+    }
     AppStorage.setOrCreate<number>('msgVersion', 0);
     AppStorage.setOrCreate<boolean>('needOnboarding', false);
     AppStorage.setOrCreate<string>('newMsgBanner', '');
     if (Store.hasIdentity()) {
-      this.getUIContext().getRouter().replaceUrl({ url: 'pages/HomePage' });
+      safeReplace(this.getUIContext(), 'pages/HomePage');
     } else {
-      this.getUIContext().getRouter().replaceUrl({ url: 'pages/OnboardingPage' });
+      safeReplace(this.getUIContext(), 'pages/OnboardingPage');
     }
   }
 

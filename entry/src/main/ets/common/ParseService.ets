@@ -11,9 +11,10 @@
 import { EntityType, textProcessing } from '@kit.NaturalLanguageKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Store } from './Store';
-import { ParsedEntity, ParsedInfo, RobotMessage, firstImageUrl } from './Types';
+import { ParsedEntity, ParsedInfo, RobotMessage, firstImageUrl, firstImageIndex } from './Types';
 import { classifyCategory } from './ParseRules';
 import { ImageRecognizer, ImageRecognizeResult } from './ImageRecognizer';
+import { ApiClient } from './ApiClient';
 import { withTimeout } from './AsyncUtil';
 import { buildEvent, eventOneLine } from '../nlp/EventBuilder';
 import { CampusEvent } from '../nlp/EventTypes';
@@ -130,8 +131,12 @@ export class ParseService {
       entityTypes: [EntityType.DATETIME, EntityType.LOCATION, EntityType.NAME,
         EntityType.PHONE_NO, EntityType.URL, EntityType.EMAIL]
     };
-    const result: textProcessing.Entity[] | null =
-      await withTimeout<textProcessing.Entity[]>(textProcessing.getEntity(chunk, config), NLP_TIMEOUT_MS);
+    let result: textProcessing.Entity[] | null = null;
+    try {
+      result = await withTimeout<textProcessing.Entity[]>(textProcessing.getEntity(chunk, config), NLP_TIMEOUT_MS);
+    } catch (e) {
+      result = null; // Kit 抛异常：视同超时，由 parseOne 统一降级
+    }
     if (result === null) {
       throw new Error('nlp entity timeout');
     }
@@ -147,8 +152,12 @@ export class ParseService {
   }
 
   private static async extractNounWords(chunk: string): Promise<string[]> {
-    const segs: textProcessing.WordSegment[] | null =
-      await withTimeout<textProcessing.WordSegment[]>(textProcessing.getWordSegment(chunk), NLP_TIMEOUT_MS);
+    let segs: textProcessing.WordSegment[] | null = null;
+    try {
+      segs = await withTimeout<textProcessing.WordSegment[]>(textProcessing.getWordSegment(chunk), NLP_TIMEOUT_MS);
+    } catch (e) {
+      segs = null; // Kit 抛异常：视同超时，分词降级为空
+    }
     if (segs === null) {
       return [];
     }
@@ -162,6 +171,26 @@ export class ParseService {
     return out;
   }
 
+  /**
+   * 识别消息里的图片附件。
+   *
+   * 优先经后端 `GET /attachment` 过路取字节——QQ CDN 直链带**时效 rkey**，
+   * 端上直连常常失败；后端在 30 分钟窗口内能取到。取不到再退回端上直连 URL。
+   */
+  private static async recognizeImage(msg: RobotMessage, imageUrl: string): Promise<ImageRecognizeResult> {
+    const idx: number = firstImageIndex(msg.attachments);
+    const isServerMsg: boolean = ApiClient.deviceId.length > 0 && idx >= 0
+      && msg.msg_id.length > 0 && msg.msg_id.indexOf('local_') !== 0;
+    if (isServerMsg) {
+      const path: string = '/api/relay/attachment?msg_id=' + msg.msg_id + '&index=' + idx;
+      const buf: ArrayBuffer | null = await ApiClient.getBytes(path, 20000);
+      if (buf !== null) {
+        return await ImageRecognizer.recognizeBytes(buf);
+      }
+    }
+    return await ImageRecognizer.recognize(imageUrl);
+  }
+
   /** 解析单条消息；任何异常都降级为 parseOk=false，绝不向上抛出。 */
   static async parseOne(msg: RobotMessage, withNlp: boolean): Promise<ParsedInfo> {
     const at: string = new Date().toISOString();
@@ -171,7 +200,7 @@ export class ParseService {
       let content: string = msg.content;
       const imageUrl: string = firstImageUrl(msg.attachments);
       if (imageUrl.length > 0) {
-        const rec: ImageRecognizeResult = await ImageRecognizer.recognize(imageUrl);
+        const rec: ImageRecognizeResult = await ParseService.recognizeImage(msg, imageUrl);
         imageKind = rec.kind;
         imageText = rec.text;
         if (imageText.trim().length > 0) {
@@ -232,6 +261,27 @@ export class ParseService {
         imageSummary: ''
       };
       return failed;
+    }
+  }
+
+  /**
+   * 只跑 NL Kit 实体抽取（按需场景：手动添加任务页的实体标签）。
+   * 任何失败（模拟器不支持/超时）都降级为空数组、绝不向上抛——
+   * 规则解析出的结构化事件不能被 Kit 的失败拖垮。
+   */
+  static async entitiesOf(text: string): Promise<ParsedEntity[]> {
+    try {
+      const chunks: string[] = ParseService.sliceText(text);
+      const out: ParsedEntity[] = [];
+      for (let c = 0; c < chunks.length; c++) {
+        const part: ParsedEntity[] = await ParseService.extractEntities(chunks[c]);
+        for (let i = 0; i < part.length; i++) {
+          out.push(part[i]);
+        }
+      }
+      return out;
+    } catch (e) {
+      return [];
     }
   }
 

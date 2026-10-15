@@ -12,6 +12,7 @@ import { image } from '@kit.ImageKit';
 import { textRecognition } from '@kit.CoreVisionKit';
 import { detectBarcode, scanBarcode, scanCore } from '@kit.ScanKit';
 import { fileIo } from '@kit.CoreFileKit';
+import { util } from '@kit.ArkTS';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { withTimeout } from './AsyncUtil';
 import { Store } from './Store';
@@ -36,13 +37,15 @@ function none(): ImageRecognizeResult {
 }
 
 export class ImageRecognizer {
-  /** 下载图片并识别：先二维码，再 OCR。任何失败都返回空结果。 */
+  /**
+   * 下载远端图片（URL）后识别：先二维码，再 OCR。任何失败都返回空结果。
+   * 注意：QQ CDN 直链带时效 rkey，端上直连常失败——群消息附件优先走
+   * 「后端 /attachment 过路取回字节」再调用 recognizeBytes。
+   */
   static async recognize(url: string): Promise<ImageRecognizeResult> {
     if (url.length === 0) {
       return none();
     }
-    let source: image.ImageSource | undefined = undefined;
-    let pixelMap: image.PixelMap | undefined = undefined;
     const httpRequest = http.createHttp();
     try {
       const options: http.HttpRequestOptions = {
@@ -56,8 +59,24 @@ export class ImageRecognizer {
         hilog.warn(DOMAIN, TAG, 'image download failed code=%{public}d', res.responseCode);
         return none();
       }
-      const buf: ArrayBuffer = res.result as ArrayBuffer;
+      return await ImageRecognizer.recognizeBytes(res.result as ArrayBuffer);
+    } catch (e) {
+      const err = e as Error;
+      hilog.warn(DOMAIN, TAG, 'recognize failed: %{public}s', err.message);
+      return none();
+    } finally {
+      httpRequest.destroy();
+    }
+  }
 
+  /**
+   * 识别**内存里的图片字节**：先 Scan Kit 二维码，再 Core Vision Kit OCR。
+   * 手动添加页选图（base64）与后端 /attachment 取回的字节都走这条。
+   */
+  static async recognizeBytes(buf: ArrayBuffer): Promise<ImageRecognizeResult> {
+    let source: image.ImageSource | undefined = undefined;
+    let pixelMap: image.PixelMap | undefined = undefined;
+    try {
       const qrText: string = await ImageRecognizer.decodeBarcode(buf);
       if (qrText.length > 0) {
         return { kind: 'qr', text: qrText };
@@ -77,7 +96,7 @@ export class ImageRecognizer {
       return { kind: 'text', text: ocr.value ?? '' };
     } catch (e) {
       const err = e as Error;
-      hilog.warn(DOMAIN, TAG, 'recognize failed: %{public}s', err.message);
+      hilog.warn(DOMAIN, TAG, 'recognize bytes failed: %{public}s', err.message);
       return none();
     } finally {
       if (pixelMap !== undefined) {
@@ -86,7 +105,24 @@ export class ImageRecognizer {
       if (source !== undefined) {
         await source.release();
       }
-      httpRequest.destroy();
+    }
+  }
+
+  /** 识别 base64 图片（picker 选中的图直接给的是 base64）。 */
+  static async recognizeBase64(b64: string): Promise<ImageRecognizeResult> {
+    if (b64.length === 0) {
+      return none();
+    }
+    try {
+      const bytes: Uint8Array = new util.Base64Helper().decodeSync(b64);
+      // decodeSync 的 .buffer 是 ArrayBufferLike，ArkTS 不允许结构转换：拷进真 ArrayBuffer
+      const buf: ArrayBuffer = new ArrayBuffer(bytes.length);
+      new Uint8Array(buf).set(bytes);
+      return await ImageRecognizer.recognizeBytes(buf);
+    } catch (e) {
+      const err = e as Error;
+      hilog.warn(DOMAIN, TAG, 'base64 decode failed: %{public}s', err.message);
+      return none();
     }
   }
 

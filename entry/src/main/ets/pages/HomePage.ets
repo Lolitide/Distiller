@@ -1,8 +1,9 @@
 import { PollService } from '../service/PollService';
+import { FeedbackService, ACTION_ACCEPT, ACTION_DISMISS } from '../service/FeedbackService';
 import { Store } from '../common/Store';
-import { RobotMessage, DetailParams, ParsedEntity, formatTime, hasImageAttachment } from '../common/Types';
-import { EntityIcon } from '../common/UiParts';
-import { CampusEvent, isActionable, EVENT_NOTICE, EVENT_PLAN, EVENT_TODO } from '../nlp/EventTypes';
+import { RobotMessage, DetailParams, ParsedEntity, formatTime, hasImageAttachment, fileAttachmentLabel } from '../common/Types';
+import { EntityIcon, safePush, safeReplace, safeToast } from '../common/UiParts';
+import { CampusEvent, isActionable, EVENT_NOTICE, EVENT_PLAN, EVENT_TODO, EVENT_ACTIVITY, EVENT_CHAT } from '../nlp/EventTypes';
 import { timeSlotDisplay } from '../nlp/TimeParser';
 import { clusterEvents, pickDigestClusters, EventCluster } from '../nlp/EventCluster';
 import { clip } from '../nlp/TextUtil';
@@ -22,6 +23,9 @@ struct HomePage {
   @State statusText: string = '';
   @State refreshing: boolean = false;
   @State hideSelf: boolean = false;
+  /** 筛选：类别芯片（'' = 全部）+ 关键词（标题/摘要/正文）——纯前端就够，个人数据量小 */
+  @State filterKind: string = '';
+  @State keyword: string = '';
   /** T3 汇总：把零散消息聚成若干事件 */
   @State digest: EventCluster[] = [];
   /** 汇总里总共有多少个事件（卡片只展示前 3 个） */
@@ -74,15 +78,56 @@ struct HomePage {
     }
   }
 
-  visibleMessages(): RobotMessage[] {
-    if (!this.hideSelf) {
-      return this.messages;
+  /** 类别筛选芯片 */
+  kindFilters(): string[] {
+    return ['', EVENT_TODO, EVENT_NOTICE, EVENT_ACTIVITY, EVENT_PLAN, EVENT_CHAT];
+  }
+
+  kindLabel(value: string): string {
+    return value.length === 0 ? '全部' : value;
+  }
+
+  /** 当前有没有在用筛选（类别或关键词）。 */
+  filterActive(): boolean {
+    return this.filterKind.length > 0 || this.keyword.trim().length > 0;
+  }
+
+  clearFilter(): void {
+    this.filterKind = '';
+    this.keyword = '';
+  }
+
+  /** 这条消息过不过当前的筛选（类别 + 关键词）。 */
+  matchFilter(item: RobotMessage): boolean {
+    if (this.filterKind.length > 0) {
+      const k: string = item.event?.kind ?? item.parse?.kind ?? '';
+      if (k !== this.filterKind) {
+        return false;
+      }
     }
+    const kw: string = this.keyword.trim();
+    if (kw.length === 0) {
+      return true;
+    }
+    const bag: string = (item.event?.title ?? '') + ' ' + (item.summary ?? '') + ' '
+      + (item.event?.sourceText ?? '') + ' ' + (item.content ?? '');
+    return bag.indexOf(kw) >= 0;
+  }
+
+  visibleMessages(): RobotMessage[] {
     const out: RobotMessage[] = [];
     for (let i = 0; i < this.messages.length; i++) {
-      if (this.messages[i].is_self !== true) {
-        out.push(this.messages[i]);
+      // 用户明确「忽略」过的不再出现在列表里（数据保留在本地）
+      if (this.messages[i].dismissed === true) {
+        continue;
       }
+      if (this.hideSelf && this.messages[i].is_self === true) {
+        continue;
+      }
+      if (!this.matchFilter(this.messages[i])) {
+        continue;
+      }
+      out.push(this.messages[i]);
     }
     return out;
   }
@@ -126,6 +171,11 @@ struct HomePage {
 
   imageLabel(item: RobotMessage): string {
     return item.imageKind === 'qr' ? '二维码' : '图片';
+  }
+
+  /** 文件附件的展示标签：QQ 文件消息 content 为空，正文就是附件本身（name + 体积）。 */
+  fileLabel(item: RobotMessage): string {
+    return fileAttachmentLabel(item.attachments);
   }
 
   /** 这条消息是否做成了结构化事件卡片 */
@@ -255,7 +305,7 @@ struct HomePage {
   onNeedOnboarding(): void {
     if (this.needOnboarding) {
       AppStorage.setOrCreate<boolean>('needOnboarding', false);
-      this.getUIContext().getRouter().replaceUrl({ url: 'pages/OnboardingPage' });
+      safeReplace(this.getUIContext(), 'pages/OnboardingPage');
     }
   }
 
@@ -283,17 +333,27 @@ struct HomePage {
   openDetail(item: RobotMessage): void {
     this.setRead(item.msg_id);
     const p: DetailParams = { msgId: item.msg_id };
-    this.getUIContext().getRouter().pushUrl({ url: 'pages/MessageDetailPage', params: p });
+    safePush(this.getUIContext(), 'pages/MessageDetailPage', p);
   }
 
   openDigest(): void {
-    this.getUIContext().getRouter().pushUrl({ url: 'pages/DigestPage' });
+    safePush(this.getUIContext(), 'pages/DigestPage');
   }
 
   handleToTask(item: RobotMessage): void {
     Store.markAsTaskSource(item);
     this.setHandled(item.msg_id);
-    this.getUIContext().getPromptAction().showToast({ message: '已交给解析' });
+    // 接受候选：本地先行，反馈异步回传（后端只记计数；老后端自动跳过）
+    FeedbackService.send(item, ACTION_ACCEPT);
+    safeToast(this.getUIContext(), '已交给解析');
+  }
+
+  /** 忽略候选：本地从列表隐藏 + dismiss 回传 */
+  dismissMessage(item: RobotMessage): void {
+    Store.setDismissed(item.msg_id);
+    this.bumpVersion();
+    FeedbackService.send(item, ACTION_DISMISS);
+    safeToast(this.getUIContext(), '已忽略');
   }
 
   deleteMessage(msgId: string): void {
@@ -335,11 +395,42 @@ struct HomePage {
   }
 
   goSubs(): void {
-    this.getUIContext().getRouter().pushUrl({ url: 'pages/GroupSubPage' });
+    safePush(this.getUIContext(), 'pages/GroupSubPage');
   }
 
-  goSettings(): void {
-    this.getUIContext().getRouter().pushUrl({ url: 'pages/SettingsPage' });
+  goAddTask(): void {
+    safePush(this.getUIContext(), 'pages/AddTaskPage');
+  }
+
+  /** 筛选条：类别芯片 + 关键词搜索（都在本机算，不发请求）。 */
+  @Builder
+  filterBar() {
+    Column({ space: 8 }) {
+      TextInput({ text: this.keyword, placeholder: '搜索标题 / 内容' })
+        .fontSize(14)
+        .height(36)
+        .width('100%')
+        .onChange((v: string) => {
+          this.keyword = v;
+        })
+      Flex({ wrap: FlexWrap.Wrap }) {
+        ForEach(this.kindFilters(), (k: string) => {
+          Text(this.kindLabel(k))
+            .fontSize(12)
+            .fontColor(this.filterKind === k ? Color.White : '#666666')
+            .backgroundColor(this.filterKind === k ? '#2E75B6' : '#F0F0F0')
+            .borderRadius(10)
+            .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+            .margin({ right: 6, bottom: 6 })
+            .onClick(() => {
+              this.filterKind = k;
+            })
+        }, (k: string) => k)
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .padding({ left: 16, right: 16, bottom: 4 })
   }
 
   build() {
@@ -349,15 +440,15 @@ struct HomePage {
           .fontSize(20)
           .fontWeight(FontWeight.Bold)
           .layoutWeight(1)
+        Button('＋ 添加')
+          .fontSize(12)
+          .onClick(() => {
+            this.goAddTask();
+          })
         Button('订阅管理')
           .fontSize(12)
           .onClick(() => {
             this.goSubs();
-          })
-        Button('设置')
-          .fontSize(12)
-          .onClick(() => {
-            this.goSettings();
           })
       }
       .width('100%')
@@ -392,18 +483,33 @@ struct HomePage {
         })
       }
 
+      // 筛选栏常驻（只要收到过消息）：选完芯片 / 搜完词结果为空时也必须留着，
+      // 否则整块被空状态替换，用户点不回「全部」——这就是「选中一个 tag 筛选栏就没了」的根因。
+      if (this.messages.length > 0) {
+        this.filterBar()
+      }
+
       if (this.visibleMessages().length === 0) {
         Column({ space: 12 }) {
-          Text(this.hideSelf && this.messages.length > 0 ? '你已隐藏自己发的消息，暂无其他消息' : '还没有收到消息')
+          Text(this.filterActive()
+            ? '没有符合筛选条件的消息'
+            : (this.hideSelf && this.messages.length > 0 ? '你已隐藏自己发的消息，暂无其他消息' : '还没有收到消息'))
             .fontSize(16)
             .fontColor(Color.Gray)
-          Text('请确认机器人已在群里收到过消息')
-            .fontSize(12)
-            .fontColor(Color.Gray)
-          Button('去订阅群')
-            .onClick(() => {
-              this.goSubs();
-            })
+          if (this.filterActive()) {
+            Button('清除筛选')
+              .onClick(() => {
+                this.clearFilter();
+              })
+          } else {
+            Text('请确认机器人已在群里收到过消息')
+              .fontSize(12)
+              .fontColor(Color.Gray)
+            Button('去订阅群')
+              .onClick(() => {
+                this.goSubs();
+              })
+          }
         }
         .width('100%')
         .layoutWeight(1)
@@ -551,6 +657,11 @@ struct HomePage {
                       .maxLines(2)
                       .textOverflow({ overflow: TextOverflow.Ellipsis })
                       .width('100%')
+                  } else if (this.fileLabel(item).length > 0 && this.displayText(item).length === 0) {
+                    Text(this.fileLabel(item))
+                      .fontSize(14)
+                      .fontColor('#2E75B6')
+                      .width('100%')
                   } else if (this.isPending(item)) {
                     Text('解析中…')
                       .fontSize(14)
@@ -578,6 +689,16 @@ struct HomePage {
                       .maxLines(3)
                       .textOverflow({ overflow: TextOverflow.Ellipsis })
                       .width('100%')
+                    if (this.fileLabel(item).length > 0) {
+                      Text(this.fileLabel(item))
+                        .fontSize(12)
+                        .fontColor('#2E75B6')
+                        .backgroundColor('#EAF1FA')
+                        .borderRadius(4)
+                        .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+                        .margin({ top: 4 })
+                        .width('100%')
+                    }
                   }
 
                   Row({ space: 12 }) {
@@ -592,6 +713,11 @@ struct HomePage {
                         .fontSize(12)
                         .fontColor(Color.Green)
                     }
+                    Button('忽略')
+                      .fontSize(12)
+                      .onClick(() => {
+                        this.dismissMessage(item);
+                      })
                     Button('删除')
                       .fontSize(12)
                       .onClick(() => {

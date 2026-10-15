@@ -23,7 +23,11 @@ export class Store {
     Store.appContext = context;
     if (Store.pref === null) {
       const options: preferences.Options = { name: STORE_NAME };
-      Store.pref = preferences.getPreferencesSync(context, options);
+      try {
+        Store.pref = preferences.getPreferencesSync(context, options);
+      } catch (e) {
+        Store.pref = null; // 初始化失败：后续读写全部退化为默认值
+      }
     }
     const base: string = Store.getString(K_BASE_URL, '');
     if (base.length > 0) {
@@ -37,15 +41,23 @@ export class Store {
     if (Store.pref === null) {
       return def;
     }
-    return Store.pref.getSync(key, def) as string;
+    try {
+      return Store.pref.getSync(key, def) as string;
+    } catch (e) {
+      return def;
+    }
   }
 
   private static putString(key: string, value: string): void {
     if (Store.pref === null) {
       return;
     }
-    Store.pref.putSync(key, value);
-    Store.pref.flushSync();
+    try {
+      Store.pref.putSync(key, value);
+      Store.pref.flushSync();
+    } catch (e) {
+      // 写入/落盘失败：本次持久化丢失，不影响内存态
+    }
   }
 
   /** 应用上下文：图片识码/OCR 需要它来读写沙箱临时文件。 */
@@ -149,15 +161,23 @@ export class Store {
     if (Store.pref === null) {
       return false;
     }
-    return Store.pref.getSync(K_HIDE_SELF, false) as boolean;
+    try {
+      return Store.pref.getSync(K_HIDE_SELF, false) as boolean;
+    } catch (e) {
+      return false;
+    }
   }
 
   static setHideSelf(value: boolean): void {
     if (Store.pref === null) {
       return;
     }
-    Store.pref.putSync(K_HIDE_SELF, value);
-    Store.pref.flushSync();
+    try {
+      Store.pref.putSync(K_HIDE_SELF, value);
+      Store.pref.flushSync();
+    } catch (e) {
+      // 同 putString：失败即丢本次写入
+    }
   }
 
   static getPending(): RobotMessage[] {
@@ -173,6 +193,23 @@ export class Store {
     const pending: RobotMessage[] = Store.getPending();
     pending.push(msg);
     Store.putString(K_PENDING, JSON.stringify(pending));
+  }
+
+  /** 头部插入一条本地消息（手动添加任务）。msg_id 用 local_ 前缀，不会与服务端消息撞车。 */
+  static addMessage(msg: RobotMessage): void {
+    const list: RobotMessage[] = Store.getMessages();
+    Store.saveMessages([msg].concat(list));
+  }
+
+  /** 标记用户「忽略」的消息：列表不再展示，数据保留。 */
+  static setDismissed(msgId: string): void {
+    const list: RobotMessage[] = Store.getMessages();
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].msg_id === msgId) {
+        list[i].dismissed = true;
+      }
+    }
+    Store.saveMessages(list);
   }
 
   static clearMessages(): void {

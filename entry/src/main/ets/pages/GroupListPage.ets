@@ -1,5 +1,6 @@
 import { Store } from '../common/Store';
 import { RobotMessage, formatTime } from '../common/Types';
+import { safePush } from '../common/UiParts';
 import { GroupCard, GroupParams, buildGroupCards } from '../common/GroupIndex';
 import { BottomNav } from '../common/BottomNav';
 
@@ -21,7 +22,7 @@ struct GroupListPage {
 
   openGroup(openid: string): void {
     const p: GroupParams = { openid: openid };
-    this.getUIContext().getRouter().pushUrl({ url: 'pages/GroupDetailPage', params: p });
+    safePush(this.getUIContext(), 'pages/GroupDetailPage', p);
   }
 
   @Builder

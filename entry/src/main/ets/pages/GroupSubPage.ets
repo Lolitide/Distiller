@@ -1,6 +1,7 @@
 import { ApiClient } from '../common/ApiClient';
 import { Store } from '../common/Store';
 import { GroupsData, GroupItem, SubscribeData, LocalSubscription, ApiResult, SubscribeBody, UnsubscribeBody } from '../common/Types';
+import { safeReplace } from '../common/UiParts';
 
 @Entry
 @Component
@@ -71,7 +72,11 @@ struct GroupSubPage {
   }
 
   showToast(message: string): void {
-    this.getUIContext().getPromptAction().showToast({ message: message });
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: message });
+    } catch (e) {
+      // toast 失败无需处理（页面销毁瞬间调用是常态）
+    }
   }
 
   goBack(): void {
@@ -81,7 +86,7 @@ struct GroupSubPage {
     if (router.getStackSize() > 1) {
       router.back();
     } else {
-      router.replaceUrl({ url: 'pages/HomePage' });
+      safeReplace(this.getUIContext(), 'pages/HomePage');
     }
   }
 

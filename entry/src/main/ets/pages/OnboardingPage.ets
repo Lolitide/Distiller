@@ -3,6 +3,7 @@ import { Config } from '../common/Config';
 import { ApiClient } from '../common/ApiClient';
 import { Store } from '../common/Store';
 import { ApiResult, HealthData, RegisterData, BindCodeData, BindStatusData, RegisterBody, BindCodeBody } from '../common/Types';
+import { safeReplace } from '../common/UiParts';
 
 @Entry
 @Component
@@ -18,7 +19,11 @@ struct OnboardingPage {
   private bindPollCount: number = 0;
 
   aboutToAppear(): void {
-    Store.init(getContext(this));
+    // getContext(this) 已废弃：改用 getHostContext()（可能为空，需判空）
+    const ctx: Context | undefined = this.getUIContext().getHostContext();
+    if (ctx !== undefined) {
+      Store.init(ctx);
+    }
     this.baseUrlInput = Store.getBaseUrl();
     // 不自动探测后端：直接让用户手动填地址（只认手填，避免被局域网里的假后端接管）
   }
@@ -120,15 +125,19 @@ struct OnboardingPage {
   }
 
   showToast(message: string): void {
-    this.getUIContext().getPromptAction().showToast({ message: message });
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: message });
+    } catch (e) {
+      // toast 失败无需处理（页面销毁瞬间调用是常态）
+    }
   }
 
   goHome(): void {
-    this.getUIContext().getRouter().replaceUrl({ url: 'pages/HomePage' });
+    safeReplace(this.getUIContext(), 'pages/HomePage');
   }
 
   goGroups(): void {
-    this.getUIContext().getRouter().replaceUrl({ url: 'pages/GroupSubPage' });
+    safeReplace(this.getUIContext(), 'pages/GroupSubPage');
   }
 
   saveAndRetry(): void {
