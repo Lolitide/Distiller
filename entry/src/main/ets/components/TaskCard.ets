@@ -9,7 +9,9 @@
  * 右侧「响铃提醒」开关**按有没有 `remindAt` 决定显不显示**（袁正锟 2026-10-14）：
  * 没有提醒时间，开关本身就没意义，所以 `suffixItem` 直接传 `undefined`（官方约定 undefined ＝ 不显示 C 区）。
  */
-import { HdsListItemCard, PrefixCustomBuilder, SuffixSwitch } from '@kit.UIDesignKit';
+// ⚠️ 这里必须显式导入 HDS 的 `TextOptions`：ArkUI 在 `component/text.d.ts` 里也有一个**全局**同名接口，
+// 不导入就会解析到那个，赋给 HdsListItemCard 的 textItem 时报「no properties in common」。
+import { HdsListItemCard, PrefixCustomBuilder, SuffixSwitch, TextOptions } from '@kit.UIDesignKit';
 import { TextModifier } from '@kit.ArkUI';
 import { Task, TaskStatus } from '../model';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
@@ -89,6 +91,24 @@ export struct TaskCard {
     return TaskListViewModel.descriptionLabel(this.task, new Date());
   }
 
+  /** 副标题：在 HH:mm 截止。**空的时候传 undefined 而不是空串**，避免白占一行高度 */
+  @Computed
+  get secondaryTextOptions(): TextOptions | undefined {
+    if (this.dueLabel === '') {
+      return undefined;
+    }
+    return { text: this.dueLabel, modifier: this.textModifier };
+  }
+
+  /** 描述行：优先级链取前两项。**空的时候不传**，同上 */
+  @Computed
+  get descriptionOptions(): TextOptions | undefined {
+    if (this.descriptionLabel === '') {
+      return undefined;
+    }
+    return { text: this.descriptionLabel, modifier: this.textModifier };
+  }
+
   @Builder
   prefixCircle() {
     // 圆圈尺寸：HDS 给卡片前缀图标的规格上限只有 24vp（IconSize.SYSTEM_ICON），
@@ -109,8 +129,8 @@ export struct TaskCard {
       }),
       textItem: {
         primaryText: { text: this.task.title, modifier: this.textModifier },
-        secondaryText: { text: this.dueLabel, modifier: this.textModifier },
-        description: { text: this.descriptionLabel, modifier: this.textModifier }
+        secondaryText: this.secondaryTextOptions,
+        description: this.descriptionOptions
       },
       suffixItem: this.remindSwitch
     })
