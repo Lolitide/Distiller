@@ -16,7 +16,7 @@ import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 @ComponentV2
 export struct TaskCard {
   @Require @Param task: Task;
-  @Event onComplete: () => void = () => {};
+  @Event onToggleComplete: () => void = () => {};
   @Event onRemindChange: (isOn: boolean) => void = () => {};
 
   @Computed
@@ -67,7 +67,7 @@ export struct TaskCard {
     SymbolGlyph(this.circleSymbol)
       .fontSize(24)
       .onClick(() => {
-        this.onComplete();
+        this.onToggleComplete();
       })
   }
 

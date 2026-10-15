@@ -10,11 +10,22 @@ import { TaskDayGroup, TaskListViewModel } from '../viewmodel/TaskListViewModel'
 export struct A_TaskList {
   @Local groups: TaskDayGroup[] = TaskListViewModel.groupByDay(MOCK_TASKS, new Date());
 
-  /** 点圆圈＝完成这项任务。已完成的不再重复处理（袁正锟只说「点击后完成」） */
-  private completeTask(task: Task): void {
+  /**
+   * 记「完成前是什么状态」，供再点一次圆圈时回退（袁正锟 2026-10-14：再点恢复未完成状态）。
+   * 放在页面是因为 `Task` 契约里没有这个字段 —— 它是 UI 的撤销记忆，不该进落库字段。
+   * 页面重建会丢（丢了就回退到 `CONFIRMED`）。
+   */
+  private statusBeforeCompleted: Map<number, TaskStatus> = new Map();
+
+  /** 点圆圈：未完成 → 完成；已完成 → 退回完成前的状态 */
+  private toggleComplete(task: Task): void {
     if (task.status === TaskStatus.COMPLETED) {
+      const previous: TaskStatus | undefined = this.statusBeforeCompleted.get(task.id);
+      task.status = previous === undefined ? TaskStatus.CONFIRMED : previous;
+      this.statusBeforeCompleted.delete(task.id);
       return;
     }
+    this.statusBeforeCompleted.set(task.id, task.status);
     task.status = TaskStatus.COMPLETED;
   }
 
@@ -61,8 +72,8 @@ export struct A_TaskList {
               ListItem() {
                 TaskCard({
                   task: task,
-                  onComplete: () => {
-                    this.completeTask(task);
+                  onToggleComplete: () => {
+                    this.toggleComplete(task);
                   },
                   onRemindChange: (isOn: boolean) => {
                     this.setRemind(task, isOn);
