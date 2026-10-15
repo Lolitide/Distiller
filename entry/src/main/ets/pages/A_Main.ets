@@ -55,6 +55,7 @@ struct A_Main {
         .tabBar(MainTabBar.SETTINGS)
       }
       .vertical(false)
+      .scrollable(false)
       .width('100%')
       .height('100%')
       .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
