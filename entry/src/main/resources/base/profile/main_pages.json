@@ -3,6 +3,7 @@
     "pages/Index",
     "pages/OnboardingPage",
     "pages/HomePage",
+    "pages/AddTaskPage",
     "pages/MessageDetailPage",
     "pages/DigestPage",
     "pages/GroupSubPage",
