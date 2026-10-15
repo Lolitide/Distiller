@@ -1,9 +1,8 @@
-import { HdsNavigation, HdsTabs } from '@kit.UIDesignKit';
-import { ComponentContent, UIContext } from '@kit.ArkUI';
+import { HdsNavigation, HdsNavigationMenuContentOptions, HdsTabs } from '@kit.UIDesignKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { MainTabBar } from '../components/MainTabBar';
-import { MainTitleBar, settingsMenu, taskListMenu } from '../components/MainTitleBar';
+import { MainTitleBar } from '../components/MainTitleBar';
 import { A_TaskList } from './A_TaskList';
 import { A_Settings } from './A_Settings';
 
@@ -21,24 +20,45 @@ struct A_Main {
     return this.currentIndex === 0 ? $r('app.string.tab_task_list') : $r('app.string.tab_settings');
   }
 
-  private openMoreMenu(): void {
-    const uiContext = this.getUIContext();
+  /**
+   * 右上角按钮**随页签变**：任务列表＝编辑 + 搜索（两个图标按钮），设置＝关于（一个）。
+   * 官方 `HdsNavigation` 是**函数式组件**（`HdsNavigationInterface`），`titleBar` 参数会随重渲染更新，
+   * 所以这里用 `@Computed` 依赖 `currentIndex` 就能换来换去。
+   */
+  @Computed
+  get navMenu(): HdsNavigationMenuContentOptions {
+    if (this.currentIndex === 0) {
+      return MainTitleBar.taskListMenu(() => {
+        this.onEdit();
+      }, () => {
+        this.onSearch();
+      });
+    }
+    return MainTitleBar.settingsMenu(() => {
+      this.onAbout();
+    });
+  }
+
+  /** 统一的 toast 反馈（菜单项/图标按钮无文字，点了要给可见反馈） */
+  private toast(message: ResourceStr): void {
     try {
-      const contentNode: ComponentContent<UIContext> = this.currentIndex === 0
-        ? new ComponentContent(uiContext, wrapBuilder(taskListMenu), uiContext)
-        : new ComponentContent(uiContext, wrapBuilder(settingsMenu), uiContext);
-      uiContext.getPromptAction()
-        .openMenu(contentNode, { id: MainTitleBar.MORE_TARGET_ID })
-        .then(() => {
-          hilog.info(DOMAIN, TAG, '%{public}s', 'open more menu success');
-        })
-        .catch((err: BusinessError) => {
-          hilog.error(DOMAIN, TAG, 'open more menu failed: %{public}s', JSON.stringify(err));
-        });
+      this.getUIContext().getPromptAction().showToast({ message: message });
     } catch (error) {
       const err = error as BusinessError;
-      hilog.error(DOMAIN, TAG, 'open more menu args error: %{public}d, %{public}s', err.code, err.message);
+      hilog.error(DOMAIN, TAG, 'show toast failed: %{public}d, %{public}s', err.code, err.message);
     }
+  }
+
+  private onEdit(): void {
+    this.toast($r('app.string.menu_edit'));
+  }
+
+  private onSearch(): void {
+    this.toast($r('app.string.menu_search'));
+  }
+
+  private onAbout(): void {
+    this.toast($r('app.string.menu_about'));
   }
 
   build() {
@@ -68,9 +88,7 @@ struct A_Main {
       style: MainTitleBar.STYLE,
       content: {
         title: { mainTitle: this.navTitle },
-        menu: MainTitleBar.moreMenu(() => {
-          this.openMoreMenu();
-        })
+        menu: this.navMenu
       }
     })
     .width('100%')
