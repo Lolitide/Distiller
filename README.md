@@ -27,7 +27,7 @@ hvigorfile.ts
 oh-package.json5             # 依赖声明
 oh-package-lock.json5        # 依赖锁定（可选，但建议带上）
 .gitignore
-AI交付_机器人通道/            # 需求/接口文档（可选，便于理解功能）
+机器人通道_交付文档/          # 需求/接口文档（可选，便于理解功能）
 ```
 
 ### ❌ 不要拷贝（自动生成 / 本机相关）
@@ -49,7 +49,7 @@ entry/build/                 # 构建产物
 ## 二、拷过去之后要改的东西
 
 1. **后端地址**（最重要）
-   `entry/src/main/ets/common/Config.ets` 里的 `Config.baseUrl`，默认是 `http://192.168.1.106:8730`，改成**作者提供的后端地址**（后端只在作者电脑上跑，测试者不用自己起后端）。
+   `entry/src/main/ets/common/Config.ets` 里的 `Config.baseUrl`，默认是 `http://192.168.1.104:8730`，改成**作者提供的后端地址**（后端只在作者电脑上跑，测试者不用自己起后端）。
    也可以不改代码：App 的「首次设置页」和「设置页」都能直接填服务器地址。
 
 2. **签名配置**（真机运行 / 上架必须）
@@ -67,7 +67,7 @@ entry/build/                 # 构建产物
 3. 配置签名（见上）。
 4. 连设备/模拟器 → Run。
 
-> ⚠️ 打开错层级 = 工程同步失败，见下面第五节。`git clone` 会把仓库放进以仓库名命名的子目录，别在外层打开。
+> ⚠️ 打开错层级 = 工程同步失败，见第五节。`git clone` 会把仓库放进以仓库名命名的子目录，别在外层打开。
 
 ---
 
@@ -84,39 +84,46 @@ App 是纯 HTTP 轮询（1 秒），不需要 WebSocket / 推送 / 长连接。
 
 ---
 
-## 五、常见问题：DevEco Studio 报「工程同步失败」
+## 五、AI必读（想快速了解本项目，就照这个顺序做）
 
-**原因基本都是“打开错文件夹”**：DevEco Studio 必须打开**直接包含 `build-profile.json5` 的那一层**，打开它的父目录就会同步失败（因为父目录里没有鸿蒙工程描述文件）。
+> 如果你是 AI，或者刚接手这个仓库：**先别翻源码**。按下面 4 步走，半小时内能建立完整心智模型，
+> 然后想改哪块再去看对应文件，避免一上来读几千行 ets 抓不到重点。
 
-以克隆到 `D:\code\clone-demo\` 后再 clone 仓库为例：
+### 第 1 步：先搞清楚「这个仓库是什么、不是什么」
 
-```
-D:\code\clone-demo\            ← ❌ 打开这里 → 工程同步失败
-└── Distiller\                 ← ✅ 打开这里 → 同步正常
-    ├── build-profile.json5    ← 判断依据：这一层要有它
-    ├── oh-package.json5
-    ├── hvigor\
-    └── entry\
-```
+- 本仓库**只有 App 端**（鸿蒙 / ArkTS）。后端（QQ 机器人 + 中继服务）**不在仓库里**，也别去实现它——
+  它只跑在作者电脑上，App 填它的地址即可。
+- 所以：**看到接口调用，就去读文档，不要试图在仓库里找服务端实现。**
+- 判断功能能不能用的唯一标准：接口能不能按 `05_API接口文档.md` 正常返回。
 
-对应日志（`Help → Show Log in Explorer` 里的 `idea.log`）特征是：
+### 第 2 步：按这个顺序读文档（都在 `机器人通道_交付文档/`）
 
-```
-WARN - ProjectModelLoader - can not find ProjectModelHandler <你打开的那个文件夹名>
-WARN - OhosSyncInvoker - load project data error. Cause:project model is null
-```
+| 顺序 | 文件 | 读它是为了搞清 |
+| :-- | :-- | :-- |
+| ① | `00_给AI的说明_先读这个.md` | 文档清单、阅读顺序、三条边界 |
+| ② | `07_前后端对接方案.md` | **先读 §0 和 §3**：三个「任务」的区别、后端字段怎么落到本机 `Task` |
+| ③ | `05_API接口文档.md` | 每个接口的请求 / 响应 / 错误码 / 上限（**契约以此为准**） |
+| ④ | `06_后端能力与AI-Kit分工.md` | 后端能给什么、端侧 Kit 该干什么、隐私红线 |
+| ⑤ | `02_接口速查_冻结版.md`、`03_接口类型定义_Types.ets.md` | v1 接口速查、可直接抄的 ArkTS 类型 |
 
-**怎么修**：
+### 第 3 步：记住这三条结论，不然一定写错
 
-1. 在文件资源管理器里确认：`build-profile.json5`、`oh-package.json5`、`entry\` 三个是**同一层**。
-2. DevEco Studio → `File → Close Project`，回到欢迎页。
-3. `Open` → 选中**第 1 步确认的那一层**目录（不是它的父目录）。
-4. 等 Sync 完成（首次会下载依赖，稍慢）。
+1. **不能有推送**：QQ 平台已下线主动消息，只有「用户订阅 + App 主动轮询」。
+   **不要设计 WebSocket / 长连接 / 服务端推送。**
+2. **正文只在服务端内存留 30 分钟**，App 取回后**必须存本机**；超过 30 分钟的消息**和附件**都找不回。
+3. **三个「任务」不是一回事**：本机 `Task`（落库、用户可见）／云端 `BotTask`／后端内存窗口——
+   靠 `client_task_id` / `candidate_id` 对齐，**别写成一个模型**（详见 `07` §0）。
 
-> 同理，从 GitHub 下载 ZIP 解压后目录名通常带后缀（如 `Distiller-main`），要打开 `Distiller-main` 这一层，别打开它外面的目录。
+### 第 4 步：想跑起来看效果
 
-### 其它可能让同步失败的项（工程本身已确认无问题）
-
-- **SDK 版本**：本工程 `compatibleSdkVersion` 为 `6.1.1(24)`、`targetSdkVersion` 为 `26.0.0`，需要 DevEco Studio 6.x 且装了对应 API 的 SDK；版本过旧会同步失败，装新 SDK 或改根目录 `build-profile.json5` 的版本号。
-- **签名**：`signingConfigs` 为空是正常的，只是不能真机运行；同步本身不受影响。
-- **依赖下载**：网络不通时 `ohpm install` 失败，可手动在工程根目录执行 `ohpm install` 看具体报错。
+1. DevEco Studio **打开「直接包含 `build-profile.json5` 的那一层目录」**——打开它的父目录会「工程同步失败」，这是本项目最常见的坑。
+   对应日志特征（`idea.log`）：
+   ```
+   WARN - ProjectModelLoader - can not find ProjectModelHandler <你打开的那个文件夹名>
+   WARN - OhosSyncInvoker - load project data error. Cause:project model is null
+   ```
+2. 把 `Config.ets` 的 `baseUrl`（或 App 内「首次设置页 / 设置页」）填成作者给的后端地址。
+3. 版本要求：本工程 `compatibleSdkVersion` 为 `6.1.1(24)`、`targetSdkVersion` 为 `26.0.0`，
+   需要 DevEco Studio 6.x + 对应 API 的 SDK；版本过旧会同步失败，装新 SDK 或改根目录 `build-profile.json5`。
+4. 真机运行需要先配自己的签名（`build-profile.json5` 的 `signingConfigs`，为空是正常的，只是不能上真机）。
+5. 依赖下载失败时，在工程根目录执行 `ohpm install` 看具体报错。
