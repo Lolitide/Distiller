@@ -13,6 +13,13 @@
  *    而标题是「今天/明天/周几」加「MM月DD日」两段拼成一句，`$r()` 的实参不能是另一个 Resource，
  *    拼不了 —— 于是按官方《避免硬编码与拼接》的做法，把 9 种组合各做成一条带 `%d` 占位的资源。
  *    依据：`开发指南/Localization_Kit.../提升可翻译性/避免硬编码与拼接/l10n-hard-coding-concatenate`。
+ *
+ * 3. **按钮字号**（袁正锟 2026-10-15：「展开收起的图标大一号」）：
+ *    用官方 token `sys.float.subheader_right_icon_size`（＝SubHeader **右侧图标**的官方尺寸，
+ *    真值 24vp / 32vp 按设备自动解析），不再吃 `SymbolGlyph` 默认的 24vp。
+ *    ⚠️ **不要再给它加 `.height('100%')`**：容器高度是 auto 时，百分比会解析到**外层约束**上
+ *    （实测把图标撑成整屏高，分组头变成一大块，看起来"Group 之间的间距好大"）。
+ *    热区也随之变大（32vp 图标 → 32×32vp），此前试过的 `.padding()` / `responseRegion` 都**看不出效果**，已弃用。
  */
 import { LengthMetrics, SubHeader } from '@kit.ArkUI';
 import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
@@ -89,6 +96,7 @@ export struct TaskGroupHeader {
       .layoutWeight(1)
 
       SymbolGlyph(this.toggleSymbol)
+        .fontSize($r('sys.float.subheader_right_icon_size'))
         .accessibilityText(this.toggleAccessibility)
         .onClick(() => {
           this.onToggle();
