@@ -7,6 +7,8 @@
  * 副标题的两个数（同上确认）：**未完成 x 项 / 共 y 项**。
  * 展开状态（同上确认）：**默认只展开「今天」**。
  * 描述行（同上确认）：按 **提醒时间 > 重要程度 > 耗时 > 来源 > 标签 > 备注** 取**前两项**，用 ` · ` 拼。
+ *   其中「提醒时间」那一段（`响铃还有 HH 小时 mm 分钟`）**只在「响铃提醒」开关是开的时候才出现**
+ *   （开关关掉＝`reminderId` 为空，倒计时就不显示；袁正锟 2026-10-14）。
  */
 import { Task, TaskPriority, TaskStatus } from '../model';
 
@@ -158,7 +160,8 @@ export class TaskListViewModel {
     const parts: string[] = [];
 
     const remind: number | undefined = task.remindAt;
-    if (remind !== undefined && remind > now.getTime()) {
+    // 「响铃提醒」开关关掉时（reminderId 被清空）就不显示倒计时（袁正锟 2026-10-14）
+    if (remind !== undefined && task.reminderId !== undefined && remind > now.getTime()) {
       parts.push(TaskListViewModel.remindCountdown(remind, now));
     }
     if (parts.length < DESCRIPTION_MAX_PARTS) {
