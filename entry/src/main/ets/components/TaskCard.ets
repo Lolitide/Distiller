@@ -10,6 +10,7 @@
  * 没有提醒时间，开关本身就没意义，所以 `suffixItem` 直接传 `undefined`（官方约定 undefined ＝ 不显示 C 区）。
  */
 import { HdsListItemCard, PrefixCustomBuilder, SuffixSwitch } from '@kit.UIDesignKit';
+import { TextModifier } from '@kit.ArkUI';
 import { Task, TaskStatus } from '../model';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 
@@ -28,6 +29,26 @@ export struct TaskCard {
   @Computed
   get circleSymbol(): Resource {
     return this.completed ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.circle_dashed');
+  }
+
+  /** 完成态整卡灰化：卡片底换官方「组件灰背板」，未完成用官方卡片白 */
+  @Computed
+  get cardBackground(): Resource {
+    return this.completed ? $r('sys.color.comp_background_gray') : $r('sys.color.ohos_id_color_card_bg');
+  }
+
+  /** 完成态三行文字一起变灰：官方次级文字色 */
+  @Computed
+  get textModifier(): TextModifier {
+    return new TextModifier().fontColor(
+      this.completed ? $r('sys.color.ohos_id_color_text_secondary') : $r('sys.color.ohos_id_color_text_primary')
+    );
+  }
+
+  /** 圆圈的官方图标色：完成态也用次级图标色一起灰掉 */
+  @Computed
+  get circleColor(): ResourceColor {
+    return this.completed ? $r('sys.color.icon_secondary') : $r('sys.color.icon_primary');
   }
 
   /** 「响铃提醒」开关由 `reminderId` 派生（需求方 2026-10-14 定）：有值＝开 */
@@ -65,7 +86,7 @@ export struct TaskCard {
   @Builder
   prefixCircle() {
     SymbolGlyph(this.circleSymbol)
-      .fontSize(24)
+      .fontColor([this.circleColor])
       .onClick(() => {
         this.onToggleComplete();
       })
@@ -73,14 +94,14 @@ export struct TaskCard {
 
   build() {
     HdsListItemCard({
-      cardBackgroundColor: $r('sys.color.ohos_id_color_card_bg'),
+      cardBackgroundColor: this.cardBackground,
       prefixItem: new PrefixCustomBuilder((): void => {
         this.prefixCircle();
       }),
       textItem: {
-        primaryText: { text: this.task.title },
-        secondaryText: { text: this.dueLabel },
-        description: { text: this.descriptionLabel }
+        primaryText: { text: this.task.title, modifier: this.textModifier },
+        secondaryText: { text: this.dueLabel, modifier: this.textModifier },
+        description: { text: this.descriptionLabel, modifier: this.textModifier }
       },
       suffixItem: this.remindSwitch
     })
