@@ -14,18 +14,15 @@
  *    拼不了 —— 于是按官方《避免硬编码与拼接》的做法，把 9 种组合各做成一条带 `%d` 占位的资源。
  *    依据：`开发指南/Localization_Kit.../提升可翻译性/避免硬编码与拼接/l10n-hard-coding-concatenate`。
  *
- * 3. **按钮**（袁正锟 2026-10-15 的收敛结论）：
- *    用**官方 `Button` 图标按钮**承载：`Button({ type: ButtonType.Circle, stateEffect: true }) { SymbolGlyph(...) }`。
- *    —— 点击区由**按钮自己**定，比在 `SymbolGlyph` 上想办法可靠（前三次分别试过 `.padding()`、`responseRegion`、
- *    `.height('100%')`，前两个"看不出效果"、第三个把图标撑成整屏高）。
+ * 3. **点击区＝整块分组头**（袁正锟 2026-10-15 的最终结论：「把整个 Header 区域都改成可点击的」）：
+ *    点击处理挂在最外层 `Row` 上（连带它的 `padding` 一起进热区），右侧只留一个**纯展示**的 `SymbolGlyph`。
  *    · 图标字号：官方 token `sys.float.subheader_right_icon_size`（SubHeader 右侧图标尺寸，真值 24vp / 32vp）
- *    · 图标颜色：官方 `sys.color.icon_primary`（按钮默认字色是白的，不显式设会看不见）
- *    · 按钮尺寸：**正方形，边长也用 `subheader_right_icon_size`** —— 这样它**不会比标题+副标题那一块还高**，
- *      再靠外层的 `VerticalAlign.Center` 自动与文字块的水平线重合。
- *      ※ 起初用 `titlebar_icon_background_height`(=40vp) 做边长，袁正锟反馈「按钮比左侧 titleLabel 还高」，
- *      所以要"和 title+subtitle 整块重合"就不能让按钮高过文字块 —— 实测这是最稳的做法。
- *    · 按钮底色：官方 `sys.color.button_background_color_transparent`（保持分组头原样，只留按压水波纹）
- *    ⚠️ **不要再给子节点写 `height('100%')`**：容器高度 auto 时百分比会解析到外层约束上（见 §2.7 #17）。
+ *    · 图标颜色：官方 `sys.color.icon_primary`
+ *    · 无障碍文本挂在 `Row` 上（它是可交互元素），图标本身不再单独播报
+ *    **这一改让前面几轮全部作废**：按钮多大、与文字块怎么对齐、怎么拉伸，都不再需要 ——
+ *    点击区是整行，图标只是指示器（`Row` 的 `VerticalAlign.Center` 自然把图标与文字块居中对齐）。
+ *    ⚠️ 两条不要重犯：①别给子节点写 `height('100%')`（auto 容器里会解析到外层约束，见 §2.7 #17）；
+ *    ②要让子节点与兄弟同高只能用 `Flex`+`ItemAlign.Stretch`，`Row` 的 `VerticalAlign` 没有拉伸档（见 §2.7 #18）。
  */
 import { LengthMetrics, SubHeader } from '@kit.ArkUI';
 import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
@@ -101,21 +98,18 @@ export struct TaskGroupHeader {
       }
       .layoutWeight(1)
 
-      Button({ type: ButtonType.Circle, stateEffect: true }) {
-        SymbolGlyph(this.toggleSymbol)
-          .fontSize($r('sys.float.subheader_right_icon_size'))
-          .fontColor([$r('sys.color.icon_primary')])
-      }
-      .width($r('sys.float.subheader_right_icon_size'))
-      .height($r('sys.float.subheader_right_icon_size'))
-      .backgroundColor($r('sys.color.button_background_color_transparent'))
-      .accessibilityText(this.toggleAccessibility)
-      .onClick(() => {
-        this.onToggle();
-      })
+      // 纯展示用（底色透明的 Button 与它视觉上一致，所以直接用它更省事）
+      SymbolGlyph(this.toggleSymbol)
+        .fontSize($r('sys.float.subheader_right_icon_size'))
+        .fontColor([$r('sys.color.icon_primary')])
     }
     .width('100%')
     .alignItems(VerticalAlign.Center)
     .padding({ end: LengthMetrics.resource($r('sys.float.padding_level8')) })
+    // 整块分组头都可点（袁正锟 2026-10-15）：点击区＝整行，不用再纠结按钮多大、与文字块怎么对齐
+    .accessibilityText(this.toggleAccessibility)
+    .onClick(() => {
+      this.onToggle();
+    })
   }
 }
