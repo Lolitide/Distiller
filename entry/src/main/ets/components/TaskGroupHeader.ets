@@ -20,7 +20,10 @@
  *    `.height('100%')`，前两个"看不出效果"、第三个把图标撑成整屏高）。
  *    · 图标字号：官方 token `sys.float.subheader_right_icon_size`（SubHeader 右侧图标尺寸，真值 24vp / 32vp）
  *    · 图标颜色：官方 `sys.color.icon_primary`（按钮默认字色是白的，不显式设会看不见）
- *    · 按钮尺寸：官方 `sys.float.titlebar_icon_background_height`（＝40vp，标准图标按钮触摸目标）
+ *    · 按钮尺寸：**正方形，边长也用 `subheader_right_icon_size`** —— 这样它**不会比标题+副标题那一块还高**，
+ *      再靠外层的 `VerticalAlign.Center` 自动与文字块的水平线重合。
+ *      ※ 起初用 `titlebar_icon_background_height`(=40vp) 做边长，袁正锟反馈「按钮比左侧 titleLabel 还高」，
+ *      所以要"和 title+subtitle 整块重合"就不能让按钮高过文字块 —— 实测这是最稳的做法。
  *    · 按钮底色：官方 `sys.color.button_background_color_transparent`（保持分组头原样，只留按压水波纹）
  *    ⚠️ **不要再给子节点写 `height('100%')`**：容器高度 auto 时百分比会解析到外层约束上（见 §2.7 #17）。
  */
@@ -103,8 +106,8 @@ export struct TaskGroupHeader {
           .fontSize($r('sys.float.subheader_right_icon_size'))
           .fontColor([$r('sys.color.icon_primary')])
       }
-      .width($r('sys.float.titlebar_icon_background_height'))
-      .height($r('sys.float.titlebar_icon_background_height'))
+      .width($r('sys.float.subheader_right_icon_size'))
+      .height($r('sys.float.subheader_right_icon_size'))
       .backgroundColor($r('sys.color.button_background_color_transparent'))
       .accessibilityText(this.toggleAccessibility)
       .onClick(() => {
