@@ -5,6 +5,9 @@
  *      点不动。要「点圆圈＝完成任务」只能走官方给的 A 区自定义内容口子 PrefixCustomBuilder，
  *      里面放官方 SymbolGlyph。
  *   2. 开关：用官方 SuffixSwitch（CheckOptions 里有 isCheck / onChange）。
+ *
+ * 右侧「响铃提醒」开关**按有没有 `remindAt` 决定显不显示**（袁正锟 2026-10-14）：
+ * 没有提醒时间，开关本身就没意义，所以 `suffixItem` 直接传 `undefined`（官方约定 undefined ＝ 不显示 C 区）。
  */
 import { HdsListItemCard, PrefixCustomBuilder, SuffixSwitch } from '@kit.UIDesignKit';
 import { Task, TaskStatus } from '../model';
@@ -31,6 +34,20 @@ export struct TaskCard {
   @Computed
   get remindOn(): boolean {
     return this.task.reminderId !== undefined;
+  }
+
+  /** 有提醒时间才给开关；没有就整个 C 区不显示 */
+  @Computed
+  get remindSwitch(): SuffixSwitch | undefined {
+    if (this.task.remindAt === undefined) {
+      return undefined;
+    }
+    return new SuffixSwitch({
+      isCheck: this.remindOn,
+      onChange: (isOn: boolean) => {
+        this.onRemindChange(isOn);
+      }
+    });
   }
 
   /** 副标题：在 HH:mm 截止 */
@@ -65,12 +82,7 @@ export struct TaskCard {
         secondaryText: { text: this.dueLabel },
         description: { text: this.descriptionLabel }
       },
-      suffixItem: new SuffixSwitch({
-        isCheck: this.remindOn,
-        onChange: (isOn: boolean) => {
-          this.onRemindChange(isOn);
-        }
-      })
+      suffixItem: this.remindSwitch
     })
   }
 }
