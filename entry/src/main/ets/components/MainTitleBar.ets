@@ -1,57 +1,16 @@
 /*
- * UI Design Kit 无对应组件：本文件用 ArkUI 基础组件 Menu / MenuItem 承载
- * 「图标上绑定自定义 menu」的菜单内容（HDS 只提供 menu.value 自带菜单项，
- * 不给自定义菜单内容）。其余一律用 @kit.UIDesignKit 的 HdsNavigation。
+ * 标题栏（`HdsNavigation` 的 titleBar）配置：模糊样式 + 右上角按钮。
+ *
+ * 右上角**不用下拉菜单**了（需求方 2026-10-15：「右上角编辑和搜索用两个按钮替代，不需要用选项按钮」）：
+ * 官方 `menu.value` 本来就支持**内联多项**（最多 3 个，超出才折叠成「更多」），所以
+ * 「任务列表＝编辑 + 搜索两个图标按钮」「设置＝关于一个图标按钮」直接列出来即可。
+ * 这样也删掉了原来那套 `componentId` + `promptAction.openMenu` + 自建 `Menu/MenuItem` 的复杂度。
+ * 图标一律取官方 HarmonyOS Symbol。
  */
 import { HdsNavigationMenuContentOptions, ScrollEffectType, TitleBarStyleOptions } from '@kit.UIDesignKit';
-import { LengthMetrics, UIContext } from '@kit.ArkUI';
-import { BusinessError } from '@kit.BasicServicesKit';
-import { hilog } from '@kit.PerformanceAnalysisKit';
-
-const DOMAIN: number = 0x0000;
-const TAG: string = 'MainTitleBar';
-const MENU_WIDTH: number = 224;
-
-function showItemToast(uiContext: UIContext, message: ResourceStr): void {
-  try {
-    uiContext.getPromptAction().showToast({ message: message });
-  } catch (error) {
-    const err = error as BusinessError;
-    hilog.error(DOMAIN, TAG, 'show toast failed: %{public}d, %{public}s', err.code, err.message);
-  }
-}
-
-@Builder
-export function taskListMenu(uiContext: UIContext) {
-  Menu() {
-    MenuItem({ content: $r('app.string.menu_edit') })
-      .onClick(() => {
-        showItemToast(uiContext, $r('app.string.menu_edit'));
-      })
-    MenuItem({ content: $r('app.string.menu_search') })
-      .onClick(() => {
-        showItemToast(uiContext, $r('app.string.menu_search'));
-      })
-  }
-  .width(MENU_WIDTH)
-  .menuItemDivider({ strokeWidth: LengthMetrics.px(1), color: $r('sys.color.comp_divider') })
-}
-
-@Builder
-export function settingsMenu(uiContext: UIContext) {
-  Menu() {
-    MenuItem({ content: $r('app.string.menu_about') })
-      .onClick(() => {
-        showItemToast(uiContext, $r('app.string.menu_about'));
-      })
-  }
-  .width(MENU_WIDTH)
-  .menuItemDivider({ strokeWidth: LengthMetrics.px(1), color: $r('sys.color.comp_divider') })
-}
+import { LengthMetrics } from '@kit.ArkUI';
 
 export class MainTitleBar {
-  static readonly MORE_TARGET_ID: string = 'mainTitleBarMore';
-
   /**
    * 内容区顶部要空出来的高度（vp）。
    *
@@ -75,17 +34,48 @@ export class MainTitleBar {
     }
   };
 
-  static moreMenu(onMore: () => void): HdsNavigationMenuContentOptions {
+  /**
+   * 任务列表页的右上角：**两个内联图标按钮**（编辑 / 搜索），不是下拉。
+   * （需求方 2026-10-15：「右上角编辑和搜索用两个按钮替代，不需要用选项按钮」）
+   * 官方 `menu.value` 最多内联显示 3 项，所以 2 项就是两个按钮，不会折叠成「更多」。
+   * 图标都是官方 HarmonyOS Symbol：`square_and_pencil` / `magnifyingglass`。
+   */
+  static taskListMenu(onEdit: () => void, onSearch: () => void): HdsNavigationMenuContentOptions {
     return {
-      value: [{
-        content: {
-          label: $r('app.string.action_more'),
-          icon: $r('sys.symbol.more'),
-          isEnabled: true,
-          componentId: MainTitleBar.MORE_TARGET_ID,
-          action: onMore
+      value: [
+        {
+          content: {
+            label: $r('app.string.menu_edit'),
+            icon: $r('sys.symbol.square_and_pencil'),
+            isEnabled: true,
+            action: onEdit
+          }
+        },
+        {
+          content: {
+            label: $r('app.string.menu_search'),
+            icon: $r('sys.symbol.magnifyingglass'),
+            isEnabled: true,
+            action: onSearch
+          }
         }
-      }]
+      ]
+    };
+  }
+
+  /** 设置页的右上角：**单个「关于」图标按钮**（官方 Symbol `info_circle`），同样不是下拉 */
+  static settingsMenu(onAbout: () => void): HdsNavigationMenuContentOptions {
+    return {
+      value: [
+        {
+          content: {
+            label: $r('app.string.menu_about'),
+            icon: $r('sys.symbol.info_circle'),
+            isEnabled: true,
+            action: onAbout
+          }
+        }
+      ]
     };
   }
 }
