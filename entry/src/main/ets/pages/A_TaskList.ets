@@ -1,3 +1,4 @@
+import { LengthMetrics } from '@kit.ArkUI';
 import { Task, TaskStatus } from '../model';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { TaskCard } from '../components/TaskCard';
@@ -24,6 +25,9 @@ const GROUP_HEADER_PULL_UP_VP: number = 10;
  * 再加一点呼吸 → 取 **80vp**。之前这里只有 `padding_level4`(8vp)，所以最后一张卡片会被压住。
  */
 const LIST_BOTTOM_CLEARANCE_VP: number = 80;
+
+/** 空状态图示的尺寸（vp）：官方没有随 SDK 发空状态插图，用官方 Symbol 放大到接近插图的观感档位 */
+const EMPTY_ICON_SIZE_VP: number = 96;
 
 @ComponentV2
 export struct A_TaskList {
@@ -105,7 +109,48 @@ export struct A_TaskList {
     .margin({ top: index === 0 ? 0 : -GROUP_HEADER_PULL_UP_VP })
   }
 
-  build() {
+  /**
+   * 一条任务都没有（比如全选删光）—— 走空状态。
+   * 判据取「当前列表里的任务总数」，所以删空、或者以后 Mock 换成真数据也照样成立。
+   */
+  @Computed
+  get isEmpty(): boolean {
+    return this.store.totalCount === 0;
+  }
+
+  /**
+   * 空状态（袁正锟 2026-10-16：「没有一项任务的时候 背景做一个官方那样的风格 一个图片表示无任务
+   * 下面写无任务 都是比背景要深的灰色」）。
+   *
+   * · 图示用**官方 Symbol**（`inbox`）放大到 96vp —— 官方没有随 SDK 发"空状态插图"这种位图资源
+   *   （`sys.media` 里没有 empty 类图），Symbol 是唯一能做到"官方风格"的图示；
+   * · 颜色两处都取**比页面背景（`#f1f3f5`）更深的官方灰**：图示 `gray_03`(`#d1d1d6`)，
+   *   文字 `ohos_id_color_text_tertiary`(`#66182431`)；
+   * · 整块在内容区居中；若以后要换真插图，把 SymbolGlyph 换成 `Image($r('app.media.xxx'))` 即可。
+   */
+  @Builder
+  emptyState() {
+    Column() {
+      SymbolGlyph($r('sys.symbol.inbox'))
+        .fontSize(`${EMPTY_ICON_SIZE_VP}vp`)
+        .fontColor([$r('sys.color.gray_03')])
+
+      Text($r('app.string.empty_task_list'))
+        .fontSize($r('sys.float.ohos_id_text_size_body2'))
+        .fontColor($r('sys.color.ohos_id_color_text_tertiary'))
+        .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
+    }
+    .width('100%')
+    .height('100%')
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    // 图示是纯装饰，无障碍只播报那一句文案
+    .accessibilityLevel('yes')
+    .accessibilityText($r('app.string.empty_task_list'))
+  }
+
+  @Builder
+  taskList() {
     List({ scroller: this.scroller }) {
       // 顶部让开标题栏的这一段，**必须做成列表里的第一项**，不能用 `contentStartOffset`：
       // `contentStartOffset` 会把内容整体下移，`HdsNavigation` 按滚动偏移算「标题收缩进度」时起点被推后 →
@@ -148,5 +193,18 @@ export struct A_TaskList {
     .height('100%')
     // 让开悬浮页签栏的高度，否则最后一张卡片会被栏压住（见 LIST_BOTTOM_CLEARANCE_VP 的来历）
     .contentEndOffset(LIST_BOTTOM_CLEARANCE_VP)
+  }
+
+  build() {
+    // 有任务＝列表；一条都没有＝官方风格的空状态（两者都是内容区的根，外面套 Stack 保证根节点是容器）
+    Stack() {
+      if (this.isEmpty) {
+        this.emptyState()
+      } else {
+        this.taskList()
+      }
+    }
+    .width('100%')
+    .height('100%')
   }
 }
