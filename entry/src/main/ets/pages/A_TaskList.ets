@@ -1,4 +1,3 @@
-import { LengthMetrics } from '@kit.ArkUI';
 import { Task, TaskStatus } from '../model';
 import { MOCK_TASKS } from '../mock/MockTasks';
 import { MainTitleBar } from '../components/MainTitleBar';
@@ -6,8 +5,23 @@ import { TaskCard } from '../components/TaskCard';
 import { TaskGroupHeader } from '../components/TaskGroupHeader';
 import { TaskDayGroup, TaskListViewModel } from '../viewmodel/TaskListViewModel';
 
+/**
+ * 组头「上留白回收」量（vp）：官方 `SubHeader` 在标题上方自带一段留白，**官方没给这个留白的旋钮**
+ * （`SubHeader` 的参数表里只有标题/副标题/操作项，且官方不建议给它设通用属性）。
+ * 实测「上一张卡片底边 → 下一个组标题墨迹顶」= **87px = 24.5vp**，袁正锟 2026-10-16 觉得偏大
+ * （「减小每一天任务组之间的间距 有点大了」）→ 用**负上边距**把整块组头往上提，把这段压到 ≈14.5vp。
+ * ⚠️ 已知偏离：这是"绕着官方组件调间距"，不是官方给的旋钮（区别于 §四 规则 6 的"不硬改组件"——
+ * 这里没有改 `SubHeader` 内部，只是调整它外面的间距）。
+ */
+const GROUP_HEADER_PULL_UP_VP: number = 10;
+
 @ComponentV2
 export struct A_TaskList {
+  /**
+   * 列表的滚动控制器，**由外层传进来**（`A_Main` 创建 → `MainTabBar` → 这里）。
+   * `HdsNavigation.bindToScrollable` 要绑同一个对象，标题栏的滚动联动才成立。
+   */
+  @Require @Param scroller: Scroller;
   @Local groups: TaskDayGroup[] = TaskListViewModel.groupByDay(MOCK_TASKS, new Date());
 
   /**
@@ -53,9 +67,11 @@ export struct A_TaskList {
    * 只管「列表项之间」，不含分组头，官方没给「头与首项之间」的选项。
    * `SubHeader` 自己不能设通用属性（官方文档明说会多生成 `__Common__` 节点，属性可能不生效），
    * 所以间隔只能加在外层的这层壳上。
+   *
+   * `index` 用来做**上留白回收**（见 `GROUP_HEADER_PULL_UP_VP`）：第 2 组起才提。
    */
   @Builder
-  groupHeader(group: TaskDayGroup) {
+  groupHeader(group: TaskDayGroup, index: number) {
     Column() {
       TaskGroupHeader({
         group: group,
@@ -65,14 +81,34 @@ export struct A_TaskList {
       })
     }
     .width('100%')
-    .padding({ bottom: LengthMetrics.resource($r('sys.float.padding_level8')) })
+    // ⚠️ 这里**刻意不再加下留白**（原来加的是 `padding_level8` = 16vp）。
+    // 实测（把五个分组全部展开后逐像素量，`.cache/all1-padding.txt` + `.cache/all1-report.txt`）：
+    //   卡片 ↔ 卡片（同组内）= **8.2vp**；组头副标题 → 本组第一张卡片 = **23.6vp**（＝ SubHeader 自带的 ~7.9vp 下留白 ＋ 我们这层 16vp）；
+    //   上组最后一张卡片 → 组头顶标题 = **14.6vp**。
+    // 也就是组头离**上面那组**比离**自己这组**还近 → 袁正锟 2026-10-16 说的「ListHeader 和下方卡片之间的间距是不是太大了…整体展开后协调嘛」。
+    // 去掉这层下留白后，组头→本组卡片 ≈ SubHeader 自带的 ~8vp ≈ 卡片↔卡片的 8.2vp，
+    // 而组与组之间仍是 14.6vp → **组头明确归属下面那一组**，节奏是 8 / 8 / 14.6。
+    .margin({ top: index === 0 ? 0 : -GROUP_HEADER_PULL_UP_VP })
   }
 
   build() {
-    List() {
-      ForEach(this.groups, (group: TaskDayGroup) => {
+    List({ scroller: this.scroller }) {
+      // 顶部让开标题栏的这一段，**必须做成列表里的第一项**，不能用 `contentStartOffset`：
+      // `contentStartOffset` 会把内容整体下移，`HdsNavigation` 按滚动偏移算「标题收缩进度」时起点被推后 →
+      // 标题栏会一直保持展开，直到内容整整滚过标题栏高度才「啪」地收起来（实测：内容滚了 119vp 时标题仍是 112vp，
+      // 再滚一点才变成 56vp），也就是袁正锟 2026-10-16 说的「mainTitle 向左上角移动的动画明显慢于页面上滑」。
+      // 改成列表首项留白（＝官方示例 `Scroll { Column { Blank(标题栏高度) ... } }` 的写法）后，滚动偏移从第一像素
+      // 就开始参与收缩计算 → 标题跟手。（`.cache/nb-report.txt` / `.cache/fn-report.txt` 是改前的量测记录。）
+      ListItem() {
+        // `Blank` 只能放进 Row/Column/Flex，所以这里用一行空 `Row` 撑出这段高度。
+        // 无障碍不上报这个空项（否则读屏会播报一个空列表项）
+        Row().width('100%').height(MainTitleBar.CONTENT_TOP_OFFSET_VP)
+      }
+      .accessibilityLevel('no')
+
+      ForEach(this.groups, (group: TaskDayGroup, index: number) => {
         ListItemGroup({
-          header: this.groupHeader(group),
+          header: this.groupHeader(group, index),
           spaceWidth: $r('sys.float.padding_level4')
         }) {
           if (group.expanded) {
@@ -95,7 +131,6 @@ export struct A_TaskList {
     }
     .width('100%')
     .height('100%')
-    .contentStartOffset(MainTitleBar.CONTENT_TOP_OFFSET_VP)
     .contentEndOffset($r('sys.float.padding_level4'))
   }
 }
