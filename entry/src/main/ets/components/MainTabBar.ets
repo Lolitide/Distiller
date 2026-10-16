@@ -60,6 +60,10 @@ export struct MainTabBar {
     }
     .height($r('sys.float.titlebar_icon_background_height'))
     .alignItems(VerticalAlign.Center)
+    // `.width('100%')`：**占满整条迷你栏** → 展开后整条都能点（袁正锟 2026-10-15：
+    // 「minibar 展开后整个 bar 都可以点击，现在只有图标和文字区域可点击」）。
+    // 内容仍靠左排（Row 默认 Start），所以收起被裁剪时露出的还是那个居中的图标格。
+    .width('100%')
     .onClick(() => {
       this.onAdd();
     })
