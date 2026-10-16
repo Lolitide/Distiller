@@ -13,7 +13,7 @@
 // 不导入就会解析到那个，赋给 HdsListItemCard 的 textItem 时报「no properties in common」。
 import { HdsListItemCard, PrefixCustomBuilder, SuffixSwitch, TextOptions } from '@kit.UIDesignKit';
 import { TextModifier } from '@kit.ArkUI';
-import { Task, TaskStatus } from '../model';
+import { Task, TaskPriority, TaskStatus } from '../model';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 
 @ComponentV2
@@ -34,15 +34,30 @@ export struct TaskCard {
   }
 
   /**
-   * 完成态整卡灰化：官方色阶的第三档。
-   * 踩过：一开始用 `comp_background_gray`，它解析后是 `#f1f3f5`，**和页面背景
-   * `ohos_id_color_sub_background`(#fff1f3f5) 一模一样** → 卡片一灰就等于融进背景、看不见了。
-   * 官方浅色灰阶（真值查自预览器资源表）：`#f1f3f5`(页面) → `#e5e5ea`(gray_02) → `#d1d1d6`(gray_03)
-   * → 取 `gray_03`，与卡片白 `#ffffff` 和页面灰都分得开；它有深色档（#3F4246 一带）。
+   * 卡片底色用**重要程度**表达（袁正锟 2026-10-15：「description 里面的重要程度不显示了，
+   * 改成普通卡片白色 / 重要黄色 / 严重红色」）＋ 完成态灰化。
+   *
+   * **优先级：完成态灰化 > 重要程度色**（做完的卡片统一灰掉，不再按轻重着色）。
+   * 配色**全部取官方 token**（真值查自预览器资源表）：
+   *   普通 → `ohos_id_color_card_bg`（`#ffffffff` 卡片白）
+   *   重要 → `ohos_id_color_palette_aux11`（`#fff5dc62` 浅黄）—— ⚠️ 官方**没有"黄色"语义色**，
+   *          这是官方调色板里最贴的暖色（属已知偏离：语义 token 用不了，借调色板 token）
+   *   严重 → `comp_background_warning_secondary`（`#FDD9D9` 浅红）—— 官方语义色里 `alert`=橙(`#ff7500`)、
+   *          `warning`=红(`#fa2a2d`)，两者都是饱和色、当整片卡面太重，故取「警示背景**次级色**」
+   *   完成 → `gray_03`（`#d1d1d6`）
    */
   @Computed
   get cardBackground(): Resource {
-    return this.completed ? $r('sys.color.gray_03') : $r('sys.color.ohos_id_color_card_bg');
+    if (this.completed) {
+      return $r('sys.color.gray_03');
+    }
+    if (this.task.priority === TaskPriority.URGENT) {
+      return $r('sys.color.comp_background_warning_secondary');
+    }
+    if (this.task.priority === TaskPriority.IMPORTANT) {
+      return $r('sys.color.ohos_id_color_palette_aux11');
+    }
+    return $r('sys.color.ohos_id_color_card_bg');
   }
 
   /** 完成态三行文字一起变灰：官方次级文字色 */
