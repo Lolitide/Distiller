@@ -34,6 +34,7 @@ import { hdsMaterial, HdsBarStyle, HdsTabs } from '@kit.UIDesignKit';
 import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI';
 import { A_TaskList } from '../pages/A_TaskList';
 import { A_Settings } from '../pages/A_Settings';
+import { TaskListStore } from '../viewmodel/TaskListStore';
 
 /**
  * 悬浮页签栏距**底部安全区**的间距（vp）。`barFloatingStyle.barBottomMargin` 这个字段 API 只吃 `Length`。
@@ -68,25 +69,57 @@ export struct MainTabBar {
    * 外层还要用它 `bindToScrollable`（标题栏跟手的前提），所以必须是同一个对象。
    */
   @Require @Param scroller: Scroller;
+  /** 任务列表的「数据 ＋ 编辑态」store（页面持有、按引用共享）：底部这颗按钮按它切「添加 / 删除」 */
+  @Require @Param store: TaskListStore;
   /** 当前页签下标，报给外层：标题栏按钮要按页签变（任务列表＝编辑+搜索；设置＝关于） */
   @Event onIndexChange: (index: number) => void = () => {};
   /** 右侧圆形按钮的「添加」 */
   @Event onAdd: () => void = () => {};
+  /** 编辑态删完一批之后通知外层（带上删掉的条数，外层给 toast 反馈） */
+  @Event onDeleteDone: (count: number) => void = () => {};
 
   /**
-   * 迷你栏槽位的内容 —— 照官方示例的结构：**无底色图标格 + 文字**，收起态被官方裁剪，只露出居中的「+」。
+   * 右侧那颗圆钮当前的**图标**（袁正锟 2026-10-16：「Tabbar 里面的添加按钮变成删除按钮」）：
+   * 普通态＝`plus`；编辑态＝`trash`（官方 Symbol 库里的 `trash`）。
+   */
+  @Computed
+  get slotSymbol(): Resource {
+    return this.store.editing ? $r('sys.symbol.trash') : $r('sys.symbol.plus');
+  }
+
+  /**
+   * 图标颜色：普通态＝官方一级图标色；编辑态**没勾选任何任务时压成灰色的 `icon_tertiary`**、
+   * 勾选后**高亮成警示红 `ohos_id_color_warning`**（删除是破坏性动作）。
+   * （袁正锟 2026-10-16：「如果用户没有勾选任何一条任务 删除按钮灰色 勾选后按钮高亮可点击」）
+   */
+  @Computed
+  get slotColor(): ResourceColor {
+    if (!this.store.editing) {
+      return $r('sys.color.icon_primary');
+    }
+    return this.store.canDelete ? $r('sys.color.ohos_id_color_warning') : $r('sys.color.icon_tertiary');
+  }
+
+  /** 展开态下那颗圆钮旁边的文字也要跟着换（收起态被官方裁剪，只露图标） */
+  @Computed
+  get slotLabel(): Resource {
+    return this.store.editing ? $r('app.string.action_delete') : $r('app.string.action_add_task');
+  }
+
+  /**
+   * 迷你栏槽位的内容 —— 照官方示例的结构：**无底色图标格 + 文字**，收起态被官方裁剪，只露出居中的图标。
    * 尺寸都用官方 token：格子 `titlebar_icon_background_height`(40vp) + 左右 `padding_level4`(8vp) → 收起态正好 56vp；
    * 图标 `subheader_right_icon_size`(24vp)；文字走官方字体阶梯 `body2`（比 `bottom_tab_text_size_normal` 大一号）。
-   * 圆钮的**材质与「+」都由它渲染**（`enableMiniBarBackground: true` ＝ 迷你栏背景跟随页签栏背景），
+   * 圆钮的**材质与图标都由它渲染**（`enableMiniBarBackground: true` ＝ 迷你栏背景跟随页签栏背景），
    * 我们的自绘件只负责点击（见 `addHitArea`），所以观感与左侧药丸完全同源。
    */
   @Builder
   rightSlotContent() {
     Row() {
       Column() {
-        SymbolGlyph($r('sys.symbol.plus'))
+        SymbolGlyph(this.slotSymbol)
           .fontSize($r('sys.float.subheader_right_icon_size'))
-          .fontColor([$r('sys.color.icon_primary')])
+          .fontColor([this.slotColor])
       }
       .width($r('sys.float.titlebar_icon_background_height'))
       .height($r('sys.float.titlebar_icon_background_height'))
@@ -96,7 +129,7 @@ export struct MainTabBar {
         end: LengthMetrics.resource($r('sys.float.padding_level4'))
       })
 
-      Text($r('app.string.action_add_task'))
+      Text(this.slotLabel)
         .fontSize($r('sys.float.ohos_id_text_size_body2'))
     }
     .height($r('sys.float.titlebar_icon_background_height'))
@@ -128,9 +161,19 @@ export struct MainTabBar {
         end: LengthMetrics.resource($r('sys.float.padding_level8')),
         bottom: LengthMetrics.vp(BAR_BOTTOM_MARGIN)
       })
-      // 图标按钮没有文字，无障碍文本必须给（读屏要播报）
-      .accessibilityText($r('app.string.action_add_task'))
+      // 图标按钮没有文字，无障碍文本必须给（读屏要播报）；编辑态要说「删除」
+      .accessibilityText(this.store.editing ? $r('app.string.action_delete') : $r('app.string.action_add_task'))
       .onClick(() => {
+        // 普通态＝添加；编辑态＝删除（**一条没勾时点它不做事**，图标那一刻也是灰的）
+        if (this.store.editing) {
+          if (this.store.canDelete) {
+            const removed: number = this.store.deleteSelected();
+            if (removed > 0) {
+              this.onDeleteDone(removed);
+            }
+          }
+          return;
+        }
         this.onAdd();
       })
   }
@@ -140,7 +183,7 @@ export struct MainTabBar {
     Stack({ alignContent: Alignment.BottomEnd }) {
       HdsTabs({ barPosition: BarPosition.End }) {
         TabContent() {
-          A_TaskList({ scroller: this.scroller })
+          A_TaskList({ scroller: this.scroller, store: this.store })
         }
         .tabBar(TASK_LIST_TAB)
 

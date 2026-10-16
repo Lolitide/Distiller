@@ -7,7 +7,7 @@
  * 这样也删掉了原来那套 `componentId` + `promptAction.openMenu` + 自建 `Menu/MenuItem` 的复杂度。
  * 图标一律取官方 HarmonyOS Symbol。
  */
-import { HdsNavigationMenuContentOptions, ScrollEffectType, TitleBarStyleOptions } from '@kit.UIDesignKit';
+import { HdsNavigationMenuContentOptions, ScrollEffectType, TextStyleMode, TitleBarStyleOptions } from '@kit.UIDesignKit';
 import { LengthMetrics } from '@kit.ArkUI';
 
 export class MainTitleBar {
@@ -73,6 +73,36 @@ export class MainTitleBar {
             icon: $r('sys.symbol.info_circle'),
             isEnabled: true,
             action: onAbout
+          }
+        }
+      ]
+    };
+  }
+
+  /**
+   * **编辑（多选）模式**的右上角：两个**纯文字**按钮 —— 取消 / 全选
+   * （袁正锟 2026-10-16：「导航栏右上角两个按钮变成取消和全选」）。
+   *
+   * 纯文字项的官方写法：给 `label` + `type: TextStyleMode.NORMAL`、**不给 `icon`**（§2.4 实测可行）。
+   * 注意这里仍然是**内联两项**（官方 `menu.value` 最多内联 3 项），不会折叠成「更多」。
+   */
+  static editModeMenu(onCancel: () => void, onSelectAll: () => void): HdsNavigationMenuContentOptions {
+    return {
+      value: [
+        {
+          content: {
+            label: $r('app.string.action_cancel'),
+            type: TextStyleMode.NORMAL,
+            isEnabled: true,
+            action: onCancel
+          }
+        },
+        {
+          content: {
+            label: $r('app.string.action_select_all'),
+            type: TextStyleMode.NORMAL,
+            isEnabled: true,
+            action: onSelectAll
           }
         }
       ]

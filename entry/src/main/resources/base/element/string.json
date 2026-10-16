@@ -91,6 +91,38 @@
     {
       "name": "action_add_task",
       "value": "添加任务"
+    },
+    {
+      "name": "action_cancel",
+      "value": "取消"
+    },
+    {
+      "name": "action_select_all",
+      "value": "全选"
+    },
+    {
+      "name": "action_delete",
+      "value": "删除"
+    },
+    {
+      "name": "action_select_task",
+      "value": "选择任务"
+    },
+    {
+      "name": "action_deselect_task",
+      "value": "取消选择"
+    },
+    {
+      "name": "action_complete_task",
+      "value": "标记完成"
+    },
+    {
+      "name": "action_uncomplete_task",
+      "value": "取消完成"
+    },
+    {
+      "name": "deleted_count",
+      "value": "已删除 %d 项"
     }
   ]
 }

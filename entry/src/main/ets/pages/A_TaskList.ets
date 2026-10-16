@@ -1,9 +1,9 @@
 import { Task, TaskStatus } from '../model';
-import { MOCK_TASKS } from '../mock/MockTasks';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { TaskCard } from '../components/TaskCard';
 import { TaskGroupHeader } from '../components/TaskGroupHeader';
-import { TaskDayGroup, TaskListViewModel } from '../viewmodel/TaskListViewModel';
+import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
+import { TaskListStore } from '../viewmodel/TaskListStore';
 
 /**
  * 组头「上留白回收」量（vp）：官方 `SubHeader` 在标题上方自带一段留白，**官方没给这个留白的旋钮**
@@ -32,7 +32,11 @@ export struct A_TaskList {
    * `HdsNavigation.bindToScrollable` 要绑同一个对象，标题栏的滚动联动才成立。
    */
   @Require @Param scroller: Scroller;
-  @Local groups: TaskDayGroup[] = TaskListViewModel.groupByDay(MOCK_TASKS, new Date());
+  /**
+   * 「数据 ＋ 编辑态」store，同样由外层透传：分组数据从这里取（删除会改它），
+   * 编辑态再传给每张卡片（圆圈 ↔ 方框勾选框）。
+   */
+  @Require @Param store: TaskListStore;
 
   /**
    * 记「完成前是什么状态」，供再点一次圆圈时回退（袁正锟 2026-10-14：再点恢复未完成状态）。
@@ -116,7 +120,7 @@ export struct A_TaskList {
       }
       .accessibilityLevel('no')
 
-      ForEach(this.groups, (group: TaskDayGroup, index: number) => {
+      ForEach(this.store.groups, (group: TaskDayGroup, index: number) => {
         ListItemGroup({
           header: this.groupHeader(group, index),
           spaceWidth: $r('sys.float.padding_level4')
@@ -126,6 +130,7 @@ export struct A_TaskList {
               ListItem() {
                 TaskCard({
                   task: task,
+                  store: this.store,
                   onToggleComplete: () => {
                     this.toggleComplete(task);
                   },

@@ -21,6 +21,7 @@
 // 不导入就会解析到那个，赋给 HdsListItemCard 的 textItem 时报「no properties in common」。
 import { HdsListItemCard, PrefixCustomBuilder, SuffixSwitch } from '@kit.UIDesignKit';
 import { Task, TaskPriority, TaskStatus } from '../model';
+import { TaskListStore } from '../viewmodel/TaskListStore';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 
 /**
@@ -37,18 +38,58 @@ const LINE_HEIGHT_VP: number = 20;
 @ComponentV2
 export struct TaskCard {
   @Require @Param task: Task;
+  /** 「数据 ＋ 编辑态」store：编辑态与勾选状态从这里读（卡片自己算，ForEach 不用重跑也能刷新） */
+  @Require @Param store: TaskListStore;
   @Event onToggleComplete: () => void = () => {};
   @Event onRemindChange: (isOn: boolean) => void = () => {};
+
+  /** 是否处于编辑（多选）模式 */
+  @Computed
+  get editing(): boolean {
+    return this.store.editing;
+  }
+
+  /** 这条任务有没有被勾上 */
+  @Computed
+  get selected(): boolean {
+    return this.store.isSelected(this.task.id);
+  }
 
   @Computed
   get completed(): boolean {
     return this.task.status === TaskStatus.COMPLETED;
   }
 
-  /** 未完成＝虚线圆，已完成＝带勾的圆。两个都是官方 Symbol 库里的名字 */
+  /**
+   * 左侧图标（官方 Symbol）：
+   * · 普通态 —— 未完成＝虚线圆 `circle_dashed`，已完成＝带勾的圆 `checkmark_circle`；
+   * · **编辑态 —— 方框勾选框**：未选 `square`、已选 `checkmark_square_fill`
+   *   （袁正锟 2026-10-16：「Card 的 prefixItem 里面的图标变成方框选择框 用于用户多选」）。
+   */
   @Computed
-  get circleSymbol(): Resource {
+  get prefixSymbol(): Resource {
+    if (this.editing) {
+      return this.selected ? $r('sys.symbol.checkmark_square_fill') : $r('sys.symbol.square');
+    }
     return this.completed ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.circle_dashed');
+  }
+
+  /** 编辑态勾上的方框用官方强调色（品牌蓝）表示"选中"，没勾的用一级图标色 */
+  @Computed
+  get prefixColor(): ResourceColor {
+    if (this.editing) {
+      return this.selected ? $r('sys.color.ohos_id_color_emphasize') : $r('sys.color.icon_primary');
+    }
+    return this.completed ? $r('sys.color.icon_secondary') : $r('sys.color.icon_primary');
+  }
+
+  /** 左侧图标的无障碍文本：编辑态说"选择/取消选择"，普通态说"标记完成/取消完成" */
+  @Computed
+  get prefixAccessibility(): Resource {
+    if (this.editing) {
+      return this.selected ? $r('app.string.action_deselect_task') : $r('app.string.action_select_task');
+    }
+    return this.completed ? $r('app.string.action_uncomplete_task') : $r('app.string.action_complete_task');
   }
 
   /**
@@ -82,12 +123,6 @@ export struct TaskCard {
   @Computed
   get textColor(): ResourceColor {
     return this.completed ? $r('sys.color.ohos_id_color_text_secondary') : $r('sys.color.ohos_id_color_text_primary');
-  }
-
-  /** 圆圈的官方图标色：完成态也用次级图标色一起灰掉 */
-  @Computed
-  get circleColor(): ResourceColor {
-    return this.completed ? $r('sys.color.icon_secondary') : $r('sys.color.icon_primary');
   }
 
   /** 「响铃提醒」开关由 `reminderId` 派生（袁正锟 2026-10-14 定）：有值＝开 */
@@ -130,12 +165,19 @@ export struct TaskCard {
 
   @Builder
   prefixCircle() {
-    // 圆圈尺寸：HDS 给卡片前缀图标的规格上限只有 24vp（IconSize.SYSTEM_ICON），
+    // 图标尺寸：HDS 给卡片前缀图标的规格上限只有 24vp（IconSize.SYSTEM_ICON），
     // 袁正锟 2026-10-15 要求再大一档 → 借官方「圆形按钮图标」尺寸 token（28vp，视觉上大一圈）。
-    SymbolGlyph(this.circleSymbol)
+    // 编辑态也用它 —— 方框勾选框与圆圈同尺寸，切换时卡片不会跳。
+    SymbolGlyph(this.prefixSymbol)
       .fontSize($r('sys.float.ohos_id_min_circle_button_icon_size'))
-      .fontColor([this.circleColor])
+      .fontColor([this.prefixColor])
+      .accessibilityText(this.prefixAccessibility)
       .onClick(() => {
+        // 编辑态点它＝勾选/取消勾选；普通态点它＝完成/退回未完成（袁正锟 2026-10-14 定）
+        if (this.editing) {
+          this.store.toggleSelect(this.task.id);
+          return;
+        }
         this.onToggleComplete();
       })
   }
