@@ -6,9 +6,11 @@
  * 分组规则（需求方 2026-10-14 定）：**`dueAt` 优先，回退 `remindAt`；两个都没填的进「未安排日期」组**。
  * 副标题的两个数（同上确认）：**未完成 x 项 / 共 y 项**。
  * 展开状态（同上确认）：**默认只展开「今天」**。
- * 描述行（同上确认）：按 **提醒时间 > 重要程度 > 耗时 > 来源 > 标签 > 备注** 取**前两项**，用 ` · ` 拼。
+ * 描述行（同上确认）：按 **提醒时间 > 耗时 > 来源 > 标签 > 备注** 取**前两项**，用 ` · ` 拼。
  *   其中「提醒时间」那一段（`响铃还有 HH 小时 mm 分钟`）**只在「响铃提醒」开关是开的时候才出现**
  *   （开关关掉＝`reminderId` 为空，倒计时就不显示；需求方 2026-10-14）。
+ *   **「重要程度」已从这条链里移除**（需求方 2026-10-15：「description 里面的重要程度不显示了」）——
+ *   它改用**卡片底色**表达，见 `components/TaskCard.ets` 的 `cardBackground`。
  */
 import { Task, TaskPriority, TaskStatus } from '../model';
 
@@ -164,9 +166,7 @@ export class TaskListViewModel {
     if (remind !== undefined && task.reminderId !== undefined && remind > now.getTime()) {
       parts.push(TaskListViewModel.remindCountdown(remind, now));
     }
-    if (parts.length < DESCRIPTION_MAX_PARTS) {
-      parts.push(PRIORITY_LABELS[task.priority]);
-    }
+    // 说明：这里**不再**放「重要程度」——它改用卡片底色表达（见 TaskCard.cardBackground）
     const estimated: number | undefined = task.estimatedHours;
     if (parts.length < DESCRIPTION_MAX_PARTS && estimated !== undefined) {
       parts.push(`${ESTIMATED_PREFIX}${estimated}${ESTIMATED_UNIT}`);
