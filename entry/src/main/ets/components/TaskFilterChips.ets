@@ -87,7 +87,12 @@ export struct TaskFilterChips {
         selectedIndexes: this.selectedIndexes,
         multiple: false,
         chipGroupSpace: { itemSpace: 8 },
-        chipGroupPadding: { top: 8, bottom: 8 },
+        // ⚠️ `bottom` 给 **1vp**（最小正值）：`ChipGroup` 自己的下内边距会加在「Chip 行 → 第一个分组头」那段上，
+        // 与分组头的上留白叠起来就显得空（需求方 2026-10-16：「第一个 ListGroup 和 ChipGroup 的间距过大了」）。
+        // 🔴 别写 0：官方说明「传入负数、百分比或无效字符串格式时使用默认值」，实测 `bottom: 0` **会回落到默认 14vp**
+        //    —— 间距反而从 24.2vp 涨到 30.1vp（`.cache/gap-fix.png` vs `.cache/gap-fix2.png`）。
+        // 给 1vp 后这段约 17vp，与组与组之间的 14.6vp 基本齐平。
+        chipGroupPadding: { top: 8, bottom: 1 },
         onChange: (activated: Array<number>) => {
           if (activated.length === 0) {
             return;
