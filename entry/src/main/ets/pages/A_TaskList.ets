@@ -15,6 +15,16 @@ import { TaskDayGroup, TaskListViewModel } from '../viewmodel/TaskListViewModel'
  */
 const GROUP_HEADER_PULL_UP_VP: number = 10;
 
+/**
+ * 列表底部留白（vp）：让**最后一张卡片能滚到悬浮页签栏上方**，不被它压住。
+ * 来历（袁正锟 2026-10-16：「页面拉到最底部 Tabbar 会挡住任务卡片」）：
+ * `MainTabBar` 开了 `barOverlap(true)`，悬浮栏是**叠在内容之上**的，所以列表底部要让开它的高度。
+ * 悬浮栏压住的正好是列表的可视区底部 —— 实测（截图量）栏顶在 y=2482、列表内容区底在 y=2734，
+ * 即 **256px = 72vp ＝ 栏高 `tab_bar_default_height`(56vp) + 栏底距 `barBottomMargin`(16vp)**；
+ * 再加一点呼吸 → 取 **80vp**。之前这里只有 `padding_level4`(8vp)，所以最后一张卡片会被压住。
+ */
+const LIST_BOTTOM_CLEARANCE_VP: number = 80;
+
 @ComponentV2
 export struct A_TaskList {
   /**
@@ -131,6 +141,7 @@ export struct A_TaskList {
     }
     .width('100%')
     .height('100%')
-    .contentEndOffset($r('sys.float.padding_level4'))
+    // 让开悬浮页签栏的高度，否则最后一张卡片会被栏压住（见 LIST_BOTTOM_CLEARANCE_VP 的来历）
+    .contentEndOffset(LIST_BOTTOM_CLEARANCE_VP)
   }
 }
