@@ -4,6 +4,7 @@ import { MainTitleBar } from '../components/MainTitleBar';
 import { TaskCard } from '../components/TaskCard';
 import { TaskGroupHeader } from '../components/TaskGroupHeader';
 import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
+import { TaskFilterChips } from '../components/TaskFilterChips';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 
 /**
@@ -93,6 +94,9 @@ export struct A_TaskList {
     Column() {
       TaskGroupHeader({
         group: group,
+        // 计数按**当前筛选下可见的任务**算，跟列表里真正显示的内容一致
+        pendingCount: this.store.visiblePendingCount(group),
+        totalCount: this.store.visibleTasks(group).length,
         onToggle: () => {
           group.expanded = !group.expanded;
         }
@@ -110,12 +114,12 @@ export struct A_TaskList {
   }
 
   /**
-   * 一条任务都没有（比如全选删光）—— 走空状态。
-   * 判据取「当前列表里的任务总数」，所以删空、或者以后 Mock 换成真数据也照样成立。
+   * 一条都不可见（比如全选删光，或者筛选后没有匹配）—— 走空状态。
+   * 判据取「当前筛选下可见的任务数」，所以删空和筛空都能落到这里。
    */
   @Computed
   get isEmpty(): boolean {
-    return this.store.totalCount === 0;
+    return this.store.visibleCount === 0;
   }
 
   /**
@@ -126,27 +130,41 @@ export struct A_TaskList {
    *   （`sys.media` 里没有 empty 类图），Symbol 是唯一能做到"官方风格"的图示；
    * · 颜色两处都取**比页面背景（`#f1f3f5`）更深的官方灰**：图示 `gray_03`(`#d1d1d6`)，
    *   文字 `ohos_id_color_text_tertiary`(`#66182431`)；
-   * · 整块在内容区居中；若以后要换真插图，把 SymbolGlyph 换成 `Image($r('app.media.xxx'))` 即可。
+   * · ⚠️ **顶部 Chip 行必须一起保留**：筛选到一个都没有时如果把 Chip 行也藏了，用户就**回不到「全部」**了
+   *   （实测踩到过：筛「已完成」再删掉那条 → Chip 行消失 → 卡在空筛选里）。
+   *   所以这里自己拼「标题栏让位 + Chip 行 + 余下空间居中」，而不是整个列表都不渲染。
    */
   @Builder
   emptyState() {
     Column() {
-      SymbolGlyph($r('sys.symbol.inbox'))
-        .fontSize(`${EMPTY_ICON_SIZE_VP}vp`)
-        .fontColor([$r('sys.color.gray_03')])
+      // 顶部让开标题栏（与列表首项同一段留白，保持一致）
+      Row().width('100%').height(MainTitleBar.CONTENT_TOP_OFFSET_VP)
 
-      Text($r('app.string.empty_task_list'))
-        .fontSize($r('sys.float.ohos_id_text_size_body2'))
-        .fontColor($r('sys.color.ohos_id_color_text_tertiary'))
-        .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
+      // 顶部筛选 Chip 行（空态下也要在，否则回不去「全部」）
+      TaskFilterChips({ store: this.store })
+
+      Column() {
+        SymbolGlyph($r('sys.symbol.inbox'))
+          .fontSize(`${EMPTY_ICON_SIZE_VP}vp`)
+          .fontColor([$r('sys.color.gray_03')])
+
+        Text(this.store.filteredEmpty ? $r('app.string.empty_filtered_task_list') : $r('app.string.empty_task_list'))
+          .fontSize($r('sys.float.ohos_id_text_size_body2'))
+          .fontColor($r('sys.color.ohos_id_color_text_tertiary'))
+          .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(HorizontalAlign.Center)
+      // 图示是纯装饰，无障碍只播报那一句文案
+      .accessibilityLevel('yes')
+      .accessibilityText(this.store.filteredEmpty
+        ? $r('app.string.empty_filtered_task_list')
+        : $r('app.string.empty_task_list'))
     }
     .width('100%')
     .height('100%')
-    .justifyContent(FlexAlign.Center)
-    .alignItems(HorizontalAlign.Center)
-    // 图示是纯装饰，无障碍只播报那一句文案
-    .accessibilityLevel('yes')
-    .accessibilityText($r('app.string.empty_task_list'))
   }
 
   @Builder
@@ -165,26 +183,34 @@ export struct A_TaskList {
       }
       .accessibilityLevel('no')
 
+      // 页面最顶上那一排筛选 Chip（在第一项让位区之后，所以它正好贴在标题栏下方）
+      ListItem() {
+        TaskFilterChips({ store: this.store })
+      }
+
       ForEach(this.store.groups, (group: TaskDayGroup, index: number) => {
-        ListItemGroup({
-          header: this.groupHeader(group, index),
-          spaceWidth: $r('sys.float.padding_level4')
-        }) {
-          if (group.expanded) {
-            ForEach(group.tasks, (task: Task) => {
-              ListItem() {
-                TaskCard({
-                  task: task,
-                  store: this.store,
-                  onToggleComplete: () => {
-                    this.toggleComplete(task);
-                  },
-                  onRemindChange: (isOn: boolean) => {
-                    this.setRemind(task, isOn);
-                  }
-                })
-              }
-            }, (task: Task) => `${task.id}`)
+        // 当前筛选下这一组一条都没有 → 整组不渲染（组头也不出现）
+        if (this.store.visibleTasks(group).length > 0) {
+          ListItemGroup({
+            header: this.groupHeader(group, index),
+            spaceWidth: $r('sys.float.padding_level4')
+          }) {
+            if (group.expanded) {
+              ForEach(this.store.visibleTasks(group), (task: Task) => {
+                ListItem() {
+                  TaskCard({
+                    task: task,
+                    store: this.store,
+                    onToggleComplete: () => {
+                      this.toggleComplete(task);
+                    },
+                    onRemindChange: (isOn: boolean) => {
+                      this.setRemind(task, isOn);
+                    }
+                  })
+                }
+              }, (task: Task) => `${task.id}`)
+            }
           }
         }
       }, (group: TaskDayGroup) => `${group.sortValue}-${group.hasDate}`)

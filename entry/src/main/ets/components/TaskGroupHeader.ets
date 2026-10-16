@@ -30,6 +30,13 @@ import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
 @ComponentV2
 export struct TaskGroupHeader {
   @Require @Param group: TaskDayGroup;
+  /**
+   * 副标题的两个数**由页面算好传进来**（需求方 2026-10-16 加了顶部筛选 Chip 之后）：
+   * 顶部筛选生效时，「未完成 x 项 / 共 y 项」应当只统计**当前筛选下可见的任务**，
+   * 才和列表里真正显示的卡片一致 —— 这两个数页面自己知道，组对象只知道全量。
+   */
+  @Require @Param pendingCount: number;
+  @Require @Param totalCount: number;
   @Event onToggle: () => void = () => {};
 
   /** 左：标题 = 「今天/明天/周几 · MM月DD日」，走带占位的资源，不做字符串拼接 */
@@ -47,10 +54,10 @@ export struct TaskGroupHeader {
     return this.weekdayTitle(this.group.weekdayIndex);
   }
 
-  /** 副标题：未完成 x 项 / 共 y 项 */
+  /** 副标题：未完成 x 项 / 共 y 项（两个数由页面按当前筛选算好传进来） */
   @Computed
   get subtitleLabel(): Resource {
-    return $r('app.string.group_progress', this.group.pendingCount, this.group.totalCount);
+    return $r('app.string.group_progress', this.pendingCount, this.totalCount);
   }
 
   /** 右：展开 / 收起两个图标。展开态朝上，收起态朝下 */
