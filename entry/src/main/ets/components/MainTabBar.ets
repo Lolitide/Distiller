@@ -107,7 +107,13 @@ export struct MainTabBar {
       miniBar: {
         miniBarBuilder: () => {
           this.miniBarBuilder();
-        }
+        },
+        // 需求方 2026-10-15：「为什么 minibar 没有左边页签的半透明效果」。
+        // 官方说明：true＝迷你栏**跟随页签栏背景**；false＝迷你栏背景无色透明。默认值：true。
+        // 这里显式写出来把"跟随"钉住 —— 页签栏那层半透明其实来自 `barOverlap(true)` 自动给它加的
+        // `barBackgroundBlurStyle`（官方原文见 barOverlap 一节），**那个模糊只挂在 TabBar 节点上**，
+        // 而 `HdsTabsMiniBar` 里没有给迷你栏单独设模糊/材质的字段 → 迷你栏只能"跟随背景色"，拿不到模糊。
+        enableMiniBarBackground: true
       }
     })
     .onChange((index: number) => {
