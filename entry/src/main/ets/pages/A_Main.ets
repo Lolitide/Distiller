@@ -11,6 +11,11 @@ const TAG: string = 'A_Main';
 @ComponentV2
 struct A_Main {
   private navPathStack: NavPathStack = new NavPathStack();
+  /**
+   * 任务列表的滚动控制器：在这里创建（照官方示例：Scroller 由页面持有），
+   * 一路透传 `MainTabBar → A_TaskList` 给 `List` 用，再交给 `HdsNavigation.bindToScrollable`。
+   */
+  private taskListScroller: Scroller = new Scroller();
   @Local currentIndex: number = 0;
 
   @Computed
@@ -68,6 +73,7 @@ struct A_Main {
     HdsNavigation(this.navPathStack) {
       // 底部页签栏（HdsTabs 容器 + 两个页签 + 悬浮样式 + 迷你栏）整个在 components/MainTabBar.ets 里
       MainTabBar({
+        scroller: this.taskListScroller,
         onIndexChange: (index: number) => {
           this.currentIndex = index;
         },
@@ -76,6 +82,11 @@ struct A_Main {
         }
       })
     }
+    // —— 标题栏跟手：官方要求把导航组件与可滚动容器绑起来 ——
+    // 官方原文：「6.0.0(20)及以上版本，推荐使用 bindToScrollable、bindToNestedScrollable 属性绑定导航组件和
+    // 可滚动容器组件后，再使用导航组件滚动相关的功能，从而获得更优的体验」；
+    // `HdsNavigationTitleMode.FREE` 的官方说明也写着「推荐搭配 bindToScrollable/bindToNestedScrollable 体验更佳的联动效果」。
+    .bindToScrollable([this.taskListScroller])
     .hideBackButton(true)
     .titleBar({
       style: MainTitleBar.STYLE,

@@ -63,6 +63,11 @@ const SETTINGS_TAB: BottomTabBarStyle = new BottomTabBarStyle(
 
 @ComponentV2
 export struct MainTabBar {
+  /**
+   * 任务列表的 Scroller，由外层 `A_Main` 创建并透传给 `A_TaskList` 的 `List`；
+   * 外层还要用它 `bindToScrollable`（标题栏跟手的前提），所以必须是同一个对象。
+   */
+  @Require @Param scroller: Scroller;
   /** 当前页签下标，报给外层：标题栏按钮要按页签变（任务列表＝编辑+搜索；设置＝关于） */
   @Event onIndexChange: (index: number) => void = () => {};
   /** 右侧圆形按钮的「添加」 */
@@ -135,7 +140,7 @@ export struct MainTabBar {
     Stack({ alignContent: Alignment.BottomEnd }) {
       HdsTabs({ barPosition: BarPosition.End }) {
         TabContent() {
-          A_TaskList()
+          A_TaskList({ scroller: this.scroller })
         }
         .tabBar(TASK_LIST_TAB)
 
