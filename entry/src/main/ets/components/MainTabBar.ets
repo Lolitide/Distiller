@@ -164,18 +164,66 @@ export struct MainTabBar {
       // 图标按钮没有文字，无障碍文本必须给（读屏要播报）；编辑态要说「删除」
       .accessibilityText(this.store.editing ? $r('app.string.action_delete') : $r('app.string.action_add_task'))
       .onClick(() => {
-        // 普通态＝添加；编辑态＝删除（**一条没勾时点它不做事**，图标那一刻也是灰的）
+        // 普通态＝添加；编辑态＝删除（**一条没勾时点它不做事**，图标那一刻也是灰的）。
+        // 编辑态**不直接删**，先弹官方警告弹窗让人确认（见 confirmDelete）。
         if (this.store.editing) {
           if (this.store.canDelete) {
-            const removed: number = this.store.deleteSelected();
-            if (removed > 0) {
-              this.onDeleteDone(removed);
-            }
+            this.confirmDelete();
           }
           return;
         }
         this.onAdd();
       })
+  }
+
+  /**
+   * 删除前先确认（需求方 2026-10-16：「给删除按钮加上 AlertDialog 用户确认删除后才能删除」）。
+   *
+   * 用官方 **`UIContext.showAlertDialog`** —— 老的 `AlertDialog.show` 从 API 18 起已废弃，
+   * 官方原文：「建议使用 `showAlertDialog` 替代…需先获取 `UIContext` 实例后再进行调用。」
+   * 按钮排布照官方示例：`primaryButton` 放**取消**、`secondaryButton` 放**删除**并给
+   * `DialogButtonStyle.HIGHLIGHT`（官方示例也是这么排的）。只有**确认**那条路才真的调 `deleteSelected()`。
+   *
+   * 🔴 **两个按钮之间那条灰色竖线去不掉**（需求方 2026-10-16：「弹窗去掉两个按钮之间的灰色竖线」）——
+   * 已查证：`AlertDialogParam` 的**全部字段**里没有任何分隔线开关
+   * （title / subtitle / message / autoCancel / cancel / alignment / offset / gridCount / maskRect /
+   * showInSubWindow / isModal / backgroundColor / backgroundBlurStyle / backgroundEffect / onWillDismiss /
+   * cornerRadius / transition / width / height / borderWidth / borderColor / borderStyle / shadow / textStyle /
+   * enableHoverMode / hoverModeArea / onWillAppear / onDidAppear / onWillDisappear / onDidDisappear /
+   * levelMode / levelUniqueId / immersiveMode / levelOrder / systemMaterial / primaryButton / secondaryButton /
+   * buttons / buttonDirection），它是系统弹窗**固定样式**的一部分。
+   * 也试过官方**高级组件 `ConfirmDialog`**（`import { ConfirmDialog } from '@kit.ArkUI'`，属于"组件化弹窗"）：
+   * 那条竖线**照样有**，还多出一个没标签的空勾选圈 ✗ → 所以退回系统 `AlertDialog`。
+   * 要真正去掉它，只剩"自己画弹窗内容"一条路（`openCustomDialog` + 自建 Column），
+   * 代价是弹窗不再走官方样式 —— **已跟需求方说明，等他定**。
+   */
+  private confirmDelete(): void {
+    const count: number = this.store.selectedCount;
+    if (count === 0) {
+      return;
+    }
+    this.getUIContext().showAlertDialog({
+      title: $r('app.string.action_delete'),
+      message: $r('app.string.delete_confirm_message', count),
+      primaryButton: {
+        value: $r('app.string.action_cancel'),
+        action: () => {
+          // 取消：什么都不做，停在编辑态（勾选也留着，用户可能只是想再确认一下选择）
+        }
+      },
+      secondaryButton: {
+        enabled: true,
+        defaultFocus: true,
+        style: DialogButtonStyle.HIGHLIGHT,
+        value: $r('app.string.action_delete'),
+        action: () => {
+          const removed: number = this.store.deleteSelected();
+          if (removed > 0) {
+            this.onDeleteDone(removed);
+          }
+        }
+      }
+    });
   }
 
   build() {

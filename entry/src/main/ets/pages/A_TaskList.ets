@@ -1,21 +1,12 @@
 import { LengthMetrics } from '@kit.ArkUI';
-import { Task, TaskStatus } from '../model';
+import { Task } from '../model';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { TaskCard } from '../components/TaskCard';
-import { TaskGroupHeader } from '../components/TaskGroupHeader';
+import { GROUP_HEADER_LIST_PULL_UP_VP, TaskGroupHeader } from '../components/TaskGroupHeader';
+import { EmptyHint } from '../components/EmptyHint';
 import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
 import { TaskFilterChips } from '../components/TaskFilterChips';
 import { TaskListStore } from '../viewmodel/TaskListStore';
-
-/**
- * 组头「上留白回收」量（vp）：官方 `SubHeader` 在标题上方自带一段留白，**官方没给这个留白的旋钮**
- * （`SubHeader` 的参数表里只有标题/副标题/操作项，且官方不建议给它设通用属性）。
- * 实测「上一张卡片底边 → 下一个组标题墨迹顶」= **87px = 24.5vp**，需求方 2026-10-16 觉得偏大
- * （「减小每一天任务组之间的间距 有点大了」）→ 用**负上边距**把整块组头往上提，把这段压到 ≈14.5vp。
- * ⚠️ 已知偏离：这是"绕着官方组件调间距"，不是官方给的旋钮（区别于 §四 规则 6 的"不硬改组件"——
- * 这里没有改 `SubHeader` 内部，只是调整它外面的间距）。
- */
-const GROUP_HEADER_PULL_UP_VP: number = 10;
 
 /**
  * 列表底部留白（vp）：让**最后一张卡片能滚到悬浮页签栏上方**，不被它压住。
@@ -26,9 +17,6 @@ const GROUP_HEADER_PULL_UP_VP: number = 10;
  * 再加一点呼吸 → 取 **80vp**。之前这里只有 `padding_level4`(8vp)，所以最后一张卡片会被压住。
  */
 const LIST_BOTTOM_CLEARANCE_VP: number = 80;
-
-/** 空状态图示的尺寸（vp）：官方没有随 SDK 发空状态插图，用官方 Symbol 放大到接近插图的观感档位 */
-const EMPTY_ICON_SIZE_VP: number = 96;
 
 @ComponentV2
 export struct A_TaskList {
@@ -43,41 +31,8 @@ export struct A_TaskList {
    */
   @Require @Param store: TaskListStore;
 
-  /**
-   * 记「完成前是什么状态」，供再点一次圆圈时回退（需求方 2026-10-14：再点恢复未完成状态）。
-   * 放在页面是因为 `Task` 契约里没有这个字段 —— 它是 UI 的撤销记忆，不该进落库字段。
-   * 页面重建会丢（丢了就回退到 `CONFIRMED`）。
-   */
-  private statusBeforeCompleted: Map<number, TaskStatus> = new Map();
-
-  /** 点圆圈：未完成 → 完成（同时关掉响铃提醒）；已完成 → 退回完成前的状态，并把响铃提醒重新打开 */
-  private toggleComplete(task: Task): void {
-    if (task.status === TaskStatus.COMPLETED) {
-      const previous: TaskStatus | undefined = this.statusBeforeCompleted.get(task.id);
-      task.status = previous === undefined ? TaskStatus.CONFIRMED : previous;
-      this.statusBeforeCompleted.delete(task.id);
-      // 退回未完成时把响铃提醒重新打开（需求方 2026-10-14）。
-      // 有提醒时间的任务才有开关，所以只在这种情况置值；置 -1 是占位的假提醒键，
-      // TODO(需求方): 真接 ReminderService 后要改成「发布提醒」并拿服务返回的键。
-      if (task.remindAt !== undefined) {
-        task.reminderId = -1;
-      }
-      return;
-    }
-    this.statusBeforeCompleted.set(task.id, task.status);
-    task.status = TaskStatus.COMPLETED;
-    // 完成时自动关掉响铃提醒：开关由 reminderId 派生，清空即关
-    task.reminderId = undefined;
-  }
-
-  /**
-   * 拨「响铃提醒」开关。开关状态由 `reminderId` 派生，所以这里就是给它置值 / 清空。
-   * TODO(需求方): 真接 `service/system/ReminderService` 后，这里要改成调用「发布提醒 / 撤销提醒」，
-   * `reminderId` 由服务返回，不许再在页面里凭空造。
-   */
-  private setRemind(task: Task, isOn: boolean): void {
-    task.reminderId = isOn ? -1 : undefined;
-  }
+  // 说明：点圆圈（完成/退回）与拨「响铃提醒」开关这两个动作**已搬到 `TaskListStore`**
+  // （`toggleComplete` / `setRemind`）—— 搜索页复用同一个 `TaskCard`，行为也必须是同一套。
 
   /**
    * 分组头。
@@ -112,7 +67,7 @@ export struct A_TaskList {
     // 需求方 2026-10-16 追加：「第一个 ListGroup 和 ChipGroup 的间距过大了」→ 上留白回收**对所有组生效**。
     // 原先第一组刻意不回收（那时它上面是标题栏让位区，属于「区块起点」）；现在页面最顶上是 Chip 行，
     // 第一组头也该贴着它 → 与组间间距同为 ~14.5vp。
-    .margin({ top: -GROUP_HEADER_PULL_UP_VP })
+    .margin({ top: -GROUP_HEADER_LIST_PULL_UP_VP })
   }
 
   /**
@@ -145,25 +100,13 @@ export struct A_TaskList {
       // 顶部筛选 Chip 行（空态下也要在，否则回不去「全部」）
       TaskFilterChips({ store: this.store })
 
-      Column() {
-        SymbolGlyph($r('sys.symbol.inbox'))
-          .fontSize(`${EMPTY_ICON_SIZE_VP}vp`)
-          .fontColor([$r('sys.color.gray_03')])
-
-        Text(this.store.filteredEmpty ? $r('app.string.empty_filtered_task_list') : $r('app.string.empty_task_list'))
-          .fontSize($r('sys.float.ohos_id_text_size_body2'))
-          .fontColor($r('sys.color.ohos_id_color_text_tertiary'))
-          .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
-      }
-      .width('100%')
+      // 图示 + 文案用**两个页面共用的** `EmptyHint` 组件（搜索页的两种空态也是它）
+      EmptyHint({
+        message: this.store.filteredEmpty
+          ? $r('app.string.empty_filtered_task_list')
+          : $r('app.string.empty_task_list')
+      })
       .layoutWeight(1)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(HorizontalAlign.Center)
-      // 图示是纯装饰，无障碍只播报那一句文案
-      .accessibilityLevel('yes')
-      .accessibilityText(this.store.filteredEmpty
-        ? $r('app.string.empty_filtered_task_list')
-        : $r('app.string.empty_task_list'))
     }
     .width('100%')
     .height('100%')
@@ -204,10 +147,10 @@ export struct A_TaskList {
                     task: task,
                     store: this.store,
                     onToggleComplete: () => {
-                      this.toggleComplete(task);
+                      this.store.toggleComplete(task);
                     },
                     onRemindChange: (isOn: boolean) => {
-                      this.setRemind(task, isOn);
+                      this.store.setRemind(task, isOn);
                     }
                   })
                 }

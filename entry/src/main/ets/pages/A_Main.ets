@@ -8,6 +8,9 @@ import { TaskListStore } from '../viewmodel/TaskListStore';
 const DOMAIN: number = 0x0000;
 const TAG: string = 'A_Main';
 
+/** 二级页路由名：`HdsNavigation.navDestination` 的 builder 按它分发（现在只有搜索页） */
+const ROUTE_SEARCH: string = 'SearchPage';
+
 @Entry
 @ComponentV2
 struct A_Main {
@@ -74,7 +77,10 @@ struct A_Main {
   }
 
   private onSearch(): void {
-    this.toast($r('app.string.menu_search'));
+    // 点导航栏的「搜索」→ 把搜索页压入导航栈（二级页**从右侧滑进来**是导航栈 push 的默认行为）。
+    // 页面本身在 `router_map.json` 里注册（官方系统路由表），所以这里只要路由名；
+    // **把任务 store 一起带过去**，搜索页搜的就是列表这一份数据（不是副本）。
+    this.navPathStack.pushPathByName(ROUTE_SEARCH, this.store);
   }
 
   private onAbout(): void {

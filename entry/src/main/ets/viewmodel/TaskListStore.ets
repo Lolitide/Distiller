@@ -88,6 +88,15 @@ export class TaskListStore {
     return total;
   }
 
+  /** 把分组摊平成一份任务列表（搜索页要从这里按关键词过滤） */
+  allTasks(): Task[] {
+    const tasks: Task[] = [];
+    this.groups.forEach((group: TaskDayGroup) => {
+      group.tasks.forEach((task: Task) => tasks.push(task));
+    });
+    return tasks;
+  }
+
   /** 当前筛选下还剩多少任务（空状态、组头副标题都看它） */
   get visibleCount(): number {
     let total: number = 0;
@@ -257,6 +266,44 @@ export class TaskListStore {
 
   isSelected(id: number): boolean {
     return this.selectedIds.indexOf(id) >= 0;
+  }
+
+  /**
+   * 记「完成前是什么状态」，供再点一次圆圈时回退（需求方 2026-10-14：再点恢复未完成状态）。
+   *
+   * 放在 store（而不是页面）：**列表页和搜索页都要这套行为** —— 搜索页复用同一个 `TaskCard`
+   * （需求方 2026-10-16：「把 List 页的那些 ListGroup、Card 直接弄过来复用」），
+   * 行为也应当一套。它是 UI 的撤销记忆、`Task` 契约里没有这个字段，所以只活在内存里。
+   */
+  private statusBeforeCompleted: Map<number, TaskStatus> = new Map();
+
+  /** 点圆圈：未完成 → 完成（同时关掉响铃提醒）；已完成 → 退回完成前的状态，并把响铃提醒重新打开 */
+  toggleComplete(task: Task): void {
+    if (task.status === TaskStatus.COMPLETED) {
+      const previous: TaskStatus | undefined = this.statusBeforeCompleted.get(task.id);
+      task.status = previous === undefined ? TaskStatus.CONFIRMED : previous;
+      this.statusBeforeCompleted.delete(task.id);
+      // 退回未完成时把响铃提醒重新打开（需求方 2026-10-14）。
+      // 有提醒时间的任务才有开关，所以只在这种情况置值；置 -1 是占位的假提醒键，
+      // TODO(需求方): 真接 ReminderService 后要改成「发布提醒」并拿服务返回的键。
+      if (task.remindAt !== undefined) {
+        task.reminderId = -1;
+      }
+      return;
+    }
+    this.statusBeforeCompleted.set(task.id, task.status);
+    task.status = TaskStatus.COMPLETED;
+    // 完成时自动关掉响铃提醒：开关由 reminderId 派生，清空即关
+    task.reminderId = undefined;
+  }
+
+  /**
+   * 拨「响铃提醒」开关。开关状态由 `reminderId` 派生，所以这里就是给它置值 / 清空。
+   * TODO(需求方): 真接 `service/system/ReminderService` 后，这里要改成调用「发布提醒 / 撤销提醒」，
+   * `reminderId` 由服务返回，不许再在页面里凭空造。
+   */
+  setRemind(task: Task, isOn: boolean): void {
+    task.reminderId = isOn ? -1 : undefined;
   }
 
   /** 进入编辑（多选）模式：每次进来都从「一条没勾」开始 */
