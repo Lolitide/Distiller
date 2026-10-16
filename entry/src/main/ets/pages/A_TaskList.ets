@@ -86,11 +86,9 @@ export struct A_TaskList {
    * 只管「列表项之间」，不含分组头，官方没给「头与首项之间」的选项。
    * `SubHeader` 自己不能设通用属性（官方文档明说会多生成 `__Common__` 节点，属性可能不生效），
    * 所以间隔只能加在外层的这层壳上。
-   *
-   * `index` 用来做**上留白回收**（见 `GROUP_HEADER_PULL_UP_VP`）：第 2 组起才提。
    */
   @Builder
-  groupHeader(group: TaskDayGroup, index: number) {
+  groupHeader(group: TaskDayGroup) {
     Column() {
       TaskGroupHeader({
         group: group,
@@ -110,7 +108,11 @@ export struct A_TaskList {
     // 也就是组头离**上面那组**比离**自己这组**还近 → 袁正锟 2026-10-16 说的「ListHeader 和下方卡片之间的间距是不是太大了…整体展开后协调嘛」。
     // 去掉这层下留白后，组头→本组卡片 ≈ SubHeader 自带的 ~8vp ≈ 卡片↔卡片的 8.2vp，
     // 而组与组之间仍是 14.6vp → **组头明确归属下面那一组**，节奏是 8 / 8 / 14.6。
-    .margin({ top: index === 0 ? 0 : -GROUP_HEADER_PULL_UP_VP })
+    //
+    // 袁正锟 2026-10-16 追加：「第一个 ListGroup 和 ChipGroup 的间距过大了」→ 上留白回收**对所有组生效**。
+    // 原先第一组刻意不回收（那时它上面是标题栏让位区，属于「区块起点」）；现在页面最顶上是 Chip 行，
+    // 第一组头也该贴着它 → 与组间间距同为 ~14.5vp。
+    .margin({ top: -GROUP_HEADER_PULL_UP_VP })
   }
 
   /**
@@ -188,11 +190,11 @@ export struct A_TaskList {
         TaskFilterChips({ store: this.store })
       }
 
-      ForEach(this.store.groups, (group: TaskDayGroup, index: number) => {
+      ForEach(this.store.groups, (group: TaskDayGroup) => {
         // 当前筛选下这一组一条都没有 → 整组不渲染（组头也不出现）
         if (this.store.visibleTasks(group).length > 0) {
           ListItemGroup({
-            header: this.groupHeader(group, index),
+            header: this.groupHeader(group),
             spaceWidth: $r('sys.float.padding_level4')
           }) {
             if (group.expanded) {

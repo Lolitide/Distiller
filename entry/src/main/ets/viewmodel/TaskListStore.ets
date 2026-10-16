@@ -282,13 +282,30 @@ export class TaskListStore {
     this.selectedIds = next;
   }
 
-  /** 全选：把当前列表里的任务全勾上 */
-  selectAll(): void {
+  /**
+   * 当前**筛选下可见**（能匹配上的）任务 id。
+   * 「全选」的范围就是它 —— 也就是说在某个 Chip 下点全选，只勾这一条筛选下的任务。
+   */
+  visibleTaskIds(): number[] {
     const ids: number[] = [];
     this.groups.forEach((group: TaskDayGroup) => {
-      group.tasks.forEach((task: Task) => ids.push(task.id));
+      group.tasks.forEach((task: Task) => {
+        if (this.matchesFilter(task)) {
+          ids.push(task.id);
+        }
+      });
     });
-    this.selectedIds = ids;
+    return ids;
+  }
+
+  /**
+   * 全选：**只勾当前筛选下的任务**（袁正锟 2026-10-16：「在某一个 Chip 下 编辑全选删除后是删除全部
+   * 而不是删除这个 Chip 下的全部任务」—— 原来这里把 `groups` 里**所有**任务都勾上了，没看筛选）。
+   *
+   * ⚠️ 注意范围是「匹配当前筛选的全部任务」，**含折叠分组里的**：折叠只是显示状态，用户选的筛选才是范围。
+   */
+  selectAll(): void {
+    this.selectedIds = this.visibleTaskIds();
   }
 
   /**
