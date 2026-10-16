@@ -27,6 +27,18 @@
 import { LengthMetrics, SubHeader } from '@kit.ArkUI';
 import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
 
+/**
+ * 组头在列表里要**回收的上留白**（vp）：官方 `SubHeader` 在标题上方自带一段留白、**没给旋钮**
+ * （参数表里只有标题/副标题/操作项，官方也不建议给它设通用属性），所以只能整块组头往上提。
+ *
+ * 实测（袁正锟 2026-10-16 那轮）：上组最后一张卡片 → 组头顶标题 = **14.6vp**（未回收时 24.5vp），
+ * 与「卡片↔卡片 8.2vp」「组头→本组卡片 ~8vp」构成 8 / 8 / 14.6 的节奏。
+ *
+ * 导出成公共常量是因为**搜索页也要用同一套**（结果列表复用同一个组头组件，
+ * 两个页面的组间距必须一致）。
+ */
+export const GROUP_HEADER_LIST_PULL_UP_VP: number = 10;
+
 @ComponentV2
 export struct TaskGroupHeader {
   @Require @Param group: TaskDayGroup;

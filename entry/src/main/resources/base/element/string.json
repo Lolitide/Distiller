@@ -29,6 +29,10 @@
       "value": "编辑"
     },
     {
+      "name": "menu_multi_select",
+      "value": "多选"
+    },
+    {
       "name": "menu_search",
       "value": "搜索"
     },
@@ -125,6 +129,10 @@
       "value": "已删除 %d 项"
     },
     {
+      "name": "delete_confirm_message",
+      "value": "真的要删除这 %d 项任务吗？"
+    },
+    {
       "name": "empty_task_list",
       "value": "无任务"
     },
@@ -147,6 +155,26 @@
     {
       "name": "filter_urgent",
       "value": "紧急"
+    },
+    {
+      "name": "title_search",
+      "value": "搜索"
+    },
+    {
+      "name": "search_placeholder",
+      "value": "搜索功能待实现"
+    },
+    {
+      "name": "search_hint",
+      "value": "搜索任务"
+    },
+    {
+      "name": "search_idle_hint",
+      "value": "点击搜索框开始"
+    },
+    {
+      "name": "search_no_result",
+      "value": "无结果"
     }
   ]
 }

@@ -35,18 +35,24 @@ export class MainTitleBar {
   };
 
   /**
-   * 任务列表页的右上角：**两个内联图标按钮**（编辑 / 搜索），不是下拉。
+   * 任务列表页的右上角：**两个内联图标按钮**（多选 / 搜索），不是下拉。
    * （袁正锟 2026-10-15：「右上角编辑和搜索用两个按钮替代，不需要用选项按钮」）
    * 官方 `menu.value` 最多内联显示 3 项，所以 2 项就是两个按钮，不会折叠成「更多」。
-   * 图标都是官方 HarmonyOS Symbol：`square_and_pencil` / `magnifyingglass`。
+   *
+   * 图标（都是官方 HarmonyOS Symbol）：
+   *  · 多选：**`checkmark_square_on_square`**（方框上叠一个勾选框）。
+   *    ⚠️ 原来用的是 `square_and_pencil`（方框+笔），袁正锟 2026-10-16：「换一个吧 要表示那种多选删除
+   *    而不是表示成修改卡片内容」—— 那个图标读起来是"编辑内容"，而这个跟卡片上真正出现的勾选框同族
+   *    （卡片的勾选态是 `checkmark_square_fill`），语义对得上。无障碍文案也一并改成「多选」。
+   *  · 搜索：`magnifyingglass`。
    */
   static taskListMenu(onEdit: () => void, onSearch: () => void): HdsNavigationMenuContentOptions {
     return {
       value: [
         {
           content: {
-            label: $r('app.string.menu_edit'),
-            icon: $r('sys.symbol.square_and_pencil'),
+            label: $r('app.string.menu_multi_select'),
+            icon: $r('sys.symbol.checkmark_square_on_square'),
             isEnabled: true,
             action: onEdit
           }
