@@ -123,6 +123,10 @@
     {
       "name": "deleted_count",
       "value": "已删除 %d 项"
+    },
+    {
+      "name": "empty_task_list",
+      "value": "无任务"
     }
   ]
 }
