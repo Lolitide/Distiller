@@ -53,7 +53,10 @@ export struct MainTabBar {
       })
 
       Text($r('app.string.action_add_task'))
-        .fontSize($r('sys.float.bottom_tab_text_size_normal'))
+        // 需求方 2026-10-15：「这个字体再大一号」。
+        // `bottom_tab_text_size_normal` 只有 12vp（没有更大的同族档），所以改用官方**字体阶梯**里上一档：
+        // `ohos_id_text_size_body3`(12/14/13fp) ≈ 原来的档位，往上一档就是 `ohos_id_text_size_body2`(14/16/15fp)。
+        .fontSize($r('sys.float.ohos_id_text_size_body2'))
     }
     .height($r('sys.float.titlebar_icon_background_height'))
     .alignItems(VerticalAlign.Center)
