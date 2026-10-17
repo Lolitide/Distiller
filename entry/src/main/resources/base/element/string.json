@@ -267,6 +267,10 @@
     {
       "name": "delete_task_confirm",
       "value": "真的要删除这项任务吗？"
+    },
+    {
+      "name": "add_task_placeholder",
+      "value": "添加任务表单待实现"
     }
   ]
 }

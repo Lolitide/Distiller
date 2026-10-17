@@ -1,6 +1,7 @@
 import { HdsNavigation, HdsNavigationMenuContentOptions } from '@kit.UIDesignKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { AddTaskSheet } from '../components/AddTaskSheet';
 import { MainTabBar } from '../components/MainTabBar';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { NAV_STACK_KEY, ROUTE_SEARCH } from '../viewmodel/TaskNavParams';
@@ -25,6 +26,20 @@ struct A_Main {
    */
   private store: TaskListStore = new TaskListStore();
   @Local currentIndex: number = 0;
+  /**
+   * 「添加任务」半模态（`bindSheet`）的显隐（需求方 2026-10-17：「点击底部页签的添加按钮后
+   * 显示一个 bindSheet 先完成这个功能」）。
+   *
+   * 为什么这个状态挂在**页面**而不是 `MainTabBar` 里那颗圆形按钮上：
+   *  · 半模态"严格和宿主节点绑定"（官方原文），挂在页面根节点上宿主不会因页签切换/迷你栏折叠被重建；
+   *  · 底部栏只管发 `onAdd` 事件（它已经这么做了），显隐归页面，以后表单要读写 `store` 也顺理成章。
+   *
+   * 为什么传参写 `!!` 而不是 `$$`：`$$` 是**状态管理 V1** 的语法；本项目一律用 V2，
+   * 官方《语法糖 · !!语法：双向绑定》里 `bindSheet` 的 `isShow` 从 **API 18** 起支持 `!!`
+   * （本项目 target 6.0.2(22) ≥ 18 ✓）。只有双向绑定，用户**拖拽 / 点蒙层**关掉半模态时
+   * 这个变量才会自动回到 `false` —— 否则会出现"界面关了、变量还是 true，再点一次拉不起来"。
+   */
+  @Local addSheetShown: boolean = false;
 
   /**
    * 把导航栈放进 `AppStorage`：点卡片进详情这件事发生在 `A_TaskList`（以及搜索页的 `B_Search`）里，
@@ -94,9 +109,19 @@ struct A_Main {
     this.toast($r('app.string.menu_about'));
   }
 
-  /** 迷你栏里的「添加任务」。真实新增流程未做，先给可见反馈 */
+  /**
+   * 底部页签右侧圆形「＋」→ **拉起「添加任务」半模态**（需求方 2026-10-17）。
+   * 半模态的内容区在 `components/AddTaskSheet.ets`，标题在下面的 `bindSheet` 选项里给。
+   * 原来这里是一句 toast 占位，本轮被真正的半模态取代。
+   */
   private onAdd(): void {
-    this.toast($r('app.string.action_add_task'));
+    this.addSheetShown = true;
+  }
+
+  /** 半模态的内容 builder —— 内容区整个在 `components/AddTaskSheet.ets` 里 */
+  @Builder
+  addTaskSheetContent() {
+    AddTaskSheet()
   }
 
   build() {
@@ -129,6 +154,23 @@ struct A_Main {
         title: { mainTitle: this.navTitle },
         menu: this.navMenu
       }
+    })
+    // —— 「添加任务」半模态（需求方 2026-10-17）——
+    // 挂在**导航根节点**上：半模态"严格和宿主节点绑定"（官方原文），这个节点在本页生命周期里
+    // 不会重建，所以页签切换、迷你栏折叠都影响不到它。第一个参数必须是 `!!` 双向绑定（见 `addSheetShown`）。
+    // 官方另有一条要留意：宿主节点还没上树就把 isShow 置 true，半模态不生效 ——
+    // 本页的宿主是常驻的导航根节点，不存在这个问题。
+    .bindSheet(this.addSheetShown!!, this.addTaskSheetContent(), {
+      // 挡位先给官方「半屏」：现在内容区只有一句占位。
+      // 等表单进场再考虑 `detents: [SheetSize.MEDIUM, SheetSize.LARGE]` 多挡位跟手。
+      height: SheetSize.MEDIUM,
+      // 底部弹出（这是默认值，显式写出来把语义钉住；SIDE / CONTENT_COVER 等是 20+ 的其它形态）
+      preferType: SheetType.BOTTOM,
+      // 官方默认就有拖拽条与右上角关闭按钮，两边都显式写出来，免得以后主题改动把关闭入口弄丢
+      dragBar: true,
+      showClose: true,
+      // 标题用资源：与底部那颗按钮的无障碍文案同一个字符串（「添加任务」）
+      title: { title: $r('app.string.action_add_task') }
     })
     .width('100%')
     .height('100%')
