@@ -97,6 +97,14 @@
       "value": "添加任务"
     },
     {
+      "name": "action_save",
+      "value": "保存"
+    },
+    {
+      "name": "task_saved",
+      "value": "已保存"
+    },
+    {
       "name": "action_cancel",
       "value": "取消"
     },
@@ -269,8 +277,140 @@
       "value": "真的要删除这项任务吗？"
     },
     {
-      "name": "add_task_placeholder",
-      "value": "添加任务表单待实现"
+      "name": "add_task_screenshot_hint",
+      "value": "选择截图"
+    },
+    {
+      "name": "add_task_screenshot_reselect",
+      "value": "重新选择截图"
+    },
+    {
+      "name": "add_task_pick_failed",
+      "value": "选图失败，请重试"
+    },
+    {
+      "name": "add_task_text_hint",
+      "value": "粘贴或输入任务原文"
+    },
+    {
+      "name": "add_task_record_start",
+      "value": "点击开始录音"
+    },
+    {
+      "name": "add_task_record_stop",
+      "value": "结束录音"
+    },
+    {
+      "name": "add_task_record_done",
+      "value": "已录 %s"
+    },
+    {
+      "name": "add_task_name_hint",
+      "value": "输入任务名称"
+    },
+    {
+      "name": "chip_set_due",
+      "value": "设置到期日期"
+    },
+    {
+      "name": "chip_due_set",
+      "value": "%d月%d日 到期"
+    },
+    {
+      "name": "chip_remind_me",
+      "value": "提醒我"
+    },
+    {
+      "name": "chip_remind_set",
+      "value": "在 %d月%d日 %s 提醒我"
+    },
+    {
+      "name": "chip_repeat",
+      "value": "重复"
+    },
+    {
+      "name": "repeat_option_none",
+      "value": "不重复"
+    },
+    {
+      "name": "repeat_option_daily",
+      "value": "每天"
+    },
+    {
+      "name": "repeat_option_weekly",
+      "value": "每周"
+    },
+    {
+      "name": "repeat_option_monthly",
+      "value": "每月"
+    },
+    {
+      "name": "repeat_option_yearly",
+      "value": "每年"
+    },
+    {
+      "name": "chip_priority",
+      "value": "重要程度"
+    },
+    {
+      "name": "priority_option_normal",
+      "value": "普通"
+    },
+    {
+      "name": "priority_option_important",
+      "value": "重要"
+    },
+    {
+      "name": "priority_option_urgent",
+      "value": "紧急"
+    },
+    {
+      "name": "chip_source",
+      "value": "来源"
+    },
+    {
+      "name": "chip_source_set",
+      "value": "来源于 %s"
+    },
+    {
+      "name": "source_option_paste",
+      "value": "粘贴"
+    },
+    {
+      "name": "source_option_share",
+      "value": "分享"
+    },
+    {
+      "name": "source_option_bot",
+      "value": "机器人"
+    },
+    {
+      "name": "source_option_voice",
+      "value": "语音"
+    },
+    {
+      "name": "source_option_manual",
+      "value": "手动"
+    },
+    {
+      "name": "chip_add_tag",
+      "value": "添加标签"
+    },
+    {
+      "name": "tag_input_hint",
+      "value": "输入标签名"
+    },
+    {
+      "name": "source_screenshot",
+      "value": "截图"
+    },
+    {
+      "name": "source_voice",
+      "value": "录音"
+    },
+    {
+      "name": "source_text",
+      "value": "文本"
     }
   ]
 }

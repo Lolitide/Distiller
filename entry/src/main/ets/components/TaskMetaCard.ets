@@ -16,6 +16,7 @@
  */
 import { Task, TaskPriority, TaskSource } from '../model';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
+import { OptionPickerBody } from './OptionPickerBody';
 
 /** 圆形图标直径（vp） */
 const ICON_CIRCLE_SIZE_VP: number = 32;
@@ -29,9 +30,6 @@ const ROW_SIDE_PADDING_VP: number = 16;
 const ICON_TEXT_GAP_VP: number = 12;
 /** 右侧「清除」按钮点击热区直径（vp） */
 const CLEAR_BUTTON_SIZE_VP: number = 40;
-/** 选择器面板底部按钮条：行高与中间竖分割线高度（vp） */
-const SHEET_FOOTER_HEIGHT_VP: number = 48;
-const SHEET_FOOTER_DIVIDER_VP: number = 20;
 /**
  * 重要程度三档。**顺序与 `TaskPriority` 的取值一致**（0 普通 / 1 重要 / 2 紧急），
  * 但下标换算走 `prioritySeedIndex` / `applyPriority` 里的显式分支，不直接拿枚举当数组下标 ——
@@ -260,82 +258,43 @@ export struct TaskMetaCard {
   }
 
   /**
-   * 面板底部那一条「取消 / 确定」：与属性卡同一套排布（等分、中间竖细分割线、纯文字）。
-   * 参数只是回调、不带「会变的值」，不受「@Builder 值参数不刷新」那条坑影响。
+   * 重要程度面板内容 —— **复用 `components/OptionPickerBody.ets`**（官方 `TextPicker` ＋ 共用底部条）。
+   * 原来这里内联了一份 `TextPicker` + `sheetFooter`，与「添加任务」那边的面板各写一遍；
+   * 按 `references/02-编码规约.md` §10 规则 3，长得像就必须是同一个组件。
    */
   @Builder
-  sheetFooter(onCancel: () => void, onConfirm: () => void) {
-    Row() {
-      Text($r('app.string.action_cancel'))
-        .layoutWeight(1)
-        .height(SHEET_FOOTER_HEIGHT_VP)
-        .textAlign(TextAlign.Center)
-        .fontSize($r('sys.float.ohos_id_text_size_button1'))
-        .fontColor($r('sys.color.font_emphasize'))
-        .onClick(() => {
-          onCancel();
-        })
-
-      Divider()
-        .vertical(true)
-        .height(SHEET_FOOTER_DIVIDER_VP)
-        .color($r('sys.color.comp_divider'))
-
-      Text($r('app.string.action_confirm'))
-        .layoutWeight(1)
-        .height(SHEET_FOOTER_HEIGHT_VP)
-        .textAlign(TextAlign.Center)
-        .fontSize($r('sys.float.ohos_id_text_size_button1'))
-        .fontColor($r('sys.color.font_emphasize'))
-        .onClick(() => {
-          onConfirm();
-        })
-    }
-    .width('100%')
-    .alignItems(VerticalAlign.Center)
-  }
-
-  /** 重要程度面板内容：官方 `TextPicker`（三档），改草稿档位，点「确定」才写回任务 */
-  @Builder
   prioritySheet() {
-    Column() {
-      TextPicker({ range: PRIORITY_OPTIONS, selected: this.priorityDraftIndex })
-        .width('100%')
-        .onChange((value: string | string[], index: number | number[]) => {
-          // 单列选择器运行时 index 一定是 number；先收窄再赋值
-          if (typeof index === 'number') {
-            this.priorityDraftIndex = index;
-          }
-        })
-
-      this.sheetFooter(() => {
+    OptionPickerBody({
+      options: PRIORITY_OPTIONS,
+      selectedIndex: this.priorityDraftIndex,
+      onSelectedIndexChange: (index: number) => {
+        this.priorityDraftIndex = index;
+      },
+      onCancel: () => {
         this.closePrioritySheet();
-      }, () => {
+      },
+      onConfirm: () => {
         this.confirmPriority();
-      })
-    }
-    .width('100%')
+      }
+    })
   }
 
-  /** 来源面板内容：官方 `TextPicker`（五档通道） */
+  /** 来源面板内容 —— 同一个 `OptionPickerBody`，选项换成五档通道 */
   @Builder
   sourceSheet() {
-    Column() {
-      TextPicker({ range: SOURCE_OPTIONS, selected: this.sourceDraftIndex })
-        .width('100%')
-        .onChange((value: string | string[], index: number | number[]) => {
-          if (typeof index === 'number') {
-            this.sourceDraftIndex = index;
-          }
-        })
-
-      this.sheetFooter(() => {
+    OptionPickerBody({
+      options: SOURCE_OPTIONS,
+      selectedIndex: this.sourceDraftIndex,
+      onSelectedIndexChange: (index: number) => {
+        this.sourceDraftIndex = index;
+      },
+      onCancel: () => {
         this.closeSourceSheet();
-      }, () => {
+      },
+      onConfirm: () => {
         this.confirmSource();
-      })
-    }
-    .width('100%')
+      }
+    })
   }
 
   /*

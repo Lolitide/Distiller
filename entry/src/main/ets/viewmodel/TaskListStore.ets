@@ -139,6 +139,49 @@ export class TaskListStore {
     this.groups = merged;
   }
 
+  /**
+   * 下一条任务的自增主键（取现有最大值 + 1；一条都没有就从 1 开始）。
+   * `Task.id` 是**本机自增主键**，提醒的 `notificationId` 会由它确定性映射，所以必须唯一。
+   */
+  nextTaskId(): number {
+    let maxId: number = 0;
+    this.allTasks().forEach((task: Task) => {
+      if (task.id > maxId) {
+        maxId = task.id;
+      }
+    });
+    // MOCK_TASKS 的 id 也在里面，所以这里不会撞号
+    return maxId + 1;
+  }
+
+  /**
+   * 新增一条任务（袁正锟 2026-10-17：「点击后创建一个任务」）。
+   *
+   * ⚠️ 为什么不能「先塞进 groups 里某一组再 refreshGroups」：`refreshGroups` 是从 `allTasks()`
+   * （＝现有 `groups` 摊平）重新分组的，一条都还没有时**没有任何组可以落脚**，新任务就进不去。
+   * 所以这里把新任务**并进这次重新分组的输入**里，再按同一套合并规则落盘；
+   * 落进去之后它自然就在 `allTasks()` 里了，后续的 `refreshGroups()` 都带着它。
+   */
+  addTask(task: Task): void {
+    const all: Task[] = this.allTasks();
+    all.push(task);
+    const rebuilt: TaskDayGroup[] = TaskListViewModel.groupByDay(all, new Date());
+    const merged: TaskDayGroup[] = [];
+    rebuilt.forEach((fresh: TaskDayGroup) => {
+      const kept: TaskDayGroup | undefined = this.findGroup(fresh.sortValue, fresh.hasDate);
+      if (kept === undefined) {
+        this.expandIfContains(fresh, task.id);
+        merged.push(fresh);
+        return;
+      }
+      kept.tasks = fresh.tasks;
+      this.expandIfContains(kept, task.id);
+      merged.push(kept);
+    });
+    this.groups = merged;
+    // 新任务的标签可能带出新的筛选芯片：这里不用做别的，`chips` 是 `@Computed` 派生的
+  }
+
   /** 找「那一天」现在已经存在的组对象（判据与 `groupByDay` 的分组口径一致：日期键 + 有无日期） */
   private findGroup(sortValue: number, hasDate: boolean): TaskDayGroup | undefined {
     const current: TaskDayGroup[] = this.groups;
