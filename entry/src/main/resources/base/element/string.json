@@ -194,7 +194,7 @@
     },
     {
       "name": "action_delete_step",
-      "value": "删除步骤"
+      "value": "删除"
     },
     {
       "name": "delete_step_confirm",
