@@ -20,7 +20,7 @@
 // ⚠️ 这里必须显式导入 HDS 的 `TextOptions`：ArkUI 在 `component/text.d.ts` 里也有一个**全局**同名接口，
 // 不导入就会解析到那个，赋给 HdsListItemCard 的 textItem 时报「no properties in common」。
 import { HdsListItemCard, PrefixCustomBuilder, SuffixSwitch } from '@kit.UIDesignKit';
-import { Task, TaskPriority, TaskStatus } from '../model';
+import { Task, TaskAlarm, TaskPriority, TaskStatus } from '../model';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 
@@ -125,10 +125,16 @@ export struct TaskCard {
     return this.completed ? $r('sys.color.ohos_id_color_text_secondary') : $r('sys.color.ohos_id_color_text_primary');
   }
 
-  /** 「响铃提醒」开关由 `reminderId` 派生（需求方 2026-10-14 定）：有值＝开 */
+  /**
+   * 「响铃提醒」开关的状态。
+   *
+   * v1 字段表（第 16/18 项）明确：**`alarm` 是用户意图、开关读它**；`reminderId` 是"已发布的本地提醒句柄"，
+   * 「为空而 `alarm=1` ⇒ 开关开了但未生效（如超 30 条报 1700002）」。
+   * 所以这里改读 `alarm`（原来是从 `reminderId` 派生）—— 否则"提醒配额满了"时开关会莫名自己变灰。
+   */
   @Computed
   get remindOn(): boolean {
-    return this.task.reminderId !== undefined;
+    return this.task.alarm === TaskAlarm.ON;
   }
 
   /** 有提醒时间才给开关；没有就整个 C 区不显示 */
@@ -160,7 +166,7 @@ export struct TaskCard {
   /** 自定义文字区之后，卡片的无障碍文本要自己拼（HDS 不再从 primaryText/description 取） */
   @Computed
   get accessibilityLabel(): string {
-    return `${this.task.title} ${this.dueLabel} ${this.descriptionLabel}`;
+    return `${this.task.name} ${this.dueLabel} ${this.descriptionLabel}`;
   }
 
   @Builder
@@ -191,7 +197,7 @@ export struct TaskCard {
   @Builder
   textBlock() {
     Column() {
-      Text(this.task.title)
+      Text(this.task.name)
         .fontSize($r('sys.float.ohos_id_text_size_body1'))
         .fontWeight(FontWeight.Bold)
         .fontColor(this.textColor)

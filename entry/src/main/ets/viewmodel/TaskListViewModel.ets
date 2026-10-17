@@ -13,7 +13,7 @@
  *   **「重要程度」已从这条链里移除**（需求方 2026-10-15：「description 里面的重要程度不显示了」）——
  *   它改用**卡片底色**表达，见 `components/TaskCard.ets` 的 `cardBackground`。
  */
-import { Task, TaskPriority, TaskStatus } from '../model';
+import { Task, TaskAlarm, TaskPriority, TaskStatus } from '../model';
 
 const DAY_MS: number = 24 * 60 * 60 * 1000;
 const HOUR_MS: number = 60 * 60 * 1000;
@@ -41,8 +41,7 @@ const TIME_PREFIX: string = '在 ';
 const REMIND_PREFIX: string = '响铃还有 ';
 const REMIND_HOUR_UNIT: string = ' 小时 ';
 const REMIND_MINUTE_UNIT: string = ' 分钟';
-const ESTIMATED_PREFIX: string = '预计耗时 ';
-const ESTIMATED_UNIT: string = ' 小时';
+// v1 起没有「预计耗时」字段（27 项字段表里没有它），对应常量一并删掉
 const SOURCE_PREFIX: string = '来源于 ';
 const TAG_SEPARATOR: string = '、';
 const DESCRIPTION_SEPARATOR: string = ' · ';
@@ -162,31 +161,32 @@ export class TaskListViewModel {
     return `${TIME_PREFIX}${TaskListViewModel.hhmm(due)}${TIME_SUFFIX}`;
   }
 
-  /** 卡片描述行：按 提醒时间 > 重要程度 > 耗时 > 来源 > 标签 > 备注 取前两项，用 ` · ` 拼 */
+  /**
+   * 卡片描述行：按 **提醒时间 > 来源展示名 > 标签 > 备注** 取**第一项**。
+   * v1 契约的两处变化：① 没有 `estimatedHours` 了（27 项字段表里没有"耗时"）→ 这条链上删掉它；
+   * ② 「响铃提醒」开关**改读 `alarm`（用户意图）**，不再由 `reminderId` 派生
+   * （字段表 §1 第 16/18 项：`alarm=1` 而 `reminderId` 为空 ⇒ 开关开了但未生效）。
+   * 文档 §2 的卡片改版（第二行 = 标签胶囊＋重要性图形＋截止文案＋重复标识）**尚未做**。
+   */
   static descriptionLabel(task: Task, now: Date): string {
     const parts: string[] = [];
 
     const remind: number | undefined = task.remindAt;
-    // 「响铃提醒」开关关掉时（reminderId 被清空）就不显示倒计时（需求方 2026-10-14）
-    if (remind !== undefined && task.reminderId !== undefined && remind > now.getTime()) {
+    if (remind !== undefined && task.alarm === TaskAlarm.ON && remind > now.getTime()) {
       parts.push(TaskListViewModel.remindCountdown(remind, now));
     }
     // 说明：这里**不再**放「重要程度」——它改用卡片底色表达（见 TaskCard.cardBackground）
-    const estimated: number | undefined = task.estimatedHours;
-    if (parts.length < DESCRIPTION_MAX_PARTS && estimated !== undefined) {
-      parts.push(`${ESTIMATED_PREFIX}${estimated}${ESTIMATED_UNIT}`);
-    }
-    const source: string | undefined = task.source;
-    if (parts.length < DESCRIPTION_MAX_PARTS && source !== undefined) {
-      parts.push(`${SOURCE_PREFIX}${source}`);
+    const sourceDetail: string | undefined = task.originDetail;
+    if (parts.length < DESCRIPTION_MAX_PARTS && sourceDetail !== undefined) {
+      parts.push(`${SOURCE_PREFIX}${sourceDetail}`);
     }
     const tags: string[] | undefined = task.tags;
     if (parts.length < DESCRIPTION_MAX_PARTS && tags !== undefined && tags.length > 0) {
       parts.push(tags.join(TAG_SEPARATOR));
     }
-    const detail: string | undefined = task.detail;
-    if (parts.length < DESCRIPTION_MAX_PARTS && detail !== undefined) {
-      parts.push(detail);
+    const note: string | undefined = task.note;
+    if (parts.length < DESCRIPTION_MAX_PARTS && note !== undefined) {
+      parts.push(note);
     }
 
     return parts.join(DESCRIPTION_SEPARATOR);

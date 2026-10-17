@@ -33,23 +33,24 @@ export class TaskSearchViewModel {
     if (needle.length === 0) {
       return false;
     }
-    if (task.title.toLowerCase().includes(needle)) {
+    if (task.name.toLowerCase().includes(needle)) {
       return true;
     }
     const tags: string[] | undefined = task.tags;
     if (tags !== undefined && TaskSearchViewModel.anyContains(tags, needle)) {
       return true;
     }
-    const detail: string | undefined = task.detail;
-    if (detail !== undefined && detail.toLowerCase().includes(needle)) {
+    const note: string | undefined = task.note;
+    if (note !== undefined && note.toLowerCase().includes(needle)) {
       return true;
     }
     const category: string | undefined = task.category;
     if (category !== undefined && category.toLowerCase().includes(needle)) {
       return true;
     }
-    const source: string | undefined = task.source;
-    if (source !== undefined && source.toLowerCase().includes(needle)) {
+    // 来源：v1 起 `source` 是枚举（paste/share/bot/voice/manual），**显示与检索用的是 `originDetail`**
+    const originDetail: string | undefined = task.originDetail;
+    if (originDetail !== undefined && originDetail.toLowerCase().includes(needle)) {
       return true;
     }
     const steps = task.steps;

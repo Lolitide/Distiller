@@ -14,7 +14,7 @@
  *   · `selectedIds` —— 已勾选的任务 id（用**整体换新数组**的方式改，观测最稳）
  * 只做内存里的增删；真落库要走 `repository/`（见 `deleteSelected` 的 TODO）。
  */
-import { Task, TaskPriority, TaskStatus } from '../model';
+import { Task, TaskAlarm, TaskPriority, TaskStatus } from '../model';
 import { MOCK_TASKS } from '../mock/MockTasks';
 import { TaskDayGroup, TaskListViewModel } from './TaskListViewModel';
 
@@ -277,33 +277,49 @@ export class TaskListStore {
    */
   private statusBeforeCompleted: Map<number, TaskStatus> = new Map();
 
-  /** 点圆圈：未完成 → 完成（同时关掉响铃提醒）；已完成 → 退回完成前的状态，并把响铃提醒重新打开 */
+  /**
+   * 点圆圈：未完成 → 完成；已完成 → 退回完成前的状态。
+   *
+   * v1 契约（字段表 §1）带来的两处变化：
+   *  · 完成时要写 **`finishedAt`**（第 13 项：「完成态卡片显示的就是它」），退回时清空；
+   *  · 「响铃提醒」的**用户意图**是 `alarm`（第 16 项），所以完成时把 `alarm` 置 OFF、退回时按
+   *    「有提醒时间才开」恢复成 ON；`reminderId`（已发布句柄）跟着清空 —— 它由 `ReminderService` 给，
+   *    页面里不许凭空造。
+   */
   toggleComplete(task: Task): void {
     if (task.status === TaskStatus.COMPLETED) {
       const previous: TaskStatus | undefined = this.statusBeforeCompleted.get(task.id);
       task.status = previous === undefined ? TaskStatus.CONFIRMED : previous;
+      task.finishedAt = undefined;
       this.statusBeforeCompleted.delete(task.id);
-      // 退回未完成时把响铃提醒重新打开（需求方 2026-10-14）。
-      // 有提醒时间的任务才有开关，所以只在这种情况置值；置 -1 是占位的假提醒键，
-      // TODO(需求方): 真接 ReminderService 后要改成「发布提醒」并拿服务返回的键。
+      // 退回未完成时把响铃提醒重新打开（需求方 2026-10-14）：只有带提醒时间的任务才有这个开关
       if (task.remindAt !== undefined) {
-        task.reminderId = -1;
+        task.alarm = TaskAlarm.ON;
       }
       return;
     }
     this.statusBeforeCompleted.set(task.id, task.status);
     task.status = TaskStatus.COMPLETED;
-    // 完成时自动关掉响铃提醒：开关由 reminderId 派生，清空即关
+    task.finishedAt = Date.now();
+    // 完成时自动关掉响铃提醒：用户意图置 OFF，已发布句柄一并撤销
+    task.alarm = TaskAlarm.OFF;
     task.reminderId = undefined;
   }
 
   /**
-   * 拨「响铃提醒」开关。开关状态由 `reminderId` 派生，所以这里就是给它置值 / 清空。
+   * 拨「响铃提醒」开关。
+   *
+   * v1 契约把"用户意图"和"已发布句柄"分开了：**`alarm`(0/1) 是意图**（字段表第 16 项，开关读它），
+   * `reminderId` 是「已发布的本地提醒键」；官方语义里「`reminderId` 为空而 `alarm=1` ⇒ 开了但未生效」，
+   * 所以这里**只置 `alarm`**，句柄交给服务。
    * TODO(需求方): 真接 `service/system/ReminderService` 后，这里要改成调用「发布提醒 / 撤销提醒」，
-   * `reminderId` 由服务返回，不许再在页面里凭空造。
+   * 成功后再写 `reminderId`，失败（如超 30 条报 1700002）则把 `alarm` 回滚。
    */
   setRemind(task: Task, isOn: boolean): void {
-    task.reminderId = isOn ? -1 : undefined;
+    task.alarm = isOn ? TaskAlarm.ON : TaskAlarm.OFF;
+    if (!isOn) {
+      task.reminderId = undefined;
+    }
   }
 
   /** 进入编辑（多选）模式：每次进来都从「一条没勾」开始 */
