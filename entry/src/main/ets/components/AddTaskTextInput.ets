@@ -15,12 +15,14 @@
  */
 import { LengthMetrics } from '@kit.ArkUI';
 import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
+import { ADD_TASK_CONTENT_HEIGHT_VP } from './AddTaskContentMetrics';
 
 /**
- * 文本框高度（vp）：取设计稿 `添加任务.svg` 里那块输入行（428 宽画板）高 **56**，
+ * 文本框高度（vp）＝**三块内容区共用的那一个**（`ADD_TASK_CONTENT_HEIGHT_VP`）。
+ * 取值依据：设计稿 `添加任务.svg` 里那块输入行（428 宽画板）高 **56**，
  * 但单行 56 放不下群里那种两三行原文，所以给 **120vp**（约 4~5 行）＋内部滚动。
  */
-const TEXT_AREA_HEIGHT_VP: number = 120;
+const TEXT_AREA_HEIGHT_VP: number = ADD_TASK_CONTENT_HEIGHT_VP;
 
 @ComponentV2
 export struct AddTaskTextInput {

@@ -18,17 +18,18 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { MediaPickResult, pickSingleImage } from '../service/system';
 import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
+import { ADD_TASK_CONTENT_HEIGHT_VP } from './AddTaskContentMetrics';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'AddTaskScreenshotPicker';
 
 /**
- * 选图区高度（vp）。
+ * 选图区高度（vp）＝**三块内容区共用的那一个**（`ADD_TASK_CONTENT_HEIGHT_VP`）。
  * 取值依据：设计稿 `api/知了设计UI/添加任务.svg`（428 宽画板）里那块图片区高 **124**，
- * 换算到 428→360vp 的手机屏约 104vp；这里取整到 **120vp**，既能放下缩略图预视，也不至于把半模态撑满。
- * 官方没有"图片选择区高度"这类 token，所以按约定提成常量并在此标注出处（与 `MainTabBar.ADD_BUTTON_SIZE` 同一个做法）。
+ * 换算到 428→360vp 的手机屏约 104vp；取整到 **120vp**，既能放下缩略图预视，也不至于把半模态撑满。
+ * 官方没有"图片选择区高度"这类 token，所以按约定提成常量（现在统一在 `AddTaskContentMetrics.ets`）。
  */
-const PICK_AREA_HEIGHT_VP: number = 120;
+const PICK_AREA_HEIGHT_VP: number = ADD_TASK_CONTENT_HEIGHT_VP;
 
 @ComponentV2
 export struct AddTaskScreenshotPicker {
