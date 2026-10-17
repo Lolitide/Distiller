@@ -186,7 +186,7 @@
       "thread_id": "t_15B451_9", "kind": "活动", "priority": "normal",
       "level": 1, "category": "活动", "channel": "bot",
       "due_at": 1760630400000, "due_text": "后天",
-      "repeat": "none", "repeat_text": "", "certainty": 85,
+      "repeat": [], "repeat_text": "", "certainty": 85,
       "missing_fields": ["place", "who"],
       "title": "传智杯比赛", "summary": "传智杯比赛在后天举行。",
       "time_text": "后天", "time_normalized": "2026-10-15", "time_unresolved": false,
@@ -215,8 +215,8 @@
 | `channel` | string | ❌ | 规则 | `bot` / `manual`（另有 `paste`/`share`/`voice` 预留） |
 | `due_at` | int 毫秒 | ✅ | 规则 | 由 `time_normalized` 换算；0 = 没有截止。**只有日期时按当天 23:59:59 算**（否则零点一过就显示"已过期"） |
 | `due_text` | string | ❌ | 规则 | 等于 `time_text`（截止原话） |
-| `repeat` | string | ✅ | 规则 | `none` / `day` / `week` / `month` / `year` / `workingDay`（从原文认「每天/每周/每月…」） |
-| `repeat_text` | string | ✅ | 规则 | 重复周期的**原话片段**（如「每周一三五」），与 `repeat` 不合并 |
+| `repeat` | object[] | ✅ | 规则 | **规则数组**（字段名同官方 `calendarManager.RecurrenceRule`，见下）。空数组 = 不重复；**命中任意一条即算当天要做（并集）** |
+| `repeat_text` | string | ✅ | 规则 | **只在规则表达不了时**兜底（如「每学期第 3 周交」「每月最后一天」）；能表达时为 `""` |
 | `certainty` | int 0~100 | ❌ | 规则 | `round(confidence × 100)` |
 | `missing_fields` | string[] | ❌ | 规则 | 缺失字段名，取值 `place` / `who` / `dueAt`；确认态高亮用 |
 | `steps` | object[] | ✅ | 规则 | **形态变了**：`string[]` → `[{ "content": "...", "done": 0 }]`（`done` 存 0/1） |
@@ -235,6 +235,39 @@
 
 **排序**（`05` 对应「任务列表」）：`priority` 降序 → `level` 降序 → `due_at` 近的在前。
 `level` **不跨档翻盘**（卡片上唯一可见的排序信号是 priority 那个红圈）。
+
+#### `repeat` 规则数组（2026-10-17 起）
+
+元素字段名与官方 `calendarManager.RecurrenceRule` **逐字段同名**，「转日历日程」零翻译。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `frequency` | int 0~3 | **必填**。0 每年 / 1 每月 / 2 每周 / 3 每天 |
+| `interval` | int | 每 N 个周期一次；缺省或 ≤1 = 每 1 个周期 |
+| `daysOfWeek` | int[] | 1~7 = 周一~周日 |
+| `daysOfMonth` | int[] | 1~31 |
+| `monthsOfYear` | int[] | 1~12 |
+| `weeksOfMonth` | int[] | 1~5 |
+| `count` / `expire` | int / 毫秒 | 次数上限、重复截止日 |
+| `dates` | int[] 毫秒 | **本机扩展、MVP 不产出**（预留） |
+
+实测产出（`test_candidates.py` 第十一节断言）：
+
+| 原文 | `repeat` |
+| --- | --- |
+| 每周一、周二、周四要写高数作业 | `[{"frequency":2,"daysOfWeek":[1,2,4]}]` |
+| 每两周的周二 | `[{"frequency":2,"interval":2,"daysOfWeek":[2]}]` |
+| 每3天 | `[{"frequency":3,"interval":3}]` |
+| 每月15号交房租 | `[{"frequency":1,"daysOfMonth":[15]}]` |
+| 每月15号并且每周一 | `[{"frequency":2,"daysOfWeek":[1]}, {"frequency":1,"daysOfMonth":[15]}]` |
+| 每年3月 | `[{"frequency":0,"monthsOfYear":[3]}]` |
+| 每个工作日打卡 | `[]` + `repeat_text: "工作日"`（**移出 MVP，不造规则**） |
+| 每月最后一天交小组汇报 | `[]` + `repeat_text: "每月最后一天"`（同上） |
+
+> 官方 `daysOfMonth` 没有「-1 / 倒数第几天」，`frequency` 也没有「工作日」，
+> 所以这三类（最后一天 / 仅工作日 / 调休）**字段留着、MVP 不产出**，只写 `repeat_text`。
+> 另外：周期任务的提醒受**单应用 30 条有效提醒**限制（超了报 `1700002`），
+> 不能每条都预发布——与 `ReminderService` 一起定，目前无定论。
 - **对应界面**：`任务列表.svg`、`任务列表-编辑状态.svg`；候选经用户确认后转本地 `Task`，用于 `任务详情.svg`、`删除弹窗.svg`（本地删除）。
 
   生成管道（已实现，`candidate_engine.py`：去重 → 聚类 → 簇级小模型/规则 → 安全闸）：
