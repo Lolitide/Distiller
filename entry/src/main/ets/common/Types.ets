@@ -481,6 +481,13 @@ export function profileEntryId(kind: ProfileKind, term: string): string {
   return 'p_' + kind + '_' + term;
 }
 
+/** POST /api/relay/push/token 的响应 */
+export interface PushTokenData {
+  registered: boolean;
+  /** 服务端是否真的配好了服务账号（配好才能发推送） */
+  push_ready: boolean;
+}
+
 /** 页面跳转参数 */
 export interface DetailParams {
   msgId: string;

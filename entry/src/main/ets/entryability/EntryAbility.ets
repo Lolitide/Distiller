@@ -4,6 +4,7 @@ import { window } from '@kit.ArkUI';
 import { Store } from '../common/Store';
 import { PollService } from '../service/PollService';
 import { NotificationService } from '../service/NotificationService';
+import { PushService } from '../service/PushService';
 
 const DOMAIN = 0x0000;
 
@@ -12,6 +13,8 @@ export default class EntryAbility extends UIAbility {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
     Store.init(this.context);
     EntryAbility.takeWant(want);
+    // Push 的消息接收**必须在这里同步注册**（官方要求：不要放在 await 之后）
+    PushService.listen(this);
   }
 
   /** 点通知时应用已在运行，走这里 */
@@ -72,6 +75,8 @@ export default class EntryAbility extends UIAbility {
     PollService.start();
     // 首次进前台要一次通知授权（只会弹一次）
     NotificationService.ensureEnabled(this.context);
+    // 拿 Push Token 上报后端（后台通知用）；没有设备身份时会自动跳过
+    PushService.register();
   }
 
   onBackground(): void {
