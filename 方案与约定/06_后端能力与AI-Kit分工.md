@@ -1,4 +1,4 @@
-# 06 · 后端能力 + AI/Kit 分工（对照 `05_API接口文档.md`）
+﻿# 06 · 后端能力 + AI/Kit 分工（对照 `05_API接口文档.md`）
 
 > 读法：本文回答三个问题——**后端现在到底能做什么**、**哪些活是 Kit 干的**、**哪些活是 AI 干的**。
 > 与 `05_API接口文档.md` 的差异逐条对照在 §2。
@@ -30,10 +30,11 @@
 | 接口 / 能力 | `05` 里写的 | **现在** | 证据 |
 | --- | --- | --- | --- |
 | `GET /api/relay/candidates` | ❌ 未实现 | ✅ **已实现** | `server.py` 注册进 `RELAY_PATHS`；`CandidateStream` 管 `rev_seq`；`test_candidates_api.py` 22 项断言 |
-| `/health` 的 `api_version` / `capabilities` | ❌ 未实现 | ✅ **已实现**（`api_version:2`；`capabilities` = `candidates/parse/feedback/attachment/profile` + `ocr`） | 只声明**真做过**的能力；`ocr` 仅当本机多模态模型在线时出现；`attachment` 2026-10-15 真机验证后加入；`profile` 2026-10-16 加入（规则回退保证常驻） |
+| `/health` 的 `api_version` / `capabilities` | ❌ 未实现 | ✅ **已实现**（`api_version:2`；`capabilities` = `candidates/parse/feedback/attachment/profile` + `ocr`（模型在线）/ `push`（服务账号配好）） | 只声明**真做过**的能力；`ocr` 仅当本机多模态模型在线时出现；`attachment` 2026-10-15 真机验证后加入；`profile` 2026-10-16 加入（规则回退保证常驻）；`push` 2026-10-17 加入（服务账号配好才出现） |
 | 族（Thread）层 / 去重 / 聚类 | ❌ 仅离线原型 | ✅ **已接入**（`candidate_engine.py`） | 去重 + 聚类（共享标签/关键词/概念/**实体**/**对话连续性**）+ 综合总结 + 跨消息时间/地点拼合 |
 | `POST /api/relay/parse` | ❌ | ✅ **已实现（2026-10-15）** | 无状态抽取：文本/截图/文件三来源；截图走本机多模态 OCR（`llm_parse.ocr_image`），无模型返回 501 让前端降级端侧；**文件支持 docx/xlsx/pptx（标准库 zip+XML，零依赖）与 pdf（`pypdf` 软依赖，未装 501、扫描版 400）**，老格式 doc/xls/ppt 明确 400 引导转存；手动输入有宽松判据（闲聊 + 任务词/时间 → 待办）；`test_parse_api.py` 50+ 项断言（隐私：不进窗口/候选流/落盘） |
 | `POST /api/relay/profile` | —（新增接口） | ✅ **已实现（2026-10-16）** | 用户画像词条归纳：入参是端侧统计好的**词频表**（「词 + 次数 + 类别」，**不含聊天正文**），出参是画像词条（kind/term/weight/evidence/reason）。**安全闸**：模型返回的 `term` 必须能在素材词表里查到，查不到就丢——模型只能挑词/合并/排序，**不能发明词条**（素材里只有「传智杯」时写「竞赛」也会被丢）；`reason` 由**规则**生成，模型说了不算。模型不在线/产出过薄 → 规则回退（按次数排序，权重归一化），所以 `profile` 能力**常驻**。**只处理、不存储**：不落盘、不进窗口、不进候选流；`test_profile_api.py` 全绿（含「工作目录无新增文件」断言） |
+| `POST /api/relay/push/token` | —（新增接口） | ✅ **已实现（2026-10-17）** | 设备上报 Push Token（空串=注销）。服务端 `push_sender.py` 用服务账号 **JWT(PS256)** 调 `messages:send`（`push-type: 0`），`push_loop()` 每 10s 重算候选、靠窗口指纹闸保证同一份窗口只推一次。**注意**：需 `QQBOT_PUSH_SA` 指向服务账号 JSON 才会真正发送，未配置时 `capabilities` 不含 `push` |
 | `POST /api/relay/feedback` | ❌ | ✅ **已实现** | 只记 accept/dismiss **计数**（不存内容）；可选 `drop_words` 把人工删掉的词同步给按群词表（接上了 AGENTS.md §3.1 的手动删词）。前端在确认页「转成待办」=accept、「忽略」=dismiss（**交付前端尚未对接**） |
 | `GET /api/relay/attachment` | —（新增接口，05 §2.5） | ✅ **已实现 + 真机验证（2026-10-15）** | 附件过路：窗口内按 `msg_id+index` 转发附件原始字节（≤12MB、并发 8 路、90 秒内存缓存 16 条/64MB 封顶，**不落盘**）；404=过期/未订阅/不存在、502=QQ 拉取失败。**真机已验证图片与 docx 直链服务端可 GET** → `capabilities` 已加 `attachment`；`test_attachment_api.py` 23 项全绿 |
 | `POST /api/relay/messages/update` | —（新增接口，05 §2.6） | ✅ **已实现（2026-10-15）** | 用户改「待办」：白名单字段（kind/标题/摘要/时间原话/地点/对象/截止/需带/标签），**派生字段拒改**（400 并回清单）；改 `timeText` 由**规则**重算归一化（不信客户端）；覆盖表只在内存、随 30 分钟窗口失效、**不落盘**；`test_message_update_api.py` 24 项全绿。**注意**：交付前端改的是**本机 `Task`**（`repository`），不需要回改后端；这个接口对接交付前端时用不到，是否保留由组长定（见 `07 §4`） |
@@ -160,6 +161,7 @@
 | `/attachment` 的附件字节 | **只在内存过路**：90 秒短缓存（16 条/64MB 封顶）后即丢，不进窗口、不落盘；窗口过期附件找不回 |
 | **端侧**的附件副本（`filesDir/attachments/`） | 群里的图片/文件在**轮询到的 30 分钟窗口内**被 App 取回并落到**本机沙箱**（`AttachmentStore`），所以窗口过期后仍能查看/保存；默认 200MB 上限、按最旧优先淘汰，随「清空本机消息」一起删。**不占服务器存储** |
 | **端侧**的用户画像（`profile_json`） | 词条**只落端侧** preferences，随「清空本机数据 / 清空画像」一起删；出端侧的素材只有「词 + 次数 + 类别」，**不含正文**；后端 `/profile` 与之同款「只处理不存储」（见上表） |
+| **服务端**的 Push Token（`push_tokens`） | 只存「device_id → Push Token + 更新时间」，用于发通知；**不含任何消息内容**，归到「匿名设备标识」一类。`DELETE /my/data` 一并清除。**但推送的标题/摘要会经过华为网关**——用 `QQBOT_PUSH_INCLUDE_TEXT=0` 可改成只推「有新的校园提醒」不带内容 |
 | **按群领域词表** `group_lexicon.json` | **唯一允许落盘的非路由数据**，且只含「词 + 次数 + 类别」，**绝不含正文**（写完自检：最长条目是词，不是句子） |
 | 端侧 Kit 解析 | 全程**不出端侧**（无网络请求） |
 | 一键删除 `DELETE /my/data` | 清绑定/订阅/配对码；该群已无别的订阅者时，**连带清掉它的词表** |
@@ -193,3 +195,4 @@
 | **规则回退的 summary 像"没有总结"（2026-10-17 已修）** | 四处根因，都已修：<br>① **模型的 summary 被无谓丢弃**——旧逻辑是「只要任一槽位没过子串闸，就整段丢弃模型 summary」，一个字段写错连累整段总结。现在 `llm_parse.validate` 额外返回 `_nullified_values`（槽位名 → 被清空的原值），`_build_from_llm` 只在 summary **真的复述了那个编造值**时才回退规则；否则保留模型的总结。<br>② **规则拼接把原文重复了三遍**——旧 `_rule_summary` 会把簇内最长 1~2 条原文追加进 summary →「标题；时间；原文」。现在只用结构化字段（标题/时间/地点/对象）拼，原文交给 `sourceText` 单独下发。<br>③ **规则路径的 title 是句子碎片**——旧 `title = action`（= 原文删掉时间/地点后的剩余串），删除发生在句子中段：`【重要通知】图书馆10月20日起闭馆改造` → `【重通知】起闭馆改造`。新增 `pipeline_proto.extract_title()`：按标点切分句 → 去掉句首/句尾噪声（`【…】`/`通知：`/`关于`/`记得`/`请准时参加`）→ 丢掉纯时间分句 → 拼回。`build_event` 改用它；**`action` 槽位与 `classify` 均未动**（那条链路挂着 29.6 万条语料基线）。实测 10000 条 `build_event` 0.35s（0.035ms/条），无性能回退。<br>④ **短通知被安全闸整条毙掉**——「紧急停水通知」没有任何时间/地点，`validate` 的「通知类必须至少一个结构化槽位」判据直接返回 `None` → 回退规则 → 总结退化成标题本身。现在**只要有 `summary` 或 `title` 就保留**（两者是自然语言字段，允许润色）。 |
 | **详情页进出一次，后端总结变回原文（2026-10-17 已修，端侧）** | `MessageDetailPage.aboutToAppear → ensureNlp → ParseService.reparse → parseOne(msg,true) → apply()` 会把 `summary` / `category` / `event` **整个覆盖**成端侧规则结果；而 `event` 被重建还会连带清空后端给的 `priority` / `dueAt` / `repeat` / `steps`。表现：金秋外语节原本有总结，点进详情再退出来就变成原文前两句。<br>**修法**：新增 `nlpOnly` 模式——后端已有 `parse` 的消息只补 `entities`，不动其余字段；`nlpOnly` 下也跳过图片重复识别。`reparse` 按 `msg.parse !== undefined` 自动选择模式。 |
 | **后台通知：已查实是平台边界，不是 bug（2026-10-16，暂停待议）** | 现象：App 在后台收不到通知，点进 App 才弹。<br>根因：`EntryAbility.onBackground()` 直接 `PollService.stop()`（`EntryAbility.ets:80`），后台停轮询 → 收不到消息。<br>**但删掉 `stop()` 也修不好**，三道官方限制挡着（均已核对文档原文）：<br>① `FAQ/网络/应用进入后台是否回收网络权限`：**后台会回收网络权限**，需长时任务才能继续联网；<br>② `BackgroundMode` 表 8 种类型**没有一种匹配"群消息轮询"**——`DATA_TRANSFER`「超过 10 分钟未更新进度会被取消」且进度须走实况窗，`TASK_KEEPING` 仅 PC/2in1 或需 ACL `KEEP_BACKGROUND_RUNNING_SYSTEM`，其余类型业务不符（违反《Background Tasks Kit 接入规范》）；<br>③ 延迟任务 `workScheduler`：「循环任务**执行间隔至少 2 小时**」且由系统按内存/功耗/习惯统一调度，时间不保证；<br>④ `FAQ/程序框架/应用运行时进程资源使用规格`：后台 10 分钟单核平均 >10% **结束进程**（5 秒轮询放后台本身就会被杀）。<br>**候选方向**（用户 2026-10-16 决定暂停、以后再议）：A 接 **Push Kit 云侧推送**（唯一真正能后台实时提醒的路，需 AGC + 公网 HTTPS 后端 + 后端接 Push REST）；B `workScheduler` 延迟兜底（合规但最慢 2 小时）；C 接受现状，把"回到前台立即补齐 + 合并成一条汇总通知"做扎实 |
+| ↳ **A 已落地（2026-10-17）** | 客户端 `PushService.ets`：`onCreate` 同步注册 `receiveMessage` + `on('tokenUpdate')`，进前台 `getToken()` 上报 `/push/token`；`module.json5` 的 EntryAbility 加 `action.ohos.push.listener`。服务端 `push_sender.py`（JWT/PS256）+ `push_loop()` + `/push/token`。**待你补**：把服务账号 JSON 放到 `QQBOT_PUSH_SA` 指向的路径，重启控制台；`/health` 的 `capabilities` 出现 `push` 即配好。 |

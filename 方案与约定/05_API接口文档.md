@@ -332,7 +332,7 @@
   { "ok": true, "data": {
     "ok": true, "version": "mvp0",
     "api_version": 2,
-    "capabilities": ["candidates", "parse", "feedback", "attachment", "ocr"],
+    "capabilities": ["candidates", "parse", "feedback", "attachment", "profile", "ocr", "push"],
     "time": "...", "bot_running": true,
     "window": { "window_items": 12, "window_minutes": 30, "max_seq": 37 }
   }}
@@ -404,6 +404,25 @@
 
 ---
 
+### 2.7 `POST /api/relay/push/token` ✅（2026-10-17 新增）
+
+- **作用**：App 启动/进前台时把自己的 **Push Token** 上报给后端，用于「App 在后台/被杀时也能收到提醒」。
+  App 在后台不轮询（HarmonyOS 限制），云侧推送是唯一通路。
+- **鉴权**：设备身份。
+- **请求**：`{ "token": "<Push Token>" }`；**空串表示注销**（换绑/清空本机数据时主动清）。
+- **响应**：
+  ```json
+  { "ok": true, "data": { "registered": true, "push_ready": true } }
+  ```
+  `push_ready` = 后端服务账号是否配好（没配好时 token 会存下来，但发不出推送）。
+- **服务端发送**（不对外暴露）：`push_sender.py` 用服务账号 JWT（**PS256**）调
+  `https://push-api.cloud.huawei.com/v1/{projectId}/messages:send`，
+  `push-type: 0`（Alert 通知），成功判据 `code == "80000000"`。
+- **触发**：`server.py` 的 `push_loop()` 每 `QQBOT_PUSH_INTERVAL`（默认 10s）重算候选；
+  `CandidateStream` 的窗口指纹闸保证「同一份窗口只推一次」，只推**新增/变化**的 actionable 候选。
+- **隐私**：默认推标题 + 摘要（会经过华为网关）；`QQBOT_PUSH_INCLUDE_TEXT=0` 改成只推「有新的校园提醒」。
+  Token 只存「device_id → token」，属于匿名设备标识，不含任何消息内容；`DELETE /my/data` 会一并清除。
+
 ## 3. 非 App 契约接口（仅记录，不属本次对接范围）
 
 ### 3.1 机器人 → 服务端内部通道
@@ -452,7 +471,7 @@
 | `POST /api/relay/feedback` | ✅ | accept/dismiss 计数 + `drop_words` 手动删词（接 `/feedback`） | §2.3 |
 | `GET /api/relay/attachment` | ✅ | 附件过路：窗口内按 `msg_id+index` 转发原始字节（12MB 上限、8 路并发、90s 内存缓存，不落盘）；**图片与文件直链均已真机验证可取**；`test_attachment_api.py` 覆盖 | §2.5 |
 | `POST /api/relay/messages/update` | ✅ | 用户改「待办」：白名单字段（kind/摘要/时间原话/地点…）+ 时间由规则重算；覆盖表只在内存、随窗口失效；`test_message_update_api.py` 24 项断言 | §2.6 |
-| `GET /api/relay/health` 的 `api_version` / `capabilities` | ✅ | `api_version: 2`；`capabilities` 含 `candidates/parse/feedback/attachment` 恒在，`ocr` 跟随模型可用性 | §2.4 |
+| `GET /api/relay/health` 的 `api_version` / `capabilities` | ✅ | `api_version: 2`；`capabilities` 含 `candidates/parse/feedback/attachment/profile` 恒在，`ocr` 跟随模型、`push` 跟随服务账号配置 | §2.4 |
 
 > 注：v2 管道复用了 `pipeline_proto.py` 的 `Event`/`parse_time()` 与 `llm_worker.py` 的单条解析；簇级实现在 `candidate_engine.py`（`test_candidates.py` 覆盖规则路径，`test_llm_e2e.py` 覆盖模型路径）。
 
