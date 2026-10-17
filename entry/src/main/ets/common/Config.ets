@@ -5,4 +5,6 @@ export class Config {
   static idlePollIntervalMs: number = 10000;
   static bindPollIntervalMs: number = 2000;
   static bindPollMaxTimes: number = 60;
+  /** 附件落盘总占用上限（字节），超出按最旧优先淘汰（见 AttachmentStore） */
+  static attachmentLimitBytes: number = 200 * 1024 * 1024;
 }

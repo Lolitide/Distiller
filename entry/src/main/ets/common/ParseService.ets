@@ -15,6 +15,7 @@ import { ParsedEntity, ParsedInfo, RobotMessage, firstImageUrl, firstImageIndex 
 import { classifyCategory } from './ParseRules';
 import { ImageRecognizer, ImageRecognizeResult } from './ImageRecognizer';
 import { ApiClient } from './ApiClient';
+import { AttachmentStore } from './AttachmentStore';
 import { withTimeout } from './AsyncUtil';
 import { buildEvent, eventOneLine } from '../nlp/EventBuilder';
 import { CampusEvent } from '../nlp/EventTypes';
@@ -174,16 +175,22 @@ export class ParseService {
   /**
    * 识别消息里的图片附件。
    *
-   * 优先经后端 `GET /attachment` 过路取字节——QQ CDN 直链带**时效 rkey**，
-   * 端上直连常常失败；后端在 30 分钟窗口内能取到。取不到再退回端上直连 URL。
+   * 取字节的顺序：**① 本机落盘的副本 → ② 后端 `/attachment` 过路 → ③ 端上直连**。
+   * ① 是 2026-10 加的：轮询时已趁 30 分钟窗口把附件存到沙箱（AttachmentStore），
+   * 所以窗口过期后**照样能识别**；② 是没存过时的补救，取到就顺手落盘；
+   * ③ 只在前两者都失败时兜底（QQ CDN 直链带时效 rkey，端上直连常常失败）。
    */
   private static async recognizeImage(msg: RobotMessage, imageUrl: string): Promise<ImageRecognizeResult> {
     const idx: number = firstImageIndex(msg.attachments);
-    const isServerMsg: boolean = ApiClient.deviceId.length > 0 && idx >= 0
-      && msg.msg_id.length > 0 && msg.msg_id.indexOf('local_') !== 0;
-    if (isServerMsg) {
-      const path: string = '/api/relay/attachment?msg_id=' + msg.msg_id + '&index=' + idx;
-      const buf: ArrayBuffer | null = await ApiClient.getBytes(path, 20000);
+    if (idx >= 0 && msg.msg_id.length > 0 && msg.msg_id.indexOf('local_') !== 0) {
+      let buf: ArrayBuffer | null = AttachmentStore.readLocal(msg.group_openid, msg.msg_id, idx);
+      if (buf === null && ApiClient.deviceId.length > 0) {
+        const path: string = '/api/relay/attachment?msg_id=' + msg.msg_id + '&index=' + idx;
+        buf = await ApiClient.getBytes(path, 20000);
+        if (buf !== null) {
+          AttachmentStore.saveBytes(msg.group_openid, msg.msg_id, idx, buf);
+        }
+      }
       if (buf !== null) {
         return await ImageRecognizer.recognizeBytes(buf);
       }
