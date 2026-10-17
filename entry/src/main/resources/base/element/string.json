@@ -175,6 +175,30 @@
     {
       "name": "search_no_result",
       "value": "无结果"
+    },
+    {
+      "name": "task_detail_placeholder",
+      "value": "任务详情待做"
+    },
+    {
+      "name": "title_task_detail",
+      "value": "任务详情"
+    },
+    {
+      "name": "action_add_step",
+      "value": "添加步骤"
+    },
+    {
+      "name": "step_hint_next",
+      "value": "下一步"
+    },
+    {
+      "name": "action_delete_step",
+      "value": "删除步骤"
+    },
+    {
+      "name": "delete_step_confirm",
+      "value": "真的要删除这个步骤吗？"
     }
   ]
 }

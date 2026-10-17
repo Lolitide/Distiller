@@ -6,6 +6,7 @@ import { GROUP_HEADER_LIST_PULL_UP_VP, TaskGroupHeader } from '../components/Tas
 import { EmptyHint } from '../components/EmptyHint';
 import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
 import { TaskFilterChips } from '../components/TaskFilterChips';
+import { ROUTE_TASK_DETAIL, NAV_STACK_KEY, TaskDetailParam } from '../viewmodel/TaskNavParams';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 
 /**
@@ -151,6 +152,14 @@ export struct A_TaskList {
                     },
                     onRemindChange: (isOn: boolean) => {
                       this.store.setRemind(task, isOn);
+                    },
+                    // 点整卡 → 压入任务详情页（编辑态下不跳，避免和多选冲突）
+                    onOpen: () => {
+                      if (this.store.editing) {
+                        return;
+                      }
+                      AppStorage.get<NavPathStack>(NAV_STACK_KEY)
+                        ?.pushPathByName(ROUTE_TASK_DETAIL, new TaskDetailParam(task, this.store));
                     }
                   })
                 }

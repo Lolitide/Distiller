@@ -21,6 +21,7 @@
 // 不导入就会解析到那个，赋给 HdsListItemCard 的 textItem 时报「no properties in common」。
 import { HdsListItemCard, PrefixCustomBuilder, SuffixSwitch } from '@kit.UIDesignKit';
 import { Task, TaskAlarm, TaskPriority, TaskStatus } from '../model';
+import { TaskStatusIcon } from './TaskStatusIcon';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 
@@ -42,6 +43,8 @@ export struct TaskCard {
   @Require @Param store: TaskListStore;
   @Event onToggleComplete: () => void = () => {};
   @Event onRemindChange: (isOn: boolean) => void = () => {};
+  /** 点整卡 → 交给页面去压任务详情页（卡片本身不知道路由） */
+  @Event onOpen: () => void = () => {};
 
   /** 是否处于编辑（多选）模式 */
   @Computed
@@ -58,38 +61,6 @@ export struct TaskCard {
   @Computed
   get completed(): boolean {
     return this.task.status === TaskStatus.COMPLETED;
-  }
-
-  /**
-   * 左侧图标（官方 Symbol）：
-   * · 普通态 —— 未完成＝虚线圆 `circle_dashed`，已完成＝带勾的圆 `checkmark_circle`；
-   * · **编辑态 —— 方框勾选框**：未选 `square`、已选 `checkmark_square_fill`
-   *   （需求方 2026-10-16：「Card 的 prefixItem 里面的图标变成方框选择框 用于用户多选」）。
-   */
-  @Computed
-  get prefixSymbol(): Resource {
-    if (this.editing) {
-      return this.selected ? $r('sys.symbol.checkmark_square_fill') : $r('sys.symbol.square');
-    }
-    return this.completed ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.circle_dashed');
-  }
-
-  /** 编辑态勾上的方框用官方强调色（品牌蓝）表示"选中"，没勾的用一级图标色 */
-  @Computed
-  get prefixColor(): ResourceColor {
-    if (this.editing) {
-      return this.selected ? $r('sys.color.ohos_id_color_emphasize') : $r('sys.color.icon_primary');
-    }
-    return this.completed ? $r('sys.color.icon_secondary') : $r('sys.color.icon_primary');
-  }
-
-  /** 左侧图标的无障碍文本：编辑态说"选择/取消选择"，普通态说"标记完成/取消完成" */
-  @Computed
-  get prefixAccessibility(): Resource {
-    if (this.editing) {
-      return this.selected ? $r('app.string.action_deselect_task') : $r('app.string.action_select_task');
-    }
-    return this.completed ? $r('app.string.action_uncomplete_task') : $r('app.string.action_complete_task');
   }
 
   /**
@@ -171,21 +142,21 @@ export struct TaskCard {
 
   @Builder
   prefixCircle() {
-    // 图标尺寸：HDS 给卡片前缀图标的规格上限只有 24vp（IconSize.SYSTEM_ICON），
-    // 需求方 2026-10-15 要求再大一档 → 借官方「圆形按钮图标」尺寸 token（28vp，视觉上大一圈）。
-    // 编辑态也用它 —— 方框勾选框与圆圈同尺寸，切换时卡片不会跳。
-    SymbolGlyph(this.prefixSymbol)
-      .fontSize($r('sys.float.ohos_id_min_circle_button_icon_size'))
-      .fontColor([this.prefixColor])
-      .accessibilityText(this.prefixAccessibility)
-      .onClick(() => {
+    // 圆圈 / 方框勾选框的形态、颜色、无障碍文本都已经收进共用组件 `TaskStatusIcon`
+    // （详情页标题前那个圆圈也是它，别在两处各写一遍）
+    TaskStatusIcon({
+      task: this.task,
+      selectionMode: this.editing,
+      selected: this.selected,
+      onTap: () => {
         // 编辑态点它＝勾选/取消勾选；普通态点它＝完成/退回未完成（需求方 2026-10-14 定）
         if (this.editing) {
           this.store.toggleSelect(this.task.id);
           return;
         }
         this.onToggleComplete();
-      })
+      }
+    })
   }
 
   /**
@@ -249,6 +220,11 @@ export struct TaskCard {
       accessibilityOptions: {
         accessibilityText: this.accessibilityLabel
       }
+    })
+    // 整卡可点 → 进任务详情（需求方 2026-10-16）。前缀圆圈与右侧开关各自有 onClick，
+    // 点它们不会冒泡到这里，所以「点圆圈改完成状态」不会误开详情。
+    .onClick(() => {
+      this.onOpen();
     })
   }
 }

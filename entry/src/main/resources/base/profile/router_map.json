@@ -4,6 +4,11 @@
       "name": "SearchPage",
       "pageSourceFile": "src/main/ets/pages/B_Search.ets",
       "buildFunction": "SearchPageBuilder"
+    },
+    {
+      "name": "TaskDetailPage",
+      "pageSourceFile": "src/main/ets/pages/B_TaskDetail.ets",
+      "buildFunction": "TaskDetailPageBuilder"
     }
   ]
 }
