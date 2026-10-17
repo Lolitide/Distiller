@@ -169,12 +169,10 @@ export struct TaskAttributeCard {
     return this.task.dueAt !== undefined;
   }
 
-  @Computed
-  get repeatSet(): boolean {
-    const rules: RepeatRule[] | undefined = this.task.repeat;
-    const text: string | undefined = this.task.repeatText;
-    return (rules !== undefined && rules.length > 0) || (text !== undefined && text.length > 0);
-  }
+  /*
+   * 说明：这里**没有** `repeatSet`。重复那一行只有两种文案（规则 / `repeatText` 原话 / 「不重复」），
+   * 其中「不重复」是**合法档位**而不是「未设置」，所以整行恒用正文黑色、不需要灰/黑两态。
+   */
 
   /**
    * 清提醒：用户意图关掉 + 清已发布句柄。
@@ -717,9 +715,11 @@ export struct TaskAttributeCard {
           Scroll() {
             Text(this.repeatLabel)
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor(this.repeatSet
-                ? $r('sys.color.ohos_id_color_text_primary')
-                : $r('sys.color.ohos_id_color_text_secondary'))
+              // **「不重复」也用正文黑色**（需求方 2026-10-17：「不重复变成黑色吧」）：
+              // 它和「未设置提醒 / 未设置到期时间」不是一类 —— 那两项是**没填**，
+              // 而「不重复」是重复选择器里的**一个合法档位**（等于「普通」之于重要程度），
+              // 所以这一行没有灰色未设置态，`repeatSet` 也因此不再需要。
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
               .maxLines(1)
               .textAlign(TextAlign.Start)
           }
