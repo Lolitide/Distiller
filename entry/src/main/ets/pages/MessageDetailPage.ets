@@ -11,11 +11,13 @@ import { CalendarService, CalendarResult } from '../service/CalendarService';
 import {
   RobotMessage, DetailParams, ParsedEntity, ServeParse, MessageEditFields, MessageUpdateData,
   firstImageUrl, firstImageIndex, firstFileIndex, fileAttachmentLabel, isLocalAttachment,
-  applyParsedEvent, splitListInput, joinListInput, mergeLocalParse, dueAtOf
+  applyParsedEvent, splitListInput, joinListInput, mergeLocalParse, dueAtOf,
+  normalizeRepeat, repeatLabel
 } from '../common/Types';
 import { EntityIcon, safeToast } from '../common/UiParts';
 import {
-  CampusEvent, EVENT_TODO, EVENT_NOTICE, EVENT_ACTIVITY, EVENT_PLAN, EVENT_CHAT, EVENT_IGNORE
+  CampusEvent, RepeatRule, EVENT_TODO, EVENT_NOTICE, EVENT_ACTIVITY, EVENT_PLAN, EVENT_CHAT,
+  EVENT_IGNORE, FREQ_DAILY, FREQ_WEEKLY, FREQ_MONTHLY
 } from '../nlp/EventTypes';
 import { timeSlotDisplay } from '../nlp/TimeParser';
 
@@ -456,8 +458,35 @@ struct MessageDetailPage {
     return this.msg?.event?.level ?? 1;
   }
 
-  evRepeat(): string {
-    return this.msg?.event?.repeat ?? 'none';
+  evRepeat(): RepeatRule[] {
+    return normalizeRepeat(this.msg?.event?.repeat);
+  }
+
+  /** 当前的重复"形态"，给下面的快捷芯片判高亮用。 */
+  repeatMode(): string {
+    const list: RepeatRule[] = this.evRepeat();
+    if (list.length === 0) {
+      return 'none';
+    }
+    if (list.length > 1) {
+      return 'multi';
+    }
+    const f: number = list[0].frequency;
+    if (f === FREQ_DAILY) {
+      return 'day';
+    }
+    if (f === FREQ_WEEKLY) {
+      return 'week';
+    }
+    if (f === FREQ_MONTHLY) {
+      return 'month';
+    }
+    return 'year';
+  }
+
+  /** 当前规则的完整文案（如「每周一、二、四」；多条用「；」分隔）。 */
+  repeatTextNow(): string {
+    return repeatLabel(this.evRepeat(), this.msg?.event?.repeatText ?? '');
   }
 
   evDueAt(): number {
@@ -536,19 +565,29 @@ struct MessageDetailPage {
     });
   }
 
-  setRepeat(r: string): void {
+  setRepeat(rules: RepeatRule[]): void {
     const m: RobotMessage | undefined = this.msg;
     if (m === undefined) {
       return;
     }
     this.patchLocal(m.msg_id, (x: RobotMessage) => {
       if (x.event !== undefined) {
-        x.event.repeat = r;
-        if (r === 'none') {
+        x.event.repeat = rules;
+        if (rules.length === 0) {
           x.event.repeatText = '';
         }
       }
     });
+  }
+
+  /** 快捷芯片：把重复规则换成"单一频率、无额外限定"的一条。 */
+  setRepeatFreq(frequency: number): void {
+    if (frequency < 0) {
+      this.setRepeat([]);
+      return;
+    }
+    const rule: RepeatRule = { frequency: frequency };
+    this.setRepeat([rule]);
   }
 
   setAlarm(on: boolean): void {
@@ -868,42 +907,55 @@ struct MessageDetailPage {
                     .width(56)
                   Text('不重复')
                     .fontSize(13)
-                    .fontColor(this.evRepeat() === 'none' ? Color.White : '#1F3A5F')
-                    .backgroundColor(this.evRepeat() === 'none' ? '#2E75B6' : '#EAF1FA')
+                    .fontColor(this.repeatMode() === 'none' ? Color.White : '#1F3A5F')
+                    .backgroundColor(this.repeatMode() === 'none' ? '#2E75B6' : '#EAF1FA')
                     .borderRadius(10)
                     .padding({ left: 10, right: 10, top: 4, bottom: 4 })
                     .onClick(() => {
-                      this.setRepeat('none');
+                      this.setRepeatFreq(-1);
                     })
                   Text('每天')
                     .fontSize(13)
-                    .fontColor(this.evRepeat() === 'day' ? Color.White : '#1F3A5F')
-                    .backgroundColor(this.evRepeat() === 'day' ? '#2E75B6' : '#EAF1FA')
+                    .fontColor(this.repeatMode() === 'day' ? Color.White : '#1F3A5F')
+                    .backgroundColor(this.repeatMode() === 'day' ? '#2E75B6' : '#EAF1FA')
                     .borderRadius(10)
                     .padding({ left: 10, right: 10, top: 4, bottom: 4 })
                     .onClick(() => {
-                      this.setRepeat('day');
+                      this.setRepeatFreq(FREQ_DAILY);
                     })
                   Text('每周')
                     .fontSize(13)
-                    .fontColor(this.evRepeat() === 'week' ? Color.White : '#1F3A5F')
-                    .backgroundColor(this.evRepeat() === 'week' ? '#2E75B6' : '#EAF1FA')
+                    .fontColor(this.repeatMode() === 'week' ? Color.White : '#1F3A5F')
+                    .backgroundColor(this.repeatMode() === 'week' ? '#2E75B6' : '#EAF1FA')
                     .borderRadius(10)
                     .padding({ left: 10, right: 10, top: 4, bottom: 4 })
                     .onClick(() => {
-                      this.setRepeat('week');
+                      this.setRepeatFreq(FREQ_WEEKLY);
                     })
                   Text('每月')
                     .fontSize(13)
-                    .fontColor(this.evRepeat() === 'month' ? Color.White : '#1F3A5F')
-                    .backgroundColor(this.evRepeat() === 'month' ? '#2E75B6' : '#EAF1FA')
+                    .fontColor(this.repeatMode() === 'month' ? Color.White : '#1F3A5F')
+                    .backgroundColor(this.repeatMode() === 'month' ? '#2E75B6' : '#EAF1FA')
                     .borderRadius(10)
                     .padding({ left: 10, right: 10, top: 4, bottom: 4 })
                     .onClick(() => {
-                      this.setRepeat('month');
+                      this.setRepeatFreq(FREQ_MONTHLY);
                     })
                 }
                 .width('100%')
+
+                // 解析出来的规则比快捷芯片更细时（如「每周一、二、四」），把它显示出来
+                if (this.repeatTextNow().length > 0) {
+                  Row({ space: 8 }) {
+                    Text('')
+                      .width(56)
+                    Text('当前：' + this.repeatTextNow())
+                      .fontSize(12)
+                      .fontColor('#5C6673')
+                      .layoutWeight(1)
+                  }
+                  .width('100%')
+                }
 
                 Row({ space: 12 }) {
                   Text('提醒')

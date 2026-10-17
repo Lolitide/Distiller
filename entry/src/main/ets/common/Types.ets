@@ -2,7 +2,10 @@
  * 知了 · 机器人通道 —— 接口类型定义（Types.ets）
  */
 
-import { CampusEvent, CandidateStep, LEVEL_MEDIUM } from '../nlp/EventTypes';
+import {
+  CampusEvent, CandidateStep, RepeatRule, LEVEL_MEDIUM,
+  FREQ_YEARLY, FREQ_MONTHLY, FREQ_WEEKLY, FREQ_DAILY
+} from '../nlp/EventTypes';
 import { TimeSlot } from '../nlp/TimeParser';
 
 // ============================================================ 统一响应包
@@ -132,9 +135,9 @@ export interface ServeParse {
   dueAt?: number;
   /** 截止原话（等于 timeText） */
   dueText?: string;
-  /** none / day / week / month / year / workingDay */
-  repeat?: string;
-  /** 重复周期原话 */
+  /** 重复规则数组（字段名同官方 RecurrenceRule）；空数组 = 不重复 */
+  repeat?: RepeatRule[];
+  /** 规则表达不了时的补充原话 */
   repeatText?: string;
   /** 置信度 ×100（0~100） */
   certainty?: number;
@@ -228,7 +231,7 @@ export interface ParseCandidate {
   channel?: string;
   due_at?: number;
   due_text?: string;
-  repeat?: string;
+  repeat?: RepeatRule[];
   repeat_text?: string;
   certainty?: number;
   missing_fields?: string[];
@@ -529,7 +532,7 @@ function serverEvent(m: RobotMessage, p: ServeParse): CampusEvent {
     priority: priorityToInt(p.priority ?? ''),
     level: p.level ?? LEVEL_MEDIUM,
     dueAt: (p.dueAt !== undefined && p.dueAt > 0) ? p.dueAt : dueAtOf(p.timeNormalized),
-    repeat: p.repeat ?? 'none',
+    repeat: normalizeRepeat(p.repeat),
     repeatText: p.repeatText ?? '',
     steps: p.steps ?? [],
     certainty: p.certainty ?? Math.round((p.confidence ?? 0) * 100),
@@ -570,7 +573,7 @@ export function parseCandidateToEvent(c: ParseCandidate, sourceText: string,
     priority: priorityToInt(c.priority ?? ''),
     level: c.level ?? LEVEL_MEDIUM,
     dueAt: (c.due_at !== undefined && c.due_at > 0) ? c.due_at : dueAtOf(c.time_normalized),
-    repeat: c.repeat ?? 'none',
+    repeat: normalizeRepeat(c.repeat),
     repeatText: c.repeat_text ?? '',
     steps: c.steps ?? [],
     certainty: c.certainty ?? Math.round((c.confidence ?? 0) * 100),
@@ -661,30 +664,79 @@ export function dueLabel(dueAt: number, nowMs: number): string {
   return days + '天后截止';
 }
 
-/** 重复周期的展示文案（优先用原文，如「每周一三五」）。 */
-export function repeatLabel(repeat: string, repeatText: string): string {
-  if (repeat.length === 0 || repeat === 'none') {
-    return '';
+/** 旧数据里 `repeat` 曾是字符串（'week'/'day'…）；不是数组就当"没有规则"。 */
+export function normalizeRepeat(raw: RepeatRule[] | undefined): RepeatRule[] {
+  if (raw === undefined || !Array.isArray(raw)) {
+    return [];
   }
-  if (repeatText.length > 0) {
-    return repeatText;
+  return raw;
+}
+
+const WEEK_CN: string[] = ['一', '二', '三', '四', '五', '六', '日'];
+
+/** 单条规则的展示文案（字段语义见《任务字段表》§1.1.1）。 */
+function repeatRuleText(r: RepeatRule): string {
+  const interval: number = (r.interval !== undefined && r.interval > 1) ? r.interval : 1;
+  if (r.frequency === FREQ_DAILY) {
+    return interval > 1 ? ('每' + interval + '天') : '每天';
   }
-  if (repeat === 'day') {
-    return '每天';
+  if (r.frequency === FREQ_WEEKLY) {
+    const days: number[] = r.daysOfWeek ?? [];
+    let ds: string = '';
+    for (let i = 0; i < days.length; i++) {
+      const d: number = days[i];
+      if (d >= 1 && d <= 7) {
+        ds += (ds.length > 0 ? '、' : '') + WEEK_CN[d - 1];
+      }
+    }
+    if (interval > 1) {
+      return '每' + interval + '周' + (ds.length > 0 ? ('的周' + ds) : '');
+    }
+    return days.length > 0 ? ('每周' + ds) : '每周';
   }
-  if (repeat === 'week') {
-    return '每周';
+  if (r.frequency === FREQ_MONTHLY) {
+    const days: number[] = r.daysOfMonth ?? [];
+    let ds: string = '';
+    for (let i = 0; i < days.length; i++) {
+      ds += (ds.length > 0 ? '、' : '') + days[i] + '号';
+    }
+    const base: string = interval > 1 ? ('每' + interval + '月') : '每月';
+    return days.length > 0 ? (base + ds) : base;
   }
-  if (repeat === 'month') {
-    return '每月';
-  }
-  if (repeat === 'year') {
-    return '每年';
-  }
-  if (repeat === 'workingDay') {
-    return '工作日';
+  if (r.frequency === FREQ_YEARLY) {
+    const months: number[] = r.monthsOfYear ?? [];
+    let ms: string = '';
+    for (let i = 0; i < months.length; i++) {
+      ms += (ms.length > 0 ? '、' : '') + months[i] + '月';
+    }
+    const base: string = interval > 1 ? ('每' + interval + '年') : '每年';
+    return months.length > 0 ? (base + ms) : base;
   }
   return '';
+}
+
+/**
+ * 重复规则的展示文案（多条用「；」分隔，与字段表 §1.1.1 一致）。
+ *
+ * 规则为空时回落到 `repeatText` —— 规则表达不了的周期（如「每学期第 3 周」）
+ * 只存在原话里，不参与自动生成。
+ */
+export function repeatLabel(rules: RepeatRule[] | undefined, repeatText: string): string {
+  const list: RepeatRule[] = normalizeRepeat(rules);
+  if (list.length === 0) {
+    return repeatText;
+  }
+  const parts: string[] = [];
+  for (let i = 0; i < list.length; i++) {
+    const one: string = repeatRuleText(list[i]);
+    if (one.length > 0) {
+      parts.push(one);
+    }
+  }
+  if (parts.length === 0) {
+    return repeatText;
+  }
+  return parts.join('；');
 }
 
 export function toRobotMessages(remote: ServeMessage[]): RobotMessage[] {

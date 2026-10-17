@@ -265,7 +265,7 @@ struct HomePage {
     if (e === undefined) {
       return '';
     }
-    return repeatLabel(e.repeat ?? 'none', e.repeatText ?? '');
+    return repeatLabel(e.repeat, e.repeatText ?? '');
   }
 
   /** 有截止时刻才给提醒开关（没有时间的任务没法定提醒点）。 */

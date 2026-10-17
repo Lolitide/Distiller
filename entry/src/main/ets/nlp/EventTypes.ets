@@ -21,6 +21,39 @@ export interface CandidateStep {
   done: number;
 }
 
+/**
+ * 重复规则（《任务字段表》§1.1.1）。
+ *
+ * 字段名与官方 `calendarManager.RecurrenceRule` **逐字段同名** —— 这样
+ * 「把任务变成日历日程」那一步零翻译。一条任务可以有**多条**规则，
+ * **命中任意一条即算当天要做（并集）**。
+ */
+export interface RepeatRule {
+  /** 0 每年 / 1 每月 / 2 每周 / 3 每天（= 官方 RecurrenceFrequency） */
+  frequency: number;
+  /** 每 N 个周期一次；缺省或 1 = 每 1 个周期 */
+  interval?: number;
+  /** 一周里的第几天：1~7 = 周一~周日 */
+  daysOfWeek?: number[];
+  /** 一个月里的第几天：1~31 */
+  daysOfMonth?: number[];
+  /** 一年里的第几月：1~12 */
+  monthsOfYear?: number[];
+  /** 一个月里的第几周：1~5 */
+  weeksOfMonth?: number[];
+  /** 重复次数上限 */
+  count?: number;
+  /** 重复截止日（毫秒） */
+  expire?: number;
+  /** **本机扩展**：规则表达不了的日期；MVP 不产出（§1.1.3） */
+  dates?: number[];
+}
+
+export const FREQ_YEARLY: number = 0;
+export const FREQ_MONTHLY: number = 1;
+export const FREQ_WEEKLY: number = 2;
+export const FREQ_DAILY: number = 3;
+
 /** 重要性：0 普通（不显示标识）/ 1 重要（红圈+感叹号）/ 2 紧急（红实心+白感叹号） */
 export const PRIORITY_NONE: number = 0;
 export const PRIORITY_IMPORTANT: number = 1;
@@ -64,9 +97,9 @@ export interface CampusEvent {
   level?: number;
   /** 截止时刻（毫秒）；0/未定义 = 没有截止 */
   dueAt?: number;
-  /** 重复周期：none / day / week / month / year / workingDay */
-  repeat?: string;
-  /** 重复周期的原话（如「每周一三五」），与 repeat 是两件事 */
+  /** 重复规则数组（字段名同官方 RecurrenceRule）；空数组 = 不重复 */
+  repeat?: RepeatRule[];
+  /** 规则表达不了时的原话（如「每学期第 3 周交」） */
   repeatText?: string;
   /** 子步骤；非空才显示副卡片 */
   steps?: CandidateStep[];
