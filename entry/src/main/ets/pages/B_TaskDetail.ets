@@ -24,6 +24,7 @@ import { TaskTagsCard } from '../components/TaskTagsCard';
 import { TaskNoteCard } from '../components/TaskNoteCard';
 import { TaskAlarm, TaskStatus } from '../model';
 import { NAV_STACK_KEY, TaskDetailParam } from '../viewmodel/TaskNavParams';
+import { showDeleteConfirmDialog } from '../utils/DeleteConfirmDialog';
 
 /** 二级页标题栏高度（vp）：`HdsNavDestination.titleMode` 默认 MINI，官方写作「标题栏高度为 56vp」 */
 const DEST_TITLE_BAR_HEIGHT_VP: number = 56;
@@ -115,28 +116,17 @@ export struct B_TaskDetail {
   }
 
   /**
-   * 删除任务：先弹**官方警告弹窗**确认（与步骤删除、列表删除同一套 `UIContext.showAlertDialog`），
-   * 确认后走 `store.deleteTask`（契约软删：`status = DELETED`），再从导航栈退回列表。
+   * 删除任务：先弹**官方警告弹窗**确认，确认后走 `store.deleteTask`（契约软删：`status = DELETED`），
+   * 再从导航栈退回列表。
+   *
+   * 弹窗本体是 `utils/DeleteConfirmDialog.showDeleteConfirmDialog` —— 列表多选删除、步骤删除
+   * 与这里**共用同一份实现**（需求方 2026-10-17），所以三处观感不会再漂移。
    */
   private confirmDelete(): void {
-    this.getUIContext().showAlertDialog({
-      title: $r('app.string.action_delete_task'),
-      message: $r('app.string.delete_task_confirm'),
-      primaryButton: {
-        value: $r('app.string.action_cancel'),
-        action: () => {
-          // 取消：什么都不做
-        }
-      },
-      secondaryButton: {
-        value: $r('app.string.action_delete'),
-        enabled: true,
-        fontColor: $r('sys.color.warning'),
-        action: () => {
-          this.deleteTask();
-        }
-      }
-    });
+    showDeleteConfirmDialog(this.getUIContext(), $r('app.string.action_delete_task'),
+      $r('app.string.delete_task_confirm'), () => {
+        this.deleteTask();
+      });
   }
 
   /** 真删：软删任务 + 退回列表（`groupByDay` 会过滤 DELETED，列表里自然就没了） */

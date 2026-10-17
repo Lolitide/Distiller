@@ -35,6 +35,7 @@ import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI';
 import { A_TaskList } from '../pages/A_TaskList';
 import { A_Settings } from '../pages/A_Settings';
 import { TaskListStore } from '../viewmodel/TaskListStore';
+import { showDeleteConfirmDialog } from '../utils/DeleteConfirmDialog';
 
 /**
  * 悬浮页签栏距**底部安全区**的间距（vp）。`barFloatingStyle.barBottomMargin` 这个字段 API 只吃 `Length`。
@@ -179,10 +180,10 @@ export struct MainTabBar {
   /**
    * 删除前先确认（需求方 2026-10-16：「给删除按钮加上 AlertDialog 用户确认删除后才能删除」）。
    *
-   * 用官方 **`UIContext.showAlertDialog`** —— 老的 `AlertDialog.show` 从 API 18 起已废弃，
-   * 官方原文：「建议使用 `showAlertDialog` 替代…需先获取 `UIContext` 实例后再进行调用。」
-   * 按钮排布照官方示例：`primaryButton` 放**取消**、`secondaryButton` 放**删除**并给
-   * `DialogButtonStyle.HIGHLIGHT`（官方示例也是这么排的）。只有**确认**那条路才真的调 `deleteSelected()`。
+   * 弹窗本体走 `utils/DeleteConfirmDialog.showDeleteConfirmDialog` —— 与**详情页的步骤删除、
+   * 删除任务**同一份实现（需求方 2026-10-17 要求三处样式一致）。原来这里给删除按钮加了
+   * `style: DialogButtonStyle.HIGHLIGHT` + `defaultFocus: true`（高亮实心按钮），
+   * 与详情页那份「红色警示文字」不一致，现已统一为后者。
    *
    * 🔴 **两个按钮之间那条灰色竖线去不掉**（需求方 2026-10-16：「弹窗去掉两个按钮之间的灰色竖线」）——
    * 已查证：`AlertDialogParam` 的**全部字段**里没有任何分隔线开关
@@ -202,28 +203,13 @@ export struct MainTabBar {
     if (count === 0) {
       return;
     }
-    this.getUIContext().showAlertDialog({
-      title: $r('app.string.action_delete'),
-      message: $r('app.string.delete_confirm_message', count),
-      primaryButton: {
-        value: $r('app.string.action_cancel'),
-        action: () => {
-          // 取消：什么都不做，停在编辑态（勾选也留着，用户可能只是想再确认一下选择）
+    showDeleteConfirmDialog(this.getUIContext(), $r('app.string.action_delete'),
+      $r('app.string.delete_confirm_message', count), () => {
+        const removed: number = this.store.deleteSelected();
+        if (removed > 0) {
+          this.onDeleteDone(removed);
         }
-      },
-      secondaryButton: {
-        enabled: true,
-        defaultFocus: true,
-        style: DialogButtonStyle.HIGHLIGHT,
-        value: $r('app.string.action_delete'),
-        action: () => {
-          const removed: number = this.store.deleteSelected();
-          if (removed > 0) {
-            this.onDeleteDone(removed);
-          }
-        }
-      }
-    });
+      });
   }
 
   build() {
