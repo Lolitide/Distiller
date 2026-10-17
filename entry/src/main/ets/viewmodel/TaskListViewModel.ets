@@ -4,6 +4,7 @@
  * 只做「把任务按天分好组」和「卡片上的文案怎么拼」这两件展示逻辑，不碰存储、不碰系统能力。
  *
  * 分组规则（袁正锟 2026-10-14 定）：**`dueAt` 优先，回退 `remindAt`；两个都没填的进「未安排日期」组**。
+ * 组的排列（袁正锟 2026-10-17 追加）：**「未安排日期」排最前**，其后按日期升序（见 `groupByDay` 的排序）。
  * 副标题的两个数（同上确认）：**未完成 x 项 / 共 y 项**。
  * 展开状态（同上确认）：**默认只展开「今天」**。
  * 描述行（同上确认）：按 **提醒时间 > 耗时 > 来源 > 标签 > 备注** 取**第一项**（只一行）。
@@ -120,7 +121,12 @@ function findOrCreate(groups: TaskDayGroup[], dayStart: number, todayStart: numb
 }
 
 export class TaskListViewModel {
-  /** 按天分组。已删除的任务不进时间线（§9.3） */
+  /**
+   * 按天分组。已删除的任务不进时间线（§9.3）。
+   *
+   * 组的顺序：**「未安排日期」在最前**，其后按日期升序（袁正锟 2026-10-17）。
+   * 两处列表（任务列表页 / 搜索页）共用这一份分组结果，所以排序只在这里定一次。
+   */
   static groupByDay(tasks: Task[], today: Date): TaskDayGroup[] {
     const todayStart: number = startOfDay(today);
     const undated: TaskDayGroup = new TaskDayGroup();
@@ -145,8 +151,11 @@ export class TaskListViewModel {
     return groups
       .filter((group: TaskDayGroup) => group.totalCount > 0)
       .sort((a: TaskDayGroup, b: TaskDayGroup) => {
+        // 「未安排日期」组**排最前**（袁正锟 2026-10-17：「任务列表页面把未安排日期放到最上面」）。
+        // 它没有日期可比，所以不能参与时间线排序 —— 要么最前、要么最后，现在定的是最前：
+        // 没定日期的任务最需要用户先处理，放顶上免得沉在长列表末尾。
         if (a.hasDate !== b.hasDate) {
-          return a.hasDate ? -1 : 1;
+          return a.hasDate ? 1 : -1;
         }
         return a.sortValue - b.sortValue;
       });

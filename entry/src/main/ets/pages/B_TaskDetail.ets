@@ -13,13 +13,17 @@
  *  · 底部安全区用 `expandSafeArea` 把灰刷进去；
  *  · 本页有输入框，键盘避让改 `RESIZE`（默认 `OFFSET` 在光标位置靠上时**不会上抬页面**，见 #117）。
  */
-import { HdsNavDestination } from '@kit.UIDesignKit';
+import { HdsNavigationMenuContentOptions, HdsNavDestination } from '@kit.UIDesignKit';
 import { ColorMetrics, KeyboardAvoidMode, LengthMetrics } from '@kit.ArkUI';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { TaskStatusIcon } from '../components/TaskStatusIcon';
 import { TaskStepsSection } from '../components/TaskStepsSection';
-import { TaskStatus } from '../model';
-import { TaskDetailParam } from '../viewmodel/TaskNavParams';
+import { TaskAttributeCard } from '../components/TaskAttributeCard';
+import { TaskMetaCard } from '../components/TaskMetaCard';
+import { TaskTagsCard } from '../components/TaskTagsCard';
+import { TaskNoteCard } from '../components/TaskNoteCard';
+import { TaskAlarm, TaskStatus } from '../model';
+import { NAV_STACK_KEY, TaskDetailParam } from '../viewmodel/TaskNavParams';
 
 /** 二级页标题栏高度（vp）：`HdsNavDestination.titleMode` 默认 MINI，官方写作「标题栏高度为 56vp」 */
 const DEST_TITLE_BAR_HEIGHT_VP: number = 56;
@@ -54,6 +58,27 @@ export struct B_TaskDetail {
   /** 改名输入框的控制器：进入编辑时把光标放到文本末尾（不默认全选） */
   private nameController: TextInputController = new TextInputController();
 
+  /**
+   * 右上角两个图标按钮（袁正锟 2026-10-17）：**响铃 + 删除**。
+   *
+   * 响铃**只在任务有提醒时间时出现** —— 与列表卡片 `TaskCard.remindSwitch` 同一条规则
+   * （`remindAt === undefined` 时卡片上也不给开关）；图标反映 `alarm`（用户意图）：
+   * 开＝铃铛、关＝带斜杠。点它调 `store.setRemind`，与卡片 Switch **同一个写入口**，
+   * 所以两处的状态天然一致，不需要额外同步。
+   *
+   * 依赖 `this.param.task.remindAt / alarm`（都是 `@Trace`），改了菜单会跟着重算。
+   */
+  @Computed
+  get navMenu(): HdsNavigationMenuContentOptions {
+    const hasRemind: boolean = this.param.task.remindAt !== undefined;
+    const remindOn: boolean = this.param.task.alarm === TaskAlarm.ON;
+    return MainTitleBar.detailMenu(hasRemind, remindOn, () => {
+      this.toggleRemind();
+    }, () => {
+      this.confirmDelete();
+    });
+  }
+
   aboutToAppear(): void {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
   }
@@ -75,6 +100,60 @@ export struct B_TaskDetail {
       this.param.task.name = trimmed;
     }
     this.editingName = false;
+  }
+
+  /**
+   * 顶栏铃铛：切换「响铃提醒」。
+   *
+   * 走的是**列表卡片 Switch 同一个写入口** `TaskListStore.setRemind` —— 它只置 `alarm`
+   * （用户意图，字段表第 16 项），句柄交给 `ReminderService`（TODO 里已记）。
+   * 所以这里改完，卡片上的 Switch 状态立刻跟着变，反之亦然，不存在两份状态。
+   */
+  private toggleRemind(): void {
+    const on: boolean = this.param.task.alarm === TaskAlarm.ON;
+    this.param.store.setRemind(this.param.task, !on);
+  }
+
+  /**
+   * 删除任务：先弹**官方警告弹窗**确认（与步骤删除、列表删除同一套 `UIContext.showAlertDialog`），
+   * 确认后走 `store.deleteTask`（契约软删：`status = DELETED`），再从导航栈退回列表。
+   */
+  private confirmDelete(): void {
+    this.getUIContext().showAlertDialog({
+      title: $r('app.string.action_delete_task'),
+      message: $r('app.string.delete_task_confirm'),
+      primaryButton: {
+        value: $r('app.string.action_cancel'),
+        action: () => {
+          // 取消：什么都不做
+        }
+      },
+      secondaryButton: {
+        value: $r('app.string.action_delete'),
+        enabled: true,
+        fontColor: $r('sys.color.warning'),
+        action: () => {
+          this.deleteTask();
+        }
+      }
+    });
+  }
+
+  /** 真删：软删任务 + 退回列表（`groupByDay` 会过滤 DELETED，列表里自然就没了） */
+  private deleteTask(): void {
+    this.param.store.deleteTask(this.param.task.id);
+    this.popBack();
+  }
+
+  /**
+   * 退回列表：详情页是 `pushPathByName` 压进来的，弹栈即可。
+   * 导航栈存在 `AppStorage`（官方《Navigation 页面路由》方式一），与点卡片进来时同一份。
+   */
+  private popBack(): void {
+    const stack: NavPathStack | undefined = AppStorage.get<NavPathStack>(NAV_STACK_KEY);
+    if (stack !== undefined) {
+      stack.pop();
+    }
   }
 
   /**
@@ -158,21 +237,27 @@ export struct B_TaskDetail {
             }
           })
       } else {
-        Text(this.param.task.name)
-          .layoutWeight(1)
-          .fontSize($r('sys.float.titlebar_title_primary_size'))
-          // 与编辑态同一个字重（枚举），两态之间不会"变细"
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.param.task.status === TaskStatus.COMPLETED
-            ? $r('sys.color.ohos_id_color_text_tertiary')
-            : $r('sys.color.ohos_id_color_text_primary'))
-          .maxLines(3)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .margin({ left: CONTENT_GAP_VP })
-          // 点名称 → 改名（袁正锟 2026-10-16）
-          .onClick(() => {
-            this.beginEditName();
-          })
+        // 名称过长**不换行**、单行显示，装进**横向 Scroll** 让用户可以左右滑动看全文
+        // （袁正锟 2026-10-16：「如果任务名称和步骤过长 不要换行 用户可以左右滑动文本查看」）
+        Scroll() {
+          Text(this.param.task.name)
+            .fontSize($r('sys.float.titlebar_title_primary_size'))
+            // 与编辑态同一个字重（枚举），两态之间不会"变细"
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.param.task.status === TaskStatus.COMPLETED
+              ? $r('sys.color.ohos_id_color_text_tertiary')
+              : $r('sys.color.ohos_id_color_text_primary'))
+            .maxLines(1)
+            // 点名称 → 改名（袁正锟 2026-10-16）
+            .onClick(() => {
+              this.beginEditName();
+            })
+        }
+        .scrollable(ScrollDirection.Horizontal)
+        .scrollBar(BarState.Off)
+        .layoutWeight(1)
+        .margin({ left: CONTENT_GAP_VP })
+        .align(Alignment.Start)
       }
     }
     .width('100%')
@@ -190,30 +275,86 @@ export struct B_TaskDetail {
         // 顶部让开**二级页自己的**标题栏（MINI = 56vp）
         Row().width('100%').height(DEST_TITLE_BAR_HEIGHT_VP)
 
-        // 第一块正文：状态圆圈 + 可编辑任务名
-        this.nameRow()
+        // ⚠️ 正文必须能滚：详情页现在有四张卡（步骤 / 属性 / 元信息 / 标签），
+        // 装不下是常态。之前这里是裸 `Column`，卡片一多「添加标签」那一行就被裁在屏幕外
+        // （袁正锟 2026-10-17 报的标签卡点不到，就是这个）。
+        // 让位那条 `Row` 留在 `Scroll` 外面 —— 它是标题栏的占位，不该跟着内容滚。
+        Scroll() {
+          Column() {
+            // 第一块正文：状态圆圈 + 可编辑任务名
+            this.nameRow()
 
-        // 第二块：步骤（袁正锟 2026-10-16 的 4 张交互图，见 `TaskStepsSection` 顶部注释）
-        Column() {
-          TaskStepsSection({ task: this.param.task })
-        }
-        .width('100%')
-        .padding({
-          left: CONTENT_SIDE_PADDING_VP,
-          right: CONTENT_SIDE_PADDING_VP,
-          top: CONTENT_GAP_VP
-        })
+            // 第二块：步骤（袁正锟 2026-10-16 的 4 张交互图，见 `TaskStepsSection` 顶部注释）
+            Column() {
+              TaskStepsSection({ task: this.param.task })
+            }
+            .width('100%')
+            .padding({
+              left: CONTENT_SIDE_PADDING_VP,
+              right: CONTENT_SIDE_PADDING_VP,
+              top: CONTENT_GAP_VP
+            })
 
-        // 其余详情内容**待做**
-        Column() {
-          Text($r('app.string.task_detail_placeholder'))
-            .fontSize($r('sys.float.ohos_id_text_size_body2'))
-            .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+            // 第三块：属性编辑卡（提醒 / 到期 / 重复，照官方设置页造型）
+            // 袁正锟 2026-10-16：「这个卡片放到步骤下方」
+            Column() {
+              TaskAttributeCard({ task: this.param.task, store: this.param.store })
+            }
+            .width('100%')
+            .padding({
+              left: CONTENT_SIDE_PADDING_VP,
+              right: CONTENT_SIDE_PADDING_VP,
+              top: CONTENT_GAP_VP
+            })
+
+            // 第四块：元信息卡（重要程度 / 来源，袁正锟 2026-10-17 的设计图）
+            // 与属性卡同样的卡片造型、同样的「点行改 / 点 × 清」交互；「预计耗时」按裁定先不做
+            Column() {
+              TaskMetaCard({ task: this.param.task })
+            }
+            .width('100%')
+            .padding({
+              left: CONTENT_SIDE_PADDING_VP,
+              right: CONTENT_SIDE_PADDING_VP,
+              top: CONTENT_GAP_VP
+            })
+
+            // 第五块：标签卡（每条标签一行 + 固定「＋ 添加标签」，袁正锟 2026-10-17 的设计图）
+            Column() {
+              TaskTagsCard({ task: this.param.task })
+            }
+            .width('100%')
+            .padding({
+              left: CONTENT_SIDE_PADDING_VP,
+              right: CONTENT_SIDE_PADDING_VP,
+              top: CONTENT_GAP_VP
+            })
+
+            // 第六块：备注卡（多行、自动换行、卡片随内容变长，袁正锟 2026-10-17 的设计图）
+            Column() {
+              TaskNoteCard({ task: this.param.task })
+            }
+            .width('100%')
+            .padding({
+              left: CONTENT_SIDE_PADDING_VP,
+              right: CONTENT_SIDE_PADDING_VP,
+              top: CONTENT_GAP_VP
+            })
+
+            // 底部留白：最后一张卡（备注卡）不要贴着手势条。
+            // 原来这里还有一块「任务详情待做」占位 —— 五张卡做完就撤了（袁正锟 2026-10-17：「把底部的任务待做去掉」）
+            Column()
+              .width('100%')
+              .height(CONTENT_GAP_VP)
+          }
+          .width('100%')
         }
         .width('100%')
         .layoutWeight(1)
-        .justifyContent(FlexAlign.Start)
-        .padding({ top: CONTENT_GAP_VP })
+        .align(Alignment.Top)
+        .scrollBar(BarState.Off)
+        // 滚到底要有回弹，手势条那一带的灰才连得住
+        .edgeEffect(EdgeEffect.Spring)
       }
       .width('100%')
       .height('100%')
@@ -226,7 +367,9 @@ export struct B_TaskDetail {
     .titleBar({
       style: MainTitleBar.STYLE,
       content: {
-        title: { mainTitle: $r('app.string.title_task_detail') }
+        title: { mainTitle: $r('app.string.title_task_detail') },
+        // 右上角：响铃（有提醒时间才出现）+ 删除
+        menu: this.navMenu
       }
     })
     // 默认就带返回图标，显式写出来（官方示例也是这么写的）

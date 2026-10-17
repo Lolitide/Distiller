@@ -235,19 +235,25 @@ export struct TaskStepsSection {
               this.commitStepEdit();
             })
         } else {
-          Text(step.content)
-            .width('100%')
-            .fontSize($r('sys.float.ohos_id_text_size_body1'))
-            .fontColor(step.done === 1
-              ? $r('sys.color.ohos_id_color_text_tertiary')
-              : $r('sys.color.ohos_id_color_text_primary'))
-            .maxLines(2)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .textAlign(TextAlign.Start)
-            // 点文本 → 原地进入修改状态（袁正锟 2026-10-16）
-            .onClick(() => {
-              this.beginStepEdit(index, step.content);
-            })
+          // 步骤文字过长**不换行**、单行显示，装进**横向 Scroll** 可以左右滑动看全文
+          // （袁正锟 2026-10-16：「如果任务名称和步骤过长 不要换行 用户可以左右滑动文本查看」）
+          Scroll() {
+            Text(step.content)
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor(step.done === 1
+                ? $r('sys.color.ohos_id_color_text_tertiary')
+                : $r('sys.color.ohos_id_color_text_primary'))
+              .maxLines(1)
+              .textAlign(TextAlign.Start)
+              // 点文本 → 原地进入修改状态（袁正锟 2026-10-16）
+              .onClick(() => {
+                this.beginStepEdit(index, step.content);
+              })
+          }
+          .scrollable(ScrollDirection.Horizontal)
+          .scrollBar(BarState.Off)
+          .width('100%')
+          .align(Alignment.Start)
         }
       }
       .layoutWeight(1)
