@@ -216,7 +216,7 @@ export struct TaskStepsSection {
             .width('100%')
             .fontSize($r('sys.float.ohos_id_text_size_body1'))
             .fontColor($r('sys.color.ohos_id_color_text_primary'))
-            .style(TextInputStyle.Inline)
+            .style(TextInputStyle.Default)
             // 背景不要纯白，与页面底色一致（需求方 2026-10-16）
             .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
             .showUnderline(false)
@@ -301,8 +301,8 @@ export struct TaskStepsSection {
         .fontColor($r('sys.color.ohos_id_color_text_primary'))
         .placeholderColor($r('sys.color.ohos_id_color_text_secondary'))
         // 与"改名"同一个做法：内联样式（无背板、无下划线），不然会出现一道遮罩
-        .style(TextInputStyle.Inline)
-        .backgroundColor(Color.Transparent)
+        .style(TextInputStyle.Default)
+        .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
         .showUnderline(false)
         .borderWidth(0)
         .borderRadius(0)
