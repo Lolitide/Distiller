@@ -198,21 +198,32 @@ export class ParseService {
     return await ImageRecognizer.recognize(imageUrl);
   }
 
-  /** 解析单条消息；任何异常都降级为 parseOk=false，绝不向上抛出。 */
-  static async parseOne(msg: RobotMessage, withNlp: boolean): Promise<ParsedInfo> {
+  /**
+   * 解析单条消息；任何异常都降级为 parseOk=false，绝不向上抛出。
+   *
+   * @param withNlp   是否跑 Natural Language Kit（实体 + 分词）。批处理不跑，详情页按需跑。
+   * @param nlpOnly   **只补实体**：不重新识别图片、也不产出 event/summary。
+   *                  后端已经给过 `parse` 的消息必须走这个模式 —— 否则端侧规则会把
+   *                  后端更好的总结与卡片字段（priority/dueAt/repeat/steps）覆盖掉。
+   */
+  static async parseOne(msg: RobotMessage, withNlp: boolean,
+    nlpOnly: boolean = false): Promise<ParsedInfo> {
     const at: string = new Date().toISOString();
-    let imageText: string = '';
-    let imageKind: string = '';
+    // 图片识别结果早就落过库，nlpOnly 时直接复用，不再下载/识别
+    let imageText: string = msg.imageText ?? '';
+    let imageKind: string = msg.imageKind ?? '';
     try {
       let content: string = msg.content;
-      const imageUrl: string = firstImageUrl(msg.attachments);
-      if (imageUrl.length > 0) {
-        const rec: ImageRecognizeResult = await ParseService.recognizeImage(msg, imageUrl);
-        imageKind = rec.kind;
-        imageText = rec.text;
-        if (imageText.trim().length > 0) {
-          // 图文同时存在时两者都保留：原正文在前，识别结果在后
-          content = content.trim().length > 0 ? content + '\n' + imageText : imageText;
+      if (!nlpOnly) {
+        const imageUrl: string = firstImageUrl(msg.attachments);
+        if (imageUrl.length > 0) {
+          const rec: ImageRecognizeResult = await ParseService.recognizeImage(msg, imageUrl);
+          imageKind = rec.kind;
+          imageText = rec.text;
+          if (imageText.trim().length > 0) {
+            // 图文同时存在时两者都保留：原正文在前，识别结果在后
+            content = content.trim().length > 0 ? content + '\n' + imageText : imageText;
+          }
         }
       }
       // NL Kit（实体抽取 + 分词）**只在详情页按需跑**（withNlp === true）。
@@ -353,8 +364,11 @@ export class ParseService {
     for (let i = 0; i < snapshot.length; i++) {
       if (snapshot[i].msg_id === msgId) {
         ParseService.nlpDone.add(msgId);
-        const info: ParsedInfo = await ParseService.parseOne(snapshot[i], true);
-        ParseService.commit([msgId], [info]);
+        // 后端已解析过 -> **只补实体**。用端侧规则重算会把后端更好的
+        // summary 覆盖成「通知：标题」、还会把 event 上的卡片字段抹掉。
+        const nlpOnly: boolean = snapshot[i].parse !== undefined;
+        const info: ParsedInfo = await ParseService.parseOne(snapshot[i], true, nlpOnly);
+        ParseService.commit([msgId], [info], nlpOnly);
         return true;
       }
     }
@@ -376,13 +390,13 @@ export class ParseService {
    * 把解析结果按 msg_id 合并回最新的本地列表后再落库。
    * 解析期间轮询可能写入新消息，直接保存快照会把这些新消息覆盖掉，因此必须重新读取。
    */
-  private static commit(ids: string[], infos: ParsedInfo[]): void {
+  private static commit(ids: string[], infos: ParsedInfo[], nlpOnly: boolean = false): void {
     const fresh: RobotMessage[] = Store.getMessages();
     let changed: boolean = false;
     for (let i = 0; i < fresh.length; i++) {
       const idx: number = ids.indexOf(fresh[i].msg_id);
       if (idx >= 0) {
-        ParseService.apply(fresh[i], infos[idx]);
+        ParseService.apply(fresh[i], infos[idx], nlpOnly);
         changed = true;
       }
     }
@@ -392,12 +406,18 @@ export class ParseService {
     }
   }
 
-  private static apply(msg: RobotMessage, info: ParsedInfo): void {
+  private static apply(msg: RobotMessage, info: ParsedInfo, nlpOnly: boolean): void {
+    // 实体永远更新（详情页要的就是它）
+    msg.entities = info.entities;
+    if (nlpOnly) {
+      // 只补实体：**不动** parsedAt / summary / category / event。
+      // 后端已经给过的 summary 与卡片字段必须原样保留。
+      return;
+    }
     msg.parsedAt = info.parsedAt;
     msg.parseOk = info.parseOk;
     msg.category = info.category;
     msg.summary = info.summary;
-    msg.entities = info.entities;
     msg.imageText = info.imageText ?? '';
     msg.imageKind = info.imageKind ?? '';
     msg.imageSummary = info.imageSummary ?? '';
