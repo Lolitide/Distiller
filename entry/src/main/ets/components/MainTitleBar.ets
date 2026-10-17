@@ -7,7 +7,7 @@
  * 这样也删掉了原来那套 `componentId` + `promptAction.openMenu` + 自建 `Menu/MenuItem` 的复杂度。
  * 图标一律取官方 HarmonyOS Symbol。
  */
-import { HdsNavigationMenuContentOptions, ScrollEffectType, TextStyleMode, TitleBarStyleOptions } from '@kit.UIDesignKit';
+import { HdsNavigationMenuContentOptions, HdsNavigationMenuItemOptions, ScrollEffectType, TextStyleMode, TitleBarStyleOptions } from '@kit.UIDesignKit';
 import { LengthMetrics } from '@kit.ArkUI';
 
 export class MainTitleBar {
@@ -83,6 +83,41 @@ export class MainTitleBar {
         }
       ]
     };
+  }
+
+  /**
+   * 任务详情（二级页）的右上角：**响铃 + 删除**两个图标按钮（需求方 2026-10-17）。
+   *
+   * · 响铃**只在有提醒时间时出现** —— 与列表卡片那条规则完全对齐（`TaskCard.remindSwitch`
+   *   也是「`remindAt` 为空就整个不显示」），否则单独一个铃铛会指向一个不存在的提醒；
+   * · 图标反映**用户意图** `alarm`（字段表第 16 项）：开＝铃铛 `bell`、关＝带斜杠 `bell_slash`；
+   *   点它走 `TaskListStore.setRemind` —— 与卡片 Switch **同一个写入口**，两边永远一致；
+   * · 删除放最后一位（官方 `menu.value` 最多内联 3 项，2 项不会折叠成「更多」）。
+   *
+   * 参数：`hasRemind = remindAt !== undefined`、`remindOn = alarm === ON`。
+   */
+  static detailMenu(hasRemind: boolean, remindOn: boolean,
+    onToggleRemind: () => void, onDelete: () => void): HdsNavigationMenuContentOptions {
+    const items: HdsNavigationMenuItemOptions[] = [];
+    if (hasRemind) {
+      items.push({
+        content: {
+          label: remindOn ? $r('app.string.action_remind_off') : $r('app.string.action_remind_on'),
+          icon: remindOn ? $r('sys.symbol.bell') : $r('sys.symbol.bell_slash'),
+          isEnabled: true,
+          action: onToggleRemind
+        }
+      });
+    }
+    items.push({
+      content: {
+        label: $r('app.string.action_delete_task'),
+        icon: $r('sys.symbol.trash'),
+        isEnabled: true,
+        action: onDelete
+      }
+    });
+    return { value: items };
   }
 
   /**

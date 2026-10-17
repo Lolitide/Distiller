@@ -199,6 +199,74 @@
     {
       "name": "delete_step_confirm",
       "value": "真的要删除这个步骤吗？"
+    },
+    {
+      "name": "attr_no_remind",
+      "value": "未设置提醒"
+    },
+    {
+      "name": "attr_no_due",
+      "value": "未设置到期时间"
+    },
+    {
+      "name": "attr_no_repeat",
+      "value": "不重复"
+    },
+    {
+      "name": "action_clear_attribute",
+      "value": "清除"
+    },
+    {
+      "name": "attr_no_source",
+      "value": "未知来源"
+    },
+    {
+      "name": "action_confirm",
+      "value": "确定"
+    },
+    {
+      "name": "picker_title_remind",
+      "value": "设置提醒"
+    },
+    {
+      "name": "picker_title_due",
+      "value": "设置到期时间"
+    },
+    {
+      "name": "picker_title_repeat",
+      "value": "设置重复"
+    },
+    {
+      "name": "picker_title_priority",
+      "value": "设置重要程度"
+    },
+    {
+      "name": "picker_title_source",
+      "value": "设置来源"
+    },
+    {
+      "name": "tag_add",
+      "value": "添加标签"
+    },
+    {
+      "name": "note_hint",
+      "value": "添加备注"
+    },
+    {
+      "name": "action_remind_off",
+      "value": "关闭响铃"
+    },
+    {
+      "name": "action_remind_on",
+      "value": "开启响铃"
+    },
+    {
+      "name": "action_delete_task",
+      "value": "删除"
+    },
+    {
+      "name": "delete_task_confirm",
+      "value": "真的要删除这项任务吗？"
     }
   ]
 }

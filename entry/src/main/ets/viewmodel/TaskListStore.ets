@@ -97,6 +97,106 @@ export class TaskListStore {
     return tasks;
   }
 
+  /**
+   * 重新分组 —— 任务的**日期类字段**变了（典型：详情页清掉到期时间）必须调它，
+   * 否则 `groups` 还是创建时算好的那份，任务会赖在原来那天、不会掉进「未安排日期」。
+   *
+   * 🔴 为什么必须「**就地更新**」而不能整体换一批新对象（需求方 2026-10-16 报的
+   * 「清掉到期时间后任务直接消失、没归入未安排日期」的真因）：
+   *
+   * 列表是用 `ForEach(this.store.groups, ..., (group) => `${group.sortValue}-${group.hasDate}`)`
+   * 渲染的，而官方《ForEach：循环渲染》写明：「系统会为每个数组元素生成一个唯一且持久的键值……
+   * **当键值变化时**，ArkUI 框架会视为该数组元素已被替换或修改，并会基于新的键值创建一个新的组件」
+   * —— 反过来说，**键值不变的项不会重建**，它的内容还是按**旧的那个组对象**读出来的。
+   * （FAQ `faqs-arkui-41` 也是同一句：「ForEach 会捕捉到 key 的变化，从而通过重建组件节点来刷新」。）
+   *
+   * 于是上一版「整批 new 一遍再赋给 groups」的写法会同时出两个错：
+   *  ① 任务原来那天**空了** → 那一组从数组里消失 → 键值没了 → 旧节点被销毁；
+   *  ② 「未安排日期」这一组的键值（`0-false`）**没变** → 节点被复用，而它闭包里抓的还是**旧组对象**
+   *     （旧的 `tasks`、旧的 `expanded`）→ 新任务读不到。
+   * 两头一夹，任务在界面上就哪儿都不在了。
+   *
+   * 修法：**同一个「那一天」沿用同一个组对象**，只改它的 `@Trace` 字段（`tasks` / `expanded`），
+   * 让已经建好的节点按 V2 的常规路径刷新；只有**真的新增的那一天**才用新对象（新键 → 新节点）。
+   * 附带好处：各组的展开/收起状态天然保留，不用再像上一版那样建 map 搬来搬去。
+   */
+  refreshGroups(expandTaskId?: number): void {
+    const rebuilt: TaskDayGroup[] = TaskListViewModel.groupByDay(this.allTasks(), new Date());
+    const merged: TaskDayGroup[] = [];
+    rebuilt.forEach((fresh: TaskDayGroup) => {
+      const kept: TaskDayGroup | undefined = this.findGroup(fresh.sortValue, fresh.hasDate);
+      if (kept === undefined) {
+        // 全新的一天：键值变了，ForEach 会新建节点，直接用新算出来的这份
+        this.expandIfContains(fresh, expandTaskId);
+        merged.push(fresh);
+        return;
+      }
+      // 同一天：**复用旧对象**（对象身份不能变，见上面的注释），只换可观测的字段
+      kept.tasks = fresh.tasks;
+      this.expandIfContains(kept, expandTaskId);
+      merged.push(kept);
+    });
+    this.groups = merged;
+  }
+
+  /** 找「那一天」现在已经存在的组对象（判据与 `groupByDay` 的分组口径一致：日期键 + 有无日期） */
+  private findGroup(sortValue: number, hasDate: boolean): TaskDayGroup | undefined {
+    const current: TaskDayGroup[] = this.groups;
+    for (let i = 0; i < current.length; i++) {
+      if (current[i].hasDate === hasDate && current[i].sortValue === sortValue) {
+        return current[i];
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * 指定的任务落进这一组时把这一组**展开** —— 否则它一换组就躲进收起的组里，
+   * 看起来像任务被删掉了（需求方 2026-10-16：「清掉后发现这条任务直接没了」）。
+   */
+  private expandIfContains(group: TaskDayGroup, taskId?: number): void {
+    if (taskId === undefined) {
+      return;
+    }
+    const contains: boolean = group.tasks.some((task: Task) => task.id === taskId);
+    if (contains) {
+      group.expanded = true;
+    }
+  }
+
+  /**
+   * 删除**单条**任务（详情页右上角的删除按钮）。
+   *
+   * 与列表的多选删除不同，这里走**契约里的软删**：把 `status` 置成 `DELETED`。
+   * `groupByDay` 本来就会过滤 `TaskStatus.DELETED`（§9.3「已删除任务不进时间线」），
+   * 所以只要 `refreshGroups` 一次，列表里就立刻看不到它 —— 不需要动数组元素。
+   *
+   * 顺手把提醒收掉：`alarm` 置 OFF、`reminderId` 清空（已发布的本地提醒句柄跟着作废；
+   * 真接 `ReminderService` 后这里要先撤销提醒再软删）。
+   */
+  deleteTask(taskId: number): boolean {
+    const found: Task | undefined = this.findTask(taskId);
+    if (found === undefined) {
+      return false;
+    }
+    found.status = TaskStatus.DELETED;
+    found.alarm = TaskAlarm.OFF;
+    found.reminderId = undefined;
+    this.refreshGroups();
+    return true;
+  }
+
+  /** 按 id 在现有分组里找任务 */
+  private findTask(taskId: number): Task | undefined {
+    const all: Task[] = this.allTasks();
+    for (let i = 0; i < all.length; i++) {
+      if (all[i].id === taskId) {
+        return all[i];
+      }
+    }
+    return undefined;
+  }
+
   /** 当前筛选下还剩多少任务（空状态、组头副标题都看它） */
   get visibleCount(): number {
     let total: number = 0;
