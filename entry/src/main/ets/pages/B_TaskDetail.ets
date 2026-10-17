@@ -131,7 +131,7 @@ export struct B_TaskDetail {
           // ⚠️ `TextInputStyle.Inline` ＝ 官方"内联输入样式"，**没有背板、没有下划线、没有圆角**
           // （官方原文：Inline 为内联输入样式）。之前只设 `backgroundColor(Transparent)` 不够，
           // 那道浅色"遮罩"还在（袁正锟 2026-10-16：「修改状态有那个文本框的遮罩」）。
-          .style(TextInputStyle.Inline)
+          .style(TextInputStyle.Default)
           // 背景不要纯白，与页面底色一致（袁正锟 2026-10-16：「用TextInput 把里面的背景不要纯白 和背景一致颜色」）
           .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
           // 双保险：Inline 之外再把下划线与边框明确关掉，避免不同版本主题给它补回来
