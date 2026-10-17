@@ -14,6 +14,23 @@ export const EVENT_PLAN: string = '出行计划';
 export const EVENT_CHAT: string = '闲聊';
 export const EVENT_IGNORE: string = '忽略';
 
+/** 子步骤（副卡片每个 Step 前面的圆圈读 `done`）。见《任务字段表》#25。 */
+export interface CandidateStep {
+  content: string;
+  /** 0 未完成 / 1 完成 */
+  done: number;
+}
+
+/** 重要性：0 普通（不显示标识）/ 1 重要（红圈+感叹号）/ 2 紧急（红实心+白感叹号） */
+export const PRIORITY_NONE: number = 0;
+export const PRIORITY_IMPORTANT: number = 1;
+export const PRIORITY_URGENT: number = 2;
+
+/** 难度：0 易 / 1 中 / 2 难（只参与排序，卡片不显示） */
+export const LEVEL_EASY: number = 0;
+export const LEVEL_MEDIUM: number = 1;
+export const LEVEL_HARD: number = 2;
+
 /** 整理出来的「事件对象」：不是一句话，而是一组结构化字段。 */
 export interface CampusEvent {
   /** 事件类型（封闭枚举） */
@@ -36,6 +53,31 @@ export interface CampusEvent {
   timestamp: string;
   msgId: string;
   tags: string[];
+
+  // ---- 卡片字段（《任务字段表&idea更新》v1）----------------------------
+  // 全部**可选**：端侧规则（EventBuilder）不产这些，只有后端解析才有。
+  // 用户在本机改过的值会写回这里并落库（随 `RobotMessage.event` 一起）。
+
+  /** 0 普通 / 1 重要 / 2 紧急 —— 卡片上那个红圈就是它 */
+  priority?: number;
+  /** 0 易 / 1 中 / 2 难 —— 只参与排序 */
+  level?: number;
+  /** 截止时刻（毫秒）；0/未定义 = 没有截止 */
+  dueAt?: number;
+  /** 重复周期：none / day / week / month / year / workingDay */
+  repeat?: string;
+  /** 重复周期的原话（如「每周一三五」），与 repeat 是两件事 */
+  repeatText?: string;
+  /** 子步骤；非空才显示副卡片 */
+  steps?: CandidateStep[];
+  /** 后端置信度 ×100 的整数（0~100） */
+  certainty?: number;
+  /** 缺失字段名（place / who / dueAt），确认态高亮用 */
+  missingFields?: string[];
+  /** 来源通道：bot / manual / paste / share / voice */
+  channel?: string;
+  /** 类型：作业 / 考试 / 活动 / 通知 / 其他（可自定义） */
+  category?: string;
 }
 
 /** 该类型是否值得做成结构化卡片（闲聊/忽略不做）。 */

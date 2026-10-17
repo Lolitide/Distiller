@@ -1,17 +1,23 @@
 import { PollService } from '../service/PollService';
 import { FeedbackService, ACTION_ACCEPT, ACTION_DISMISS } from '../service/FeedbackService';
 import { Store } from '../common/Store';
-import { RobotMessage, DetailParams, ParsedEntity, formatTime, hasImageAttachment, fileAttachmentLabel } from '../common/Types';
+import { RobotMessage, DetailParams, ParsedEntity, formatTime, hasImageAttachment, fileAttachmentLabel, dueLabel, repeatLabel, dueAtOf } from '../common/Types';
 import { EntityIcon, safePush, safeReplace, safeToast } from '../common/UiParts';
-import { CampusEvent, isActionable, EVENT_NOTICE, EVENT_PLAN, EVENT_TODO, EVENT_ACTIVITY, EVENT_CHAT } from '../nlp/EventTypes';
+import { CampusEvent, CandidateStep, isActionable, EVENT_NOTICE, EVENT_PLAN, EVENT_TODO, EVENT_ACTIVITY, EVENT_CHAT, PRIORITY_IMPORTANT, PRIORITY_URGENT } from '../nlp/EventTypes';
 import { timeSlotDisplay } from '../nlp/TimeParser';
 import { clusterEvents, pickDigestClusters, EventCluster } from '../nlp/EventCluster';
 import { clip } from '../nlp/TextUtil';
 import { BottomNav } from '../common/BottomNav';
+import { common } from '@kit.AbilityKit';
+import { NotificationService } from '../service/NotificationService';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'HomePage';
+
+function pad2(n: number): string {
+  return n < 10 ? '0' + n : '' + n;
+}
 
 @Entry
 @Component
@@ -19,10 +25,14 @@ struct HomePage {
   @StorageLink('msgVersion') @Watch('onVersionChanged') msgVersion: number = 0;
   @StorageLink('needOnboarding') @Watch('onNeedOnboarding') needOnboarding: boolean = false;
   @StorageLink('newMsgBanner') @Watch('onBannerChanged') newMsgBanner: string = '';
+  /** 通知点进来要看的消息 id（EntryAbility 写入，这里消费后清空） */
+  @StorageLink('pendingMsgId') @Watch('onPendingMsg') pendingMsgId: string = '';
   @State messages: RobotMessage[] = [];
   @State statusText: string = '';
   @State refreshing: boolean = false;
   @State hideSelf: boolean = false;
+  /** 副卡片折叠状态（按 msg_id 记；默认展开，点「收起」才进这个数组） */
+  @State collapsedIds: string[] = [];
   /** 筛选：类别芯片（'' = 全部）+ 关键词（标题/摘要/正文）——纯前端就够，个人数据量小 */
   @State filterKind: string = '';
   @State keyword: string = '';
@@ -34,15 +44,63 @@ struct HomePage {
   private bannerTimer: number = -1;
   private digestSig: string = '';
 
+  /** 通知授权状态：关着的话列表顶部给一条「去开启」的入口 */
+  @State notifyOn: boolean = true;
+
   aboutToAppear(): void {
     this.messages = Store.getMessages();
     this.hideSelf = Store.getHideSelf();
     this.refreshDigest();
     PollService.start();
     this.updateStatus();
+    this.refreshNotifyState();
+    // 冷启动时通知点进来的（EntryAbility 已把 msgId 放进 AppStorage，@Watch 不会补触发）
+    this.onPendingMsg();
     this.statusTimer = setInterval(() => {
       this.updateStatus();
     }, 10000);
+  }
+
+  /** 刷新通知授权状态（进页面、从系统设置回来时都要重查）。 */
+  refreshNotifyState(): void {
+    NotificationService.isEnabled().then((on: boolean) => {
+      this.notifyOn = on;
+    });
+  }
+
+  /**
+   * 「去开启」：先走**授权弹窗**（`requestEnableNotification`，只在用户还没拒过时才会弹），
+   * 拿不到再退到系统「通知管理」面板——被拒过一次后授权弹窗再也弹不出来，只能去面板开。
+   */
+  async openNotifySettings(): Promise<void> {
+    const ctx: Context | null = Store.getAppContext();
+    if (ctx === null) {
+      return;
+    }
+    const abilityCtx: common.UIAbilityContext = ctx as common.UIAbilityContext;
+    let on: boolean = await NotificationService.ensureEnabled(abilityCtx);
+    if (!on) {
+      on = await NotificationService.openSettings(abilityCtx);
+    }
+    this.notifyOn = on;
+    safeToast(this.getUIContext(), on
+      ? '通知已开启；想让它弹横幅，还要在通知设置里把「横幅」打开'
+      : '还没开启通知，待办提醒收不到');
+  }
+
+  /**
+   * 通知点击 → 跳该条详情。
+   * `EntryAbility.takeWant` 只负责把 msgId 放进 `pendingMsgId`，跳转在这里做：
+   * 页面自己的 UIContext 一定可用，冷启动/热启动都稳。
+   */
+  onPendingMsg(): void {
+    if (this.pendingMsgId.length === 0) {
+      return;
+    }
+    const id: string = this.pendingMsgId;
+    AppStorage.setOrCreate<string>('pendingMsgId', '');
+    const params: DetailParams = { msgId: id };
+    safePush(this.getUIContext(), 'pages/MessageDetailPage', params);
   }
 
   onPageShow(): void {
@@ -50,6 +108,7 @@ struct HomePage {
     this.hideSelf = Store.getHideSelf();
     this.messages = Store.getMessages();
     this.refreshDigest();
+    this.refreshNotifyState();
   }
 
   /** T3：把当前可见消息的事件聚成簇，取最有信息量的前几条做「群汇总」 */
@@ -129,7 +188,198 @@ struct HomePage {
       }
       out.push(this.messages[i]);
     }
+    // 排序（《任务字段表》§2.3）：priority 降序 -> level 降序 -> 时间近的在前。
+    // level 刻意**不跨档翻盘**：卡片上唯一可见的排序信号是 priority 那个红圈，
+    // 若难度能跨档，用户会看到「红圈少的排前面」，以为排序坏了。
+    out.sort((a: RobotMessage, b: RobotMessage): number => {
+      const pa: number = this.priorityOf(a);
+      const pb: number = this.priorityOf(b);
+      if (pa !== pb) {
+        return pb - pa;
+      }
+      const la: number = a.event?.level ?? 1;
+      const lb: number = b.event?.level ?? 1;
+      if (la !== lb) {
+        return lb - la;
+      }
+      const da: number = this.dueAtOfItem(a);
+      const db: number = this.dueAtOfItem(b);
+      if (da > 0 && db > 0 && da !== db) {
+        return da - db;
+      }
+      return (b.timestamp ?? '').localeCompare(a.timestamp ?? '');
+    });
     return out;
+  }
+
+  // ---------------------------------------------------------------- 卡片字段
+
+  /** 0 普通 / 1 重要 / 2 紧急（卡片上那个红圈）。 */
+  priorityOf(item: RobotMessage): number {
+    return item.event?.priority ?? 0;
+  }
+
+  dueAtOfItem(item: RobotMessage): number {
+    const e: CampusEvent | undefined = item.event;
+    if (e === undefined) {
+      return 0;
+    }
+    if (e.dueAt !== undefined && e.dueAt > 0) {
+      return e.dueAt;
+    }
+    return dueAtOf(e.time?.normalized ?? '');
+  }
+
+  /** 第二行里那段截止文案（今天/明天/后天/N 天后/__h 后/已过期）。 */
+  cardDueText(item: RobotMessage): string {
+    if (item.done === true) {
+      return this.doneText(item);
+    }
+    return dueLabel(this.dueAtOfItem(item), Date.now());
+  }
+
+  doneText(item: RobotMessage): string {
+    const at: number = item.doneAt ?? 0;
+    if (at <= 0) {
+      return '已完成';
+    }
+    const d: Date = new Date(at);
+    return '完成于 ' + pad2(d.getMonth() + 1) + '.' + pad2(d.getDate())
+      + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+
+  /** 第二行最多放两个标签胶囊（再多卡片就挤了）。 */
+  cardTags(item: RobotMessage): string[] {
+    const all: string[] = item.event?.tags ?? [];
+    const out: string[] = [];
+    for (let i = 0; i < all.length && out.length < 2; i++) {
+      if (all[i].length > 0) {
+        out.push(all[i]);
+      }
+    }
+    return out;
+  }
+
+  cardRepeat(item: RobotMessage): string {
+    const e: CampusEvent | undefined = item.event;
+    if (e === undefined) {
+      return '';
+    }
+    return repeatLabel(e.repeat ?? 'none', e.repeatText ?? '');
+  }
+
+  /** 有截止时刻才给提醒开关（没有时间的任务没法定提醒点）。 */
+  canAlarm(item: RobotMessage): boolean {
+    return this.dueAtOfItem(item) > 0;
+  }
+
+  stepsOf(item: RobotMessage): CandidateStep[] {
+    return item.event?.steps ?? [];
+  }
+
+  hasSteps(item: RobotMessage): boolean {
+    return this.stepsOf(item).length > 0;
+  }
+
+  stepsDoneCount(item: RobotMessage): number {
+    const list: CandidateStep[] = this.stepsOf(item);
+    let n: number = 0;
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].done === 1) {
+        n++;
+      }
+    }
+    return n;
+  }
+
+  /** 副卡片默认展开；只有点过「收起」的才记在 collapsedIds 里。 */
+  isExpanded(msgId: string): boolean {
+    return this.collapsedIds.indexOf(msgId) < 0;
+  }
+
+  toggleExpanded(msgId: string): void {
+    const next: string[] = [];
+    let found: boolean = false;
+    for (let i = 0; i < this.collapsedIds.length; i++) {
+      if (this.collapsedIds[i] === msgId) {
+        found = true;
+      } else {
+        next.push(this.collapsedIds[i]);
+      }
+    }
+    if (!found) {
+      next.push(msgId);
+    }
+    this.collapsedIds = next;
+  }
+
+  cardName(item: RobotMessage): string {
+    const e: CampusEvent | undefined = item.event;
+    if (e !== undefined && e.title.length > 0) {
+      return e.title;
+    }
+    const t: string = (item.content ?? '').trim();
+    return t.length > 0 ? t : this.fileLabel(item);
+  }
+
+  isOverdue(item: RobotMessage): boolean {
+    if (item.done === true) {
+      return false;
+    }
+    const d: number = this.dueAtOfItem(item);
+    return d > 0 && d < Date.now();
+  }
+
+  // ---------------------------------------------------------------- 卡片操作
+
+  /** 改一条消息的本地状态并落库（只动这一条）。 */
+  private patchMessage(msgId: string, patch: (m: RobotMessage) => void): void {
+    const list: RobotMessage[] = Store.getMessages();
+    let changed: boolean = false;
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].msg_id === msgId) {
+        patch(list[i]);
+        changed = true;
+      }
+    }
+    if (changed) {
+      Store.saveMessages(list);
+      for (let i = 0; i < this.messages.length; i++) {
+        if (this.messages[i].msg_id === msgId) {
+          patch(this.messages[i]);
+        }
+      }
+      AppStorage.setOrCreate<number>('msgVersion', (AppStorage.get<number>('msgVersion') ?? 0) + 1);
+    }
+  }
+
+  toggleDone(item: RobotMessage): void {
+    const next: boolean = item.done !== true;
+    this.patchMessage(item.msg_id, (m: RobotMessage) => {
+      m.done = next;
+      m.doneAt = next ? Date.now() : 0;
+    });
+  }
+
+  toggleAlarm(item: RobotMessage): void {
+    const next: boolean = item.alarm !== true;
+    this.patchMessage(item.msg_id, (m: RobotMessage) => {
+      m.alarm = next;
+    });
+    safeToast(this.getUIContext(), next ? '已打开提醒' : '已关闭提醒');
+  }
+
+  toggleStep(item: RobotMessage, index: number): void {
+    this.patchMessage(item.msg_id, (m: RobotMessage) => {
+      const e: CampusEvent | undefined = m.event;
+      if (e === undefined || e.steps === undefined) {
+        return;
+      }
+      if (index < 0 || index >= e.steps.length) {
+        return;
+      }
+      e.steps[index].done = e.steps[index].done === 1 ? 0 : 1;
+    });
   }
 
   summaryText(item: RobotMessage): string {
@@ -161,8 +411,12 @@ struct HomePage {
     const imageMark: string = item.imageText ?? '';
     const kindMark: string = item.imageKind ?? '';
     const evMark: string = (item.event?.kind ?? '') + '#' + this.evConf(item);
+    // 卡片字段：勾选/提醒/重要性/步骤变了都必须换 key，否则 ArkUI 复用旧节点
+    const cardMark: string = (item.done ? '1' : '0') + (item.alarm ? '1' : '0')
+      + '#' + this.priorityOf(item) + '#' + this.stepsDoneCount(item) + '#' + this.stepsOf(item).length
+      + '#' + (item.doneAt ?? 0);
     return item.msg_id + '|' + parsedMark + '|' + readMark + '|' + handledMark + '|' + imageMark
-      + '|' + kindMark + '|' + evMark;
+      + '|' + kindMark + '|' + evMark + '|' + cardMark;
   }
 
   hasImage(item: RobotMessage): boolean {
@@ -433,6 +687,74 @@ struct HomePage {
     .padding({ left: 16, right: 16, bottom: 4 })
   }
 
+  /**
+   * 重要性标识（《任务字段表》§2.1）：
+   *   priority 1 -> 红圈 + 红感叹号；2 -> 红实心圆 + 白感叹号；0 不显示。
+   */
+  @Builder
+  priorityBadge(p: number) {
+    Text('!')
+      .fontSize(11)
+      .fontWeight(FontWeight.Bold)
+      .fontColor(p >= PRIORITY_URGENT ? Color.White : '#D93025')
+      .width(16)
+      .height(16)
+      .borderRadius(8)
+      .textAlign(TextAlign.Center)
+      .backgroundColor(p >= PRIORITY_URGENT ? '#D93025' : Color.Transparent)
+      .border({ width: 1.5, color: '#D93025' })
+  }
+
+  /** 副卡片：步骤列表 + 每步勾选 + 折叠（《任务字段表》§2.4，打卡进度条不在 MVP）。 */
+  @Builder
+  stepsCard(item: RobotMessage) {
+    Column({ space: 6 }) {
+      Row({ space: 6 }) {
+        Text('步骤 ' + this.stepsDoneCount(item) + '/' + this.stepsOf(item).length)
+          .fontSize(12)
+          .fontColor('#5C6673')
+          .layoutWeight(1)
+        Text(this.isExpanded(item.msg_id) ? '收起' : '展开')
+          .fontSize(12)
+          .fontColor('#2E75B6')
+          .onClick(() => {
+            this.toggleExpanded(item.msg_id);
+          })
+      }
+      .width('100%')
+
+      if (this.isExpanded(item.msg_id)) {
+        ForEach(this.stepsOf(item), (s: CandidateStep, index: number) => {
+          Row({ space: 8 }) {
+            Text(s.done === 1 ? '✓' : '')
+              .width(18)
+              .height(18)
+              .borderRadius(9)
+              .border({ width: 1, color: s.done === 1 ? '#2E75B6' : '#C4CAD2' })
+              .textAlign(TextAlign.Center)
+              .fontSize(11)
+              .fontColor('#2E75B6')
+              .onClick(() => {
+                this.toggleStep(item, index);
+              })
+            Text(s.content)
+              .fontSize(13)
+              .fontColor(s.done === 1 ? '#9AA0A6' : '#3C4652')
+              .decoration({
+                type: s.done === 1 ? TextDecorationType.LineThrough : TextDecorationType.None
+              })
+              .layoutWeight(1)
+              .maxLines(2)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          .width('100%')
+        }, (s: CandidateStep, index: number) => item.msg_id + '#' + index + '#' + s.done)
+      }
+    }
+    .width('100%')
+    .padding({ left: 36, top: 2 })
+  }
+
   build() {
     Column() {
       Row({ space: 12 }) {
@@ -481,6 +803,31 @@ struct HomePage {
         .onClick(() => {
           this.clearBanner();
         })
+      }
+
+      // 通知被拒过就再也弹不出授权框：这里给一条常驻入口，点它去系统里打开
+      if (!this.notifyOn) {
+        Column({ space: 2 }) {
+          Row({ space: 8 }) {
+            Text('通知未开启 —— 待办来了提醒不到你')
+              .fontSize(12)
+              .fontColor('#8A5CC7')
+              .layoutWeight(1)
+            Text('去开启 ›')
+              .fontSize(12)
+              .fontColor('#2E75B6')
+              .onClick(() => {
+                this.openNotifySettings();
+              })
+          }
+          .width('100%')
+          Text('（开启后若要弹横幅，还要在通知设置里把「横幅」打开）')
+            .fontSize(11)
+            .fontColor('#999999')
+            .width('100%')
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16, bottom: 4 })
       }
 
       // 筛选栏常驻（只要收到过消息）：选完芯片 / 搜完词结果为空时也必须留着，
@@ -585,72 +932,95 @@ struct HomePage {
                   .width('100%')
 
                   if (this.hasEventCard(item)) {
-                    Row({ space: 6 }) {
-                      Text(this.evKind(item))
-                        .fontSize(11)
-                        .fontColor(Color.White)
-                        .backgroundColor(this.evKindColor(item))
-                        .borderRadius(4)
-                        .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-                      if (this.hasImage(item)) {
-                        Text(this.imageLabel(item))
-                          .fontSize(11)
-                          .fontColor('#2E75B6')
-                          .backgroundColor('#EAF1FA')
-                          .borderRadius(4)
-                          .padding({ left: 6, right: 6, top: 2, bottom: 2 })
-                      }
-                      Text(this.evTitle(item))
+                    // ---- 主卡片（两行，无第三行）----
+                    // 左：完成圆圈 / 中：任务名 + 第二行四样 / 右：提醒铃
+                    Row({ space: 10 }) {
+                      Text(item.done === true ? '✓' : '')
+                        .width(26)
+                        .height(26)
+                        .borderRadius(13)
+                        .border({
+                          width: 1.5,
+                          color: item.done === true ? '#2E75B6' : '#C4CAD2',
+                          style: item.done === true ? BorderStyle.Solid : BorderStyle.Dashed
+                        })
+                        .textAlign(TextAlign.Center)
                         .fontSize(15)
-                        .fontWeight(FontWeight.Medium)
-                        .maxLines(2)
-                        .textOverflow({ overflow: TextOverflow.Ellipsis })
-                        .layoutWeight(1)
-                      Text(this.evConfText(item))
-                        .fontSize(11)
-                        .fontColor(this.evConfColor(item))
+                        .fontColor('#2E75B6')
+                        .onClick(() => {
+                          this.toggleDone(item);
+                        })
+
+                      Column({ space: 5 }) {
+                        // 第一行：任务名
+                        Text(this.cardName(item))
+                          .fontSize(15)
+                          .fontWeight(FontWeight.Medium)
+                          .fontColor(item.done === true ? '#9AA0A6' : '#1F2A37')
+                          .decoration({
+                            type: item.done === true
+                              ? TextDecorationType.LineThrough : TextDecorationType.None
+                          })
+                          .maxLines(1)
+                          .textOverflow({ overflow: TextOverflow.Ellipsis })
+                          .width('100%')
+
+                        // 第二行：标签胶囊 → 重要性 → 截止 → 重复
+                        Row({ space: 6 }) {
+                          ForEach(this.cardTags(item), (t: string) => {
+                            Text(t)
+                              .fontSize(11)
+                              .fontColor('#2E75B6')
+                              .backgroundColor('#EAF1FA')
+                              .borderRadius(9)
+                              .padding({ left: 7, right: 7, top: 1, bottom: 1 })
+                          }, (t: string) => item.msg_id + '#' + t)
+
+                          if (this.priorityOf(item) > 0) {
+                            this.priorityBadge(this.priorityOf(item))
+                          }
+
+                          if (this.cardDueText(item).length > 0) {
+                            Text(this.cardDueText(item))
+                              .fontSize(12)
+                              .fontColor(item.done === true ? '#9AA0A6'
+                                : (this.isOverdue(item) ? '#B8434E' : '#5C6673'))
+                              .layoutWeight(1)
+                              .maxLines(1)
+                              .textOverflow({ overflow: TextOverflow.Ellipsis })
+                          }
+
+                          if (this.cardRepeat(item).length > 0) {
+                            Text(this.cardRepeat(item))
+                              .fontSize(11)
+                              .fontColor('#7A5AA8')
+                              .maxLines(1)
+                          }
+                        }
+                        .width('100%')
+                        .alignItems(VerticalAlign.Center)
+                      }
+                      .layoutWeight(1)
+                      .alignItems(HorizontalAlign.Start)
+
+                      // 右：提醒开关（没有截止时刻就不显示整个铃铛）
+                      if (this.canAlarm(item)) {
+                        Text(item.alarm === true ? '🔔' : '🔕')
+                          .fontSize(18)
+                          .opacity(item.alarm === true ? 1 : 0.4)
+                          .onClick(() => {
+                            this.toggleAlarm(item);
+                          })
+                      }
                     }
                     .width('100%')
                     .alignItems(VerticalAlign.Top)
 
-                    if (this.evTimeText(item).length > 0) {
-                      Row({ space: 4 }) {
-                        EntityIcon({ type: 'datetime', size: 13, color: '#2E75B6' })
-                        Text(this.evTimeText(item))
-                          .fontSize(12)
-                          .fontColor('#333333')
-                          .layoutWeight(1)
-                      }
-                      .width('100%')
+                    // ---- 副卡片：步骤（有步骤才出现）----
+                    if (this.hasSteps(item)) {
+                      this.stepsCard(item)
                     }
-                    if (this.evPlace(item).length > 0) {
-                      Row({ space: 4 }) {
-                        EntityIcon({ type: 'location', size: 13, color: '#2E75B6' })
-                        Text(this.evPlace(item))
-                          .fontSize(12)
-                          .fontColor('#333333')
-                          .layoutWeight(1)
-                      }
-                      .width('100%')
-                    }
-                    if (this.evDeadline(item).length > 0) {
-                      Text('截止：' + this.evDeadline(item))
-                        .fontSize(12)
-                        .fontColor('#B8434E')
-                        .width('100%')
-                    }
-                    if (this.evItems(item).length > 0) {
-                      Text('需带/注意：' + this.evItems(item))
-                        .fontSize(12)
-                        .fontColor('#2F8F9D')
-                        .width('100%')
-                    }
-                    if (this.evNeedConfirm(item)) {
-                      Text('字段不完整，建议人工确认')
-                        .fontSize(11)
-                        .fontColor('#C1663D')
-                        .width('100%')
-                    }
+
                     Text('「' + this.evSource(item) + '」')
                       .fontSize(12)
                       .fontColor('#888888')

@@ -5,11 +5,13 @@ import { common, Want, wantConstant } from '@kit.AbilityKit';
 import { Store } from '../common/Store';
 import { ParseService } from '../common/ParseService';
 import { ApiClient } from '../common/ApiClient';
+import { AttachmentStore } from '../common/AttachmentStore';
 import { FeedbackService, ACTION_ACCEPT, ACTION_DISMISS } from '../service/FeedbackService';
+import { CalendarService, CalendarResult } from '../service/CalendarService';
 import {
   RobotMessage, DetailParams, ParsedEntity, ServeParse, MessageEditFields, MessageUpdateData,
   firstImageUrl, firstImageIndex, firstFileIndex, fileAttachmentLabel, isLocalAttachment,
-  applyParsedEvent, splitListInput, joinListInput, mergeLocalParse
+  applyParsedEvent, splitListInput, joinListInput, mergeLocalParse, dueAtOf
 } from '../common/Types';
 import { EntityIcon, safeToast } from '../common/UiParts';
 import {
@@ -35,6 +37,8 @@ struct MessageDetailPage {
   @State fileSaving: boolean = false;
   /** 正在准备打开文件（取回 + 拉起系统应用） */
   @State fileOpening: boolean = false;
+  /** 正在写入系统日历 */
+  @State calSaving: boolean = false;
   /** 「编辑待办」：就地改 kind / 摘要 / 时间 / 地点 / 需带 / 标签 */
   @State editing: boolean = false;
   @State editSaving: boolean = false;
@@ -103,9 +107,9 @@ struct MessageDetailPage {
   /**
    * 取回原图并解码成 PixelMap 渲染。
    *
-   * 为什么不直接用附件里的 QQ 直链：CDN 链接带**时效 rkey**，端上直连常常失败、
-   * 过期后更取不到；而原图只在后端 30 分钟窗口里有元数据，所以统一走
-   * `GET /api/relay/attachment` 过路取字节（后端 12MB 上限 + 90s 内存缓存，不落盘）。
+   * 不直接用附件里的 QQ 直链：CDN 链接带**时效 rkey**，端上直连常常失败、过期后更取不到。
+   * 取字节统一交给 `ensureBytes`：**先读本机落盘的副本**（轮询时趁 30 分钟窗口存下的，
+   * 所以窗口过期后照样能看原图）→ 再回退后端 `/attachment` 过路。
    */
   async loadImage(): Promise<void> {
     const m: RobotMessage | undefined = this.msg;
@@ -120,8 +124,7 @@ struct MessageDetailPage {
     this.imageLoading = true;
     this.imageFailed = false;
     try {
-      const path: string = '/api/relay/attachment?msg_id=' + m.msg_id + '&index=' + idx;
-      const buf: ArrayBuffer | null = await ApiClient.getBytes(path, 20000);
+      const buf: ArrayBuffer | null = await this.ensureBytes(idx);
       if (buf === null) {
         this.imageFailed = true;
         return;
@@ -215,6 +218,29 @@ struct MessageDetailPage {
     return url.indexOf('file://') === 0 ? url.substring('file://'.length) : '';
   }
 
+  /**
+   * 取这条消息第 index 个附件的字节，优先级：
+   *   ① 手动添加时存下来的沙箱副本（url 本身是 file://）
+   *   ② AttachmentStore 落盘的副本（轮询时趁 30 分钟窗口存下的，**过期也能用**）
+   *   ③ 现在去后端 `/attachment` 取一次并顺手落盘
+   */
+  async ensureBytes(index: number): Promise<ArrayBuffer | null> {
+    const m: RobotMessage | undefined = this.msg;
+    if (m === undefined || index < 0 || m.attachments === undefined) {
+      return null;
+    }
+    const url: string = m.attachments[index].url ?? '';
+    if (url.indexOf('file://') === 0) {
+      return this.readLocalFile(url.substring('file://'.length));
+    }
+    const local: ArrayBuffer | null = AttachmentStore.readLocal(m.group_openid, m.msg_id, index);
+    if (local !== null) {
+      return local;
+    }
+    const ok: boolean = await AttachmentStore.ensureSaved(m.group_openid, m.msg_id, index, url);
+    return ok ? AttachmentStore.readLocal(m.group_openid, m.msg_id, index) : null;
+  }
+
   /** 读本机沙箱文件的字节（失败返回 null）。 */
   readLocalFile(path: string): ArrayBuffer | null {
     let f: fileIo.File | undefined = undefined;
@@ -255,16 +281,9 @@ struct MessageDetailPage {
     }
     this.fileOpening = true;
     try {
-      let buf: ArrayBuffer | null = null;
-      const localPath: string = this.localPathOf();
-      if (localPath.length > 0) {
-        buf = this.readLocalFile(localPath);
-      } else {
-        const api: string = '/api/relay/attachment?msg_id=' + m.msg_id + '&index=' + idx;
-        buf = await ApiClient.getBytes(api, 30000);
-      }
+      const buf: ArrayBuffer | null = await this.ensureBytes(idx);
       if (buf === null || buf.byteLength === 0) {
-        safeToast(this.getUIContext(), '文件是空的或已过期（消息只在 30 分钟窗口内）');
+        safeToast(this.getUIContext(), '取不回这个文件：本机没存过，且已超 30 分钟窗口');
         return;
       }
       const appCtx: Context | null = Store.getAppContext();
@@ -308,10 +327,9 @@ struct MessageDetailPage {
     }
     this.fileSaving = true;
     try {
-      const path: string = '/api/relay/attachment?msg_id=' + m.msg_id + '&index=' + idx;
-      const buf: ArrayBuffer | null = await ApiClient.getBytes(path, 30000);
+      const buf: ArrayBuffer | null = await this.ensureBytes(idx);
       if (buf === null) {
-        safeToast(this.getUIContext(), '取回失败或已过期（消息只在 30 分钟窗口内）');
+        safeToast(this.getUIContext(), '取回失败：本机没存过，且已超 30 分钟窗口');
         return;
       }
       const name: string = this.fileNameOf();
@@ -424,6 +442,137 @@ struct MessageDetailPage {
    * 保存修改：先给后端（覆盖它下发的 parse，别的设备 / 下次拉取也一致）；
    * 后端存不下（30 分钟窗口过了、群没订阅）也照样在本机生效——用户改了就一定生效。
    */
+  // ---------------------------------------------------------------- 卡片字段编辑
+  //
+  // 这些字段（重要性/难度/重复/提醒/完成）在《任务字段表》里属于**本机 Task**，
+  // 不是后端解析结果，所以**只存本机**、不走 `/messages/update`
+  // （后端那份白名单里也没有它们，发过去会被 400 拒掉）。
+
+  evPriority(): number {
+    return this.msg?.event?.priority ?? 0;
+  }
+
+  evLevel(): number {
+    return this.msg?.event?.level ?? 1;
+  }
+
+  evRepeat(): string {
+    return this.msg?.event?.repeat ?? 'none';
+  }
+
+  evDueAt(): number {
+    const e: CampusEvent | undefined = this.msg?.event;
+    if (e === undefined) {
+      return 0;
+    }
+    if (e.dueAt !== undefined && e.dueAt > 0) {
+      return e.dueAt;
+    }
+    return dueAtOf(e.time?.normalized ?? '');
+  }
+
+  canAlarm(): boolean {
+    return this.evDueAt() > 0;
+  }
+
+  alarmOn(): boolean {
+    return this.msg?.alarm === true;
+  }
+
+  doneOn(): boolean {
+    return this.msg?.done === true;
+  }
+
+  /** 写一条本地卡片改动：改本机存储里的这条消息，并让当前页重新读一次。 */
+  private patchLocal(msgId: string, fn: (m: RobotMessage) => void): void {
+    const list: RobotMessage[] = Store.getMessages();
+    let changed: boolean = false;
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].msg_id === msgId) {
+        fn(list[i]);
+        changed = true;
+      }
+    }
+    if (!changed) {
+      return;
+    }
+    Store.saveMessages(list);
+    AppStorage.setOrCreate<number>('msgVersion', (AppStorage.get<number>('msgVersion') ?? 0) + 1);
+    this.refreshMsg();
+  }
+
+  /** 只重读当前这条消息（**不**重新 loadImage，避免每点一下都去取原图）。 */
+  private refreshMsg(): void {
+    const list: RobotMessage[] = Store.getMessages();
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].msg_id === this.currentId) {
+        this.msg = list[i];
+        return;
+      }
+    }
+  }
+
+  setPriority(p: number): void {
+    const m: RobotMessage | undefined = this.msg;
+    if (m === undefined) {
+      return;
+    }
+    this.patchLocal(m.msg_id, (x: RobotMessage) => {
+      if (x.event !== undefined) {
+        x.event.priority = p;
+      }
+    });
+  }
+
+  setLevel(l: number): void {
+    const m: RobotMessage | undefined = this.msg;
+    if (m === undefined) {
+      return;
+    }
+    this.patchLocal(m.msg_id, (x: RobotMessage) => {
+      if (x.event !== undefined) {
+        x.event.level = l;
+      }
+    });
+  }
+
+  setRepeat(r: string): void {
+    const m: RobotMessage | undefined = this.msg;
+    if (m === undefined) {
+      return;
+    }
+    this.patchLocal(m.msg_id, (x: RobotMessage) => {
+      if (x.event !== undefined) {
+        x.event.repeat = r;
+        if (r === 'none') {
+          x.event.repeatText = '';
+        }
+      }
+    });
+  }
+
+  setAlarm(on: boolean): void {
+    const m: RobotMessage | undefined = this.msg;
+    if (m === undefined) {
+      return;
+    }
+    this.patchLocal(m.msg_id, (x: RobotMessage) => {
+      x.alarm = on;
+    });
+    safeToast(this.getUIContext(), on ? '已打开提醒' : '已关闭提醒');
+  }
+
+  setDone(done: boolean): void {
+    const m: RobotMessage | undefined = this.msg;
+    if (m === undefined) {
+      return;
+    }
+    this.patchLocal(m.msg_id, (x: RobotMessage) => {
+      x.done = done;
+      x.doneAt = done ? Date.now() : 0;
+    });
+  }
+
   async saveEdit(): Promise<void> {
     const m: RobotMessage | undefined = this.msg;
     if (m === undefined || this.editSaving) {
@@ -470,8 +619,7 @@ struct MessageDetailPage {
   }
 
   /** 把新的 parse 落进本机这条消息，并重建事件对象（列表/详情立刻反映改动）。 */
-  writeLocal(msgId: string, next: ServeParse): void {
-    const list: RobotMessage[] = Store.getMessages();
+  writeLocal(msgId: string, next: ServeParse): void {    const list: RobotMessage[] = Store.getMessages();
     for (let i = 0; i < list.length; i++) {
       if (list[i].msg_id === msgId) {
         list[i].parse = next;
@@ -507,6 +655,32 @@ struct MessageDetailPage {
     } catch (err) {
       const e: BusinessError = err as BusinessError;
       safeToast(this.getUIContext(), '打不开这个链接：' + e.message);
+    }
+  }
+
+  /** 把这条待办一键写进系统日历（Calendar Kit；首次会弹日历授权）。 */
+  async writeToCalendar(): Promise<void> {
+    const m: RobotMessage | undefined = this.msg;
+    if (m === undefined || this.calSaving) {
+      return;
+    }
+    const ev: CampusEvent | undefined = m.event;
+    if (ev === undefined) {
+      safeToast(this.getUIContext(), '这条还没解析出事项，先「重新解析」再写日历');
+      return;
+    }
+    const ctx: Context | null = Store.getAppContext();
+    if (ctx === null) {
+      safeToast(this.getUIContext(), '拿不到应用上下文');
+      return;
+    }
+    this.calSaving = true;
+    try {
+      const res: CalendarResult =
+        await CalendarService.writeEvent(ctx as common.UIAbilityContext, ev, m.content);
+      safeToast(this.getUIContext(), res.message);
+    } finally {
+      this.calSaving = false;
     }
   }
 
@@ -609,6 +783,176 @@ struct MessageDetailPage {
       } else {
         Scroll() {
           Column({ space: 16 }) {
+            // ---- 卡片字段（只存本机；对应《任务字段表》的可编辑列）----
+            if (this.hasEvent()) {
+              Column({ space: 8 }) {
+                Text('卡片字段（只存本机）')
+                  .fontSize(16)
+                  .fontWeight(FontWeight.Medium)
+                  .width('100%')
+
+                Row({ space: 8 }) {
+                  Text('重要性')
+                    .fontSize(13)
+                    .fontColor(Color.Gray)
+                    .width(56)
+                  Text('普通')
+                    .fontSize(13)
+                    .fontColor(this.evPriority() === 0 ? Color.White : '#1F3A5F')
+                    .backgroundColor(this.evPriority() === 0 ? '#2E75B6' : '#EAF1FA')
+                    .borderRadius(10)
+                    .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                    .onClick(() => {
+                      this.setPriority(0);
+                    })
+                  Text('重要')
+                    .fontSize(13)
+                    .fontColor(this.evPriority() === 1 ? Color.White : '#1F3A5F')
+                    .backgroundColor(this.evPriority() === 1 ? '#2E75B6' : '#EAF1FA')
+                    .borderRadius(10)
+                    .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                    .onClick(() => {
+                      this.setPriority(1);
+                    })
+                  Text('紧急')
+                    .fontSize(13)
+                    .fontColor(this.evPriority() === 2 ? Color.White : '#1F3A5F')
+                    .backgroundColor(this.evPriority() === 2 ? '#2E75B6' : '#EAF1FA')
+                    .borderRadius(10)
+                    .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                    .onClick(() => {
+                      this.setPriority(2);
+                    })
+                }
+                .width('100%')
+
+                Row({ space: 8 }) {
+                  Text('难度')
+                    .fontSize(13)
+                    .fontColor(Color.Gray)
+                    .width(56)
+                  Text('易')
+                    .fontSize(13)
+                    .fontColor(this.evLevel() === 0 ? Color.White : '#1F3A5F')
+                    .backgroundColor(this.evLevel() === 0 ? '#2E75B6' : '#EAF1FA')
+                    .borderRadius(10)
+                    .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                    .onClick(() => {
+                      this.setLevel(0);
+                    })
+                  Text('中')
+                    .fontSize(13)
+                    .fontColor(this.evLevel() === 1 ? Color.White : '#1F3A5F')
+                    .backgroundColor(this.evLevel() === 1 ? '#2E75B6' : '#EAF1FA')
+                    .borderRadius(10)
+                    .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                    .onClick(() => {
+                      this.setLevel(1);
+                    })
+                  Text('难')
+                    .fontSize(13)
+                    .fontColor(this.evLevel() === 2 ? Color.White : '#1F3A5F')
+                    .backgroundColor(this.evLevel() === 2 ? '#2E75B6' : '#EAF1FA')
+                    .borderRadius(10)
+                    .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                    .onClick(() => {
+                      this.setLevel(2);
+                    })
+                }
+                .width('100%')
+
+                Row({ space: 8 }) {
+                  Text('重复')
+                    .fontSize(13)
+                    .fontColor(Color.Gray)
+                    .width(56)
+                  Text('不重复')
+                    .fontSize(13)
+                    .fontColor(this.evRepeat() === 'none' ? Color.White : '#1F3A5F')
+                    .backgroundColor(this.evRepeat() === 'none' ? '#2E75B6' : '#EAF1FA')
+                    .borderRadius(10)
+                    .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                    .onClick(() => {
+                      this.setRepeat('none');
+                    })
+                  Text('每天')
+                    .fontSize(13)
+                    .fontColor(this.evRepeat() === 'day' ? Color.White : '#1F3A5F')
+                    .backgroundColor(this.evRepeat() === 'day' ? '#2E75B6' : '#EAF1FA')
+                    .borderRadius(10)
+                    .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                    .onClick(() => {
+                      this.setRepeat('day');
+                    })
+                  Text('每周')
+                    .fontSize(13)
+                    .fontColor(this.evRepeat() === 'week' ? Color.White : '#1F3A5F')
+                    .backgroundColor(this.evRepeat() === 'week' ? '#2E75B6' : '#EAF1FA')
+                    .borderRadius(10)
+                    .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                    .onClick(() => {
+                      this.setRepeat('week');
+                    })
+                  Text('每月')
+                    .fontSize(13)
+                    .fontColor(this.evRepeat() === 'month' ? Color.White : '#1F3A5F')
+                    .backgroundColor(this.evRepeat() === 'month' ? '#2E75B6' : '#EAF1FA')
+                    .borderRadius(10)
+                    .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                    .onClick(() => {
+                      this.setRepeat('month');
+                    })
+                }
+                .width('100%')
+
+                Row({ space: 12 }) {
+                  Text('提醒')
+                    .fontSize(13)
+                    .fontColor(Color.Gray)
+                    .width(56)
+                  if (this.canAlarm()) {
+                    Toggle({ type: ToggleType.Switch, isOn: this.alarmOn() })
+                      .onChange((on: boolean) => {
+                        this.setAlarm(on);
+                      })
+                  } else {
+                    Text('没有截止时刻，定不了提醒点')
+                      .fontSize(12)
+                      .fontColor(Color.Gray)
+                  }
+                }
+                .width('100%')
+
+                Row({ space: 12 }) {
+                  Text('状态')
+                    .fontSize(13)
+                    .fontColor(Color.Gray)
+                    .width(56)
+                  Text('未完成')
+                    .fontSize(13)
+                    .fontColor(!this.doneOn() ? Color.White : '#1F3A5F')
+                    .backgroundColor(!this.doneOn() ? '#2E75B6' : '#EAF1FA')
+                    .borderRadius(10)
+                    .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                    .onClick(() => {
+                      this.setDone(false);
+                    })
+                  Text('已完成')
+                    .fontSize(13)
+                    .fontColor(this.doneOn() ? Color.White : '#1F3A5F')
+                    .backgroundColor(this.doneOn() ? '#2E75B6' : '#EAF1FA')
+                    .borderRadius(10)
+                    .padding({ left: 10, right: 10, top: 4, bottom: 4 })
+                    .onClick(() => {
+                      this.setDone(true);
+                    })
+                }
+                .width('100%')
+              }
+              .alignItems(HorizontalAlign.Start)
+              .width('100%')
+            }
+
             Column({ space: 8 }) {
               Text('事件')
                 .fontSize(16)
@@ -831,7 +1175,7 @@ struct MessageDetailPage {
                 .width('100%')
               } else if (this.hasImage()) {
                 Text(this.imageFailed
-                  ? '[原图取回失败或已过期（消息只在 30 分钟窗口内）]'
+                  ? '[原图取不回：本机没存过，且已超 30 分钟窗口]'
                   : '[图片待加载]')
                   .fontSize(13)
                   .fontColor(Color.Gray)
@@ -972,6 +1316,12 @@ struct MessageDetailPage {
                   } else {
                     this.beginEdit();
                   }
+                })
+              Button(this.calSaving ? '写入中…' : '写入日历')
+                .margin({ right: 12, bottom: 8 })
+                .enabled(!this.calSaving)
+                .onClick(() => {
+                  this.writeToCalendar();
                 })
               if (!this.msg.handled) {
                 Button('转成待办')
