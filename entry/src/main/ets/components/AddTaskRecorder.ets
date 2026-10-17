@@ -18,6 +18,7 @@
  */
 import { LengthMetrics } from '@kit.ArkUI';
 import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
+import { ADD_TASK_CONTENT_HEIGHT_VP } from './AddTaskContentMetrics';
 
 /**
  * 录音圆钮直径（vp）：需求方 2026-10-17「按钮改小一点吧」→ 从 64 降到 **48**。
@@ -32,13 +33,16 @@ const TIMER_INTERVAL_MS: number = 1000;
 const STACK_GAP_VP: number = 4;
 
 /**
- * 内容盒最小高度（vp）—— **修「点录音后内容区突然撑大」**。
- * 需求方 2026-10-17：「点击录音按钮后会突然把内容区撑大」：原来 idle 一行字、录音时变成两行字，
- * 盒子高度跟着跳。现在 idle **不显示文字**、录音/结束最多一行，再给盒子钉一个最小高度兜底
- * （48 按钮 ＋ 4 间距 ＋ 24 单行 ＋ 上下 `padding_level8`×2 = 108，取整 112），
- * 三态盒子一样高、不再跳。用 `constraintSize.minHeight` 而不是 `.height`，字体放大时还能继续长。
+ * 内容盒高度（vp）—— **修两件事**：
+ *
+ * ①「点录音后内容区突然撑大」（需求方 2026-10-17）：原来 idle 一行字、录音时两行字，高度跟着跳；
+ *    现在 idle 不显示文字、录音/结束最多一行，且盒子高度**钉死**（48 按钮 ＋ 4 间距 ＋ 24 单行
+ *    ＋ 上下 `padding_level8`×2 = 108，120 里头绰绰有余），三态一样高。
+ * ②「录音的内容区和截图、文本的内容区不一样高」（需求方 2026-10-17）：原来这里是
+ *    `constraintSize({minHeight: 112})`，而另外两块是 **120**，于是录音那格天生矮 8vp。
+ *    现在三块统一吃 `ADD_TASK_CONTENT_HEIGHT_VP`，且都用**固定高度**（不是 minHeight）。
  */
-const RECORD_BOX_MIN_HEIGHT_VP: number = 112;
+const RECORD_BOX_HEIGHT_VP: number = ADD_TASK_CONTENT_HEIGHT_VP;
 
 /** 录音状态机 */
 enum RecordState {
@@ -162,8 +166,9 @@ export struct AddTaskRecorder {
       }
     }
     .width('100%')
-    // 三态**盒子一样高**：钉一个最小高度，idle（没有文字）也占同样的高度，点录音时不会突然撑大
-    .constraintSize({ minHeight: RECORD_BOX_MIN_HEIGHT_VP })
+    // 三块内容区**同一个固定高度**（见 `ADD_TASK_CONTENT_HEIGHT_VP`）：idle（没有文字）也占同样高度，
+    // 点录音时不会撑大，也不会比「截图 / 文本」那两块矮一截。
+    .height(RECORD_BOX_HEIGHT_VP)
     .justifyContent(FlexAlign.Center)
     // 内容区外观与「截图 / 文本」两块一致（底色＝来源按钮那条胶囊轨道的灰）
     .padding({
