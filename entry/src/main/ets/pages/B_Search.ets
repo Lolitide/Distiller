@@ -26,6 +26,7 @@ import { GROUP_HEADER_LIST_PULL_UP_VP, TaskGroupHeader } from '../components/Tas
 import { TaskCard } from '../components/TaskCard';
 import { Task } from '../model';
 import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
+import { NAV_STACK_KEY, ROUTE_TASK_DETAIL, TaskDetailParam } from '../viewmodel/TaskNavParams';
 import { SearchState, TaskSearchViewModel } from '../viewmodel/TaskSearchViewModel';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 
@@ -151,6 +152,11 @@ export struct B_Search {
                   },
                   onRemindChange: (isOn: boolean) => {
                     this.store.setRemind(task, isOn);
+                  },
+                  // 搜索结果里点整卡也进详情（压到同一个导航栈上，返回后回到搜索页）
+                  onOpen: () => {
+                    AppStorage.get<NavPathStack>(NAV_STACK_KEY)
+                      ?.pushPathByName(ROUTE_TASK_DETAIL, new TaskDetailParam(task, this.store));
                   }
                 })
               }

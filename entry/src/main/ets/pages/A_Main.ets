@@ -3,13 +3,11 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { MainTabBar } from '../components/MainTabBar';
 import { MainTitleBar } from '../components/MainTitleBar';
+import { NAV_STACK_KEY, ROUTE_SEARCH } from '../viewmodel/TaskNavParams';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'A_Main';
-
-/** 二级页路由名：`HdsNavigation.navDestination` 的 builder 按它分发（现在只有搜索页） */
-const ROUTE_SEARCH: string = 'SearchPage';
 
 @Entry
 @ComponentV2
@@ -27,6 +25,15 @@ struct A_Main {
    */
   private store: TaskListStore = new TaskListStore();
   @Local currentIndex: number = 0;
+
+  /**
+   * 把导航栈放进 `AppStorage`：点卡片进详情这件事发生在 `A_TaskList`（以及搜索页的 `B_Search`）里，
+   * 官方《Navigation 页面路由》的方式一就是「使用 AppStorage 存储与获取」——
+   * 比把 `NavPathStack` 一层层往下传（`A_Main → MainTabBar → A_TaskList`）干净。
+   */
+  aboutToAppear(): void {
+    AppStorage.setOrCreate<NavPathStack>(NAV_STACK_KEY, this.navPathStack);
+  }
 
   @Computed
   get navTitle(): ResourceStr {
