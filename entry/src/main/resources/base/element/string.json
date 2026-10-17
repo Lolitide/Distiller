@@ -9,6 +9,10 @@
       "value": "description"
     },
     {
+      "name": "calendar_permission_reason",
+      "value": "把你的待办一键写入系统日历，方便按时提醒"
+    },
+    {
       "name": "EntryAbility_label",
       "value": "知了"
     }

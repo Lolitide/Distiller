@@ -3,6 +3,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { Store } from '../common/Store';
 import { PollService } from '../service/PollService';
+import { NotificationService } from '../service/NotificationService';
 
 const DOMAIN = 0x0000;
 
@@ -10,6 +11,31 @@ export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
     Store.init(this.context);
+    EntryAbility.takeWant(want);
+  }
+
+  /** 点通知时应用已在运行，走这里 */
+  onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onNewWant');
+    EntryAbility.takeWant(want);
+  }
+
+  /**
+   * 通知带过来的 msgId → 存进 AppStorage，由 HomePage 负责跳详情页。
+   *
+   * 为什么不在这里直接 pushUrl：冷启动时窗口/UIContext 还没准备好，
+   * 交给已经加载好的页面做跳转最稳（HomePage 的 @Watch）。
+   */
+  private static takeWant(want: Want): void {
+    const params: Record<string, Object> | undefined = want.parameters;
+    if (params === undefined) {
+      return;
+    }
+    const raw: Object | undefined = params['msgId'];
+    if (raw !== undefined && typeof raw === 'string' && (raw as string).length > 0) {
+      AppStorage.setOrCreate<string>('pendingMsgId', raw as string);
+      hilog.info(DOMAIN, 'testTag', 'takeWant msgId=%{public}s', raw as string);
+    }
   }
 
   onDestroy(): void {
@@ -44,6 +70,8 @@ export default class EntryAbility extends UIAbility {
     // Ability has brought to foreground
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onForeground');
     PollService.start();
+    // 首次进前台要一次通知授权（只会弹一次）
+    NotificationService.ensureEnabled(this.context);
   }
 
   onBackground(): void {
