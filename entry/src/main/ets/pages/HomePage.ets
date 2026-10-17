@@ -61,16 +61,27 @@ struct HomePage {
     }, 10000);
   }
 
-  /** 刷新通知授权状态（进页面、从系统设置回来时都要重查）。 */
+  /**
+   * 刷新通知授权状态；**没开**且本次进程还没自动问过时，就在页面里弹一次授权框。
+   *
+   * 为什么放在这里而不是 `EntryAbility.onForeground`：那时窗口/UI 可能还没就绪，
+   * `requestEnableNotification` 弹不出来，却会把「本进程已问过」的开关用掉 ——
+   * 结果就是用户点「去开启」时再也弹不出框。
+   */
   refreshNotifyState(): void {
-    NotificationService.isEnabled().then((on: boolean) => {
+    const ctx: Context | null = Store.getAppContext();
+    if (ctx === null) {
+      return;
+    }
+    const abilityCtx: common.UIAbilityContext = ctx as common.UIAbilityContext;
+    NotificationService.ensureEnabled(abilityCtx).then((on: boolean) => {
       this.notifyOn = on;
     });
   }
 
   /**
-   * 「去开启」：先走**授权弹窗**（`requestEnableNotification`，只在用户还没拒过时才会弹），
-   * 拿不到再退到系统「通知管理」面板——被拒过一次后授权弹窗再也弹不出来，只能去面板开。
+   * 「去开启」：**先真的申请一次**（`request` 不受"已问过"限制），
+   * 弹不出来再退到系统「通知管理」面板——用户拒过一次后授权框不会再弹，这是唯一正路。
    */
   async openNotifySettings(): Promise<void> {
     const ctx: Context | null = Store.getAppContext();
@@ -78,14 +89,14 @@ struct HomePage {
       return;
     }
     const abilityCtx: common.UIAbilityContext = ctx as common.UIAbilityContext;
-    let on: boolean = await NotificationService.ensureEnabled(abilityCtx);
+    let on: boolean = await NotificationService.request(abilityCtx);
     if (!on) {
       on = await NotificationService.openSettings(abilityCtx);
     }
     this.notifyOn = on;
     safeToast(this.getUIContext(), on
       ? '通知已开启；想让它弹横幅，还要在通知设置里把「横幅」打开'
-      : '还没开启通知，待办提醒收不到');
+      : '系统不会再弹授权框（之前拒绝过），请在通知设置里手动开启');
   }
 
   /**

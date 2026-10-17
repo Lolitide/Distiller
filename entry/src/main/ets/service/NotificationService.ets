@@ -33,7 +33,36 @@ export class NotificationService {
   }
 
   /**
-   * 确保拿到通知授权：**先查再申请**（官方推荐流程）。
+   * **显式申请**（用户点了「去开启 ›」）：不受 `asked` 限制，每次都真的去调。
+   *
+   * 为什么必须绕过 `asked`：`asked` 是「本进程自动问过一次」的防打扰开关，
+   * 而自动那次是在 App 启动早期调的（UI 可能还没就绪，弹不出来），
+   * 用它挡住**用户主动点击**就会变成"点了一点反应都没有、只跳系统设置"。
+   *
+   * 平台限制仍在：**用户拒过一次后这个接口不再弹窗**，这时返回 false，
+   * 由调用方退到 `openSettings()`。
+   */
+  static async request(ctx: common.UIAbilityContext): Promise<boolean> {
+    if (await NotificationService.isEnabled()) {
+      return true;
+    }
+    try {
+      await notificationManager.requestEnableNotification(ctx);
+      hilog.info(DOMAIN, TAG, 'requestEnableNotification done (explicit)');
+    } catch (err) {
+      const e: BusinessError = err as BusinessError;
+      if (e.code === 1600004) {
+        hilog.warn(DOMAIN, TAG, 'user refused notification (1600004)');
+      } else {
+        hilog.warn(DOMAIN, TAG, 'requestEnableNotification failed: code=%{public}d msg=%{public}s',
+          e.code, e.message);
+      }
+    }
+    return await NotificationService.isEnabled();
+  }
+
+  /**
+   * 自动申请（进首页时试一次）：先查再申请，**本次进程只问一次**。
    *
    * 三个必须知道的机制（`开发指南 · 请求通知授权`）：
    *   1. `requestEnableNotification` **只在首次**弹窗；之后再调，无论有没有权限都直接成功；
@@ -45,23 +74,10 @@ export class NotificationService {
       return true;
     }
     if (NotificationService.asked) {
-      return false; // 本次进程已经问过，再调也不会弹窗，别白调
+      return false; // 本次进程已经自动问过，别重复打扰
     }
     NotificationService.asked = true;
-    try {
-      await notificationManager.requestEnableNotification(ctx);
-      hilog.info(DOMAIN, TAG, 'requestEnableNotification done');
-      return true;
-    } catch (err) {
-      const e: BusinessError = err as BusinessError;
-      if (e.code === 1600004) {
-        hilog.warn(DOMAIN, TAG, 'user refused notification (1600004)');
-      } else {
-        hilog.warn(DOMAIN, TAG, 'requestEnableNotification failed: code=%{public}d msg=%{public}s',
-          e.code, e.message);
-      }
-      return false;
-    }
+    return await NotificationService.request(ctx);
   }
 
   /**

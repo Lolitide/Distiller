@@ -3,7 +3,6 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { Store } from '../common/Store';
 import { PollService } from '../service/PollService';
-import { NotificationService } from '../service/NotificationService';
 import { PushService } from '../service/PushService';
 
 const DOMAIN = 0x0000;
@@ -73,8 +72,8 @@ export default class EntryAbility extends UIAbility {
     // Ability has brought to foreground
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onForeground');
     PollService.start();
-    // 首次进前台要一次通知授权（只会弹一次）
-    NotificationService.ensureEnabled(this.context);
+    // 通知授权不在这里申请：onForeground 可能早于窗口就绪，弹不出框还会把
+    // 「本进程已问过」的开关用掉。改由 HomePage.refreshNotifyState() 在页面里申请。
     // 拿 Push Token 上报后端（后台通知用）；没有设备身份时会自动跳过
     PushService.register();
   }
