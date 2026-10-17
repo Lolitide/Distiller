@@ -13,6 +13,7 @@
  */
 import { ColorMetrics, LengthMetrics } from '@kit.ArkUI';
 import { Task, TaskStep } from '../model';
+import { showDeleteConfirmDialog } from '../utils/DeleteConfirmDialog';
 
 /** 圆圈尺寸（vp）：比卡片前缀（28vp）**小一档** —— 袁正锟 2026-10-16：「前面的图标小一档」 */
 const ICON_SIZE_TEMPLATE: string = '24vp';
@@ -149,28 +150,16 @@ export struct TaskStepsSection {
 
   /**
    * 点末尾垃圾桶 → 先弹官方警告弹窗，确认后才真的删（袁正锟 2026-10-16）。
-   * 与任务删除确认同一个写法：`UIContext.showAlertDialog`（`AlertDialog.show` 从 API 18 起已废弃）。
+   *
+   * 弹窗本体走 `utils/DeleteConfirmDialog.showDeleteConfirmDialog` —— 与**列表多选删除、
+   * 详情页删除任务**同一份实现（袁正锟 2026-10-17 要求三处样式一致）：删除按钮是**红色警示文字**，
+   * 不再用 `DialogButtonStyle.HIGHLIGHT` 的高亮实心样式，也不抢默认焦点。
    */
   private confirmRemoveStep(index: number): void {
-    this.getUIContext().showAlertDialog({
-      title: $r('app.string.action_delete_step'),
-      message: $r('app.string.delete_step_confirm'),
-      primaryButton: {
-        value: $r('app.string.action_cancel'),
-        action: () => {
-          // 取消：什么都不做
-        }
-      },
-      secondaryButton: {
-        enabled: true,
-        defaultFocus: true,
-        style: DialogButtonStyle.HIGHLIGHT,
-        value: $r('app.string.action_delete'),
-        action: () => {
-          this.removeStep(index);
-        }
-      }
-    });
+    showDeleteConfirmDialog(this.getUIContext(), $r('app.string.action_delete_step'),
+      $r('app.string.delete_step_confirm'), () => {
+        this.removeStep(index);
+      });
   }
 
   /** 步骤行左侧的圆圈：未完成＝空心圆，已完成＝实心带勾 */
