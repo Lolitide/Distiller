@@ -14,6 +14,8 @@
 import { RepeatFrequency, RepeatRule, Task, TaskAlarm } from '../model';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 import { TaskListStore } from '../viewmodel/TaskListStore';
+import { DateTimePickerBody } from './DateTimePickerBody';
+import { OptionPickerBody } from './OptionPickerBody';
 
 /** 圆形图标直径（vp） */
 const ICON_CIRCLE_SIZE_VP: number = 32;
@@ -37,9 +39,6 @@ const WEEKDAY_SHORT_CN: string[] = ['一', '二', '三', '四', '五', '六', '�
  */
 const DUE_DEFAULT_HOUR: number = 23;
 const DUE_DEFAULT_MINUTE: number = 59;
-/** 选择器面板底部按钮条：行高与中间竖分割线高度（vp） */
-const SHEET_FOOTER_HEIGHT_VP: number = 48;
-const SHEET_FOOTER_DIVIDER_VP: number = 20;
 /**
  * 「重复」选择器的选项。**顺序即 index 口径** —— 末尾那几个下标常量与它一一对应，改顺序要一起改。
  *
@@ -59,17 +58,6 @@ const REPEAT_INDEX_YEARLY: number = 4;
 function toDaysOfWeek(date: Date): number {
   const weekday: number = date.getDay();
   return weekday === 0 ? 7 : weekday;
-}
-
-/** 把「日期取 `date`、时分取 `time`」合成一个新的 `Date`（`Date` 不可变，只能造新的） */
-function mergeDate(date: Date, time: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate(),
-    time.getHours(), time.getMinutes(), 0, 0);
-}
-
-/** 把「日期取 `date`、时分换成本次的 `hour`/`minute`」合成一个新的 `Date` */
-function mergeTime(date: Date, hour: number, minute: number): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute, 0, 0);
 }
 
 @ComponentV2
@@ -489,114 +477,59 @@ export struct TaskAttributeCard {
   }
 
   /**
-   * 选择器面板底部那一条「取消 / 确定」：照官方弹窗的排布 —— 等分、中间一条竖细分割线、纯文字。
-   * 参数只是回调、不带「会变的值」，所以不受「@Builder 值参数不刷新」那条坑影响。
+   * 提醒面板内容 —— **复用 `components/DateTimePickerBody.ets`**（官方 `DatePicker` ＋ `TimePicker` ＋ 共用底部条）。
+   * 原来这里内联了一份同样的内容（连 `sheetFooter`、`mergeDate`/`mergeTime` 一起）；
+   * 「添加任务」那边的面板也用它，按 `references/02-编码规约.md` §10 规则 3 收成同一个组件。
    */
   @Builder
-  sheetFooter(onCancel: () => void, onConfirm: () => void) {
-    Row() {
-      Text($r('app.string.action_cancel'))
-        .layoutWeight(1)
-        .height(SHEET_FOOTER_HEIGHT_VP)
-        .textAlign(TextAlign.Center)
-        .fontSize($r('sys.float.ohos_id_text_size_button1'))
-        .fontColor($r('sys.color.font_emphasize'))
-        .onClick(() => {
-          onCancel();
-        })
-
-      Divider()
-        .vertical(true)
-        .height(SHEET_FOOTER_DIVIDER_VP)
-        .color($r('sys.color.comp_divider'))
-
-      Text($r('app.string.action_confirm'))
-        .layoutWeight(1)
-        .height(SHEET_FOOTER_HEIGHT_VP)
-        .textAlign(TextAlign.Center)
-        .fontSize($r('sys.float.ohos_id_text_size_button1'))
-        .fontColor($r('sys.color.font_emphasize'))
-        .onClick(() => {
-          onConfirm();
-        })
-    }
-    .width('100%')
-    .alignItems(VerticalAlign.Center)
-  }
-
-  /** 提醒面板内容：官方 `DatePicker` + `TimePicker`，改的是草稿，点「确定」才写回任务 */
-  @Builder
   remindSheet() {
-    Column() {
-      DatePicker({ selected: this.remindDraft })
-        .width('100%')
-        .onDateChange((value: Date) => {
-          // 只取日期部分，时分保留草稿里的（DatePicker 回来的 Date 带的是系统时分）
-          this.remindDraft = mergeDate(value, this.remindDraft);
-        })
-
-      TimePicker({ selected: this.remindDraft })
-        .useMilitaryTime(true)
-        .width('100%')
-        .onChange((value: TimePickerResult) => {
-          this.remindDraft = mergeTime(this.remindDraft, value.hour, value.minute);
-        })
-
-      this.sheetFooter(() => {
+    DateTimePickerBody({
+      selected: this.remindDraft,
+      onSelectedChange: (date: Date) => {
+        this.remindDraft = date;
+      },
+      onCancel: () => {
         this.closeRemindSheet();
-      }, () => {
+      },
+      onConfirm: () => {
         this.confirmRemind();
-      })
-    }
-    .width('100%')
+      }
+    })
   }
 
-  /** 到期面板内容：与提醒同一个造型，读的是到期草稿 */
+  /** 到期面板内容 —— 同一个 `DateTimePickerBody`，读的是到期草稿 */
   @Builder
   dueSheet() {
-    Column() {
-      DatePicker({ selected: this.dueDraft })
-        .width('100%')
-        .onDateChange((value: Date) => {
-          this.dueDraft = mergeDate(value, this.dueDraft);
-        })
-
-      TimePicker({ selected: this.dueDraft })
-        .useMilitaryTime(true)
-        .width('100%')
-        .onChange((value: TimePickerResult) => {
-          this.dueDraft = mergeTime(this.dueDraft, value.hour, value.minute);
-        })
-
-      this.sheetFooter(() => {
+    DateTimePickerBody({
+      selected: this.dueDraft,
+      onSelectedChange: (date: Date) => {
+        this.dueDraft = date;
+      },
+      onCancel: () => {
         this.closeDueSheet();
-      }, () => {
+      },
+      onConfirm: () => {
         this.confirmDue();
-      })
-    }
-    .width('100%')
+      }
+    })
   }
 
-  /** 重复面板内容：官方 `TextPicker`（一列五档），改草稿档位，点「确定」才映射成规则 */
+  /** 重复面板内容 —— 复用 `OptionPickerBody`（官方 `TextPicker` 一列五档 ＋ 共用底部条） */
   @Builder
   repeatSheet() {
-    Column() {
-      TextPicker({ range: REPEAT_OPTIONS, selected: this.repeatDraftIndex })
-        .width('100%')
-        .onChange((value: string | string[], index: number | number[]) => {
-          // 单列选择器运行时 index 一定是 number；先收窄再赋值
-          if (typeof index === 'number') {
-            this.repeatDraftIndex = index;
-          }
-        })
-
-      this.sheetFooter(() => {
+    OptionPickerBody({
+      options: REPEAT_OPTIONS,
+      selectedIndex: this.repeatDraftIndex,
+      onSelectedIndexChange: (index: number) => {
+        this.repeatDraftIndex = index;
+      },
+      onCancel: () => {
         this.closeRepeatSheet();
-      }, () => {
+      },
+      onConfirm: () => {
         this.confirmRepeat();
-      })
-    }
-    .width('100%')
+      }
+    })
   }
 
   /*

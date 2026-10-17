@@ -1,7 +1,7 @@
 import { HdsNavigation, HdsNavigationMenuContentOptions } from '@kit.UIDesignKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { AddTaskSheet } from '../components/AddTaskSheet';
+import { AddTaskSheet, addTaskSheetOptions } from '../components/AddTaskSheet';
 import { MainTabBar } from '../components/MainTabBar';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { NAV_STACK_KEY, ROUTE_SEARCH } from '../viewmodel/TaskNavParams';
@@ -118,10 +118,25 @@ struct A_Main {
     this.addSheetShown = true;
   }
 
-  /** 半模态的内容 builder —— 内容区整个在 `components/AddTaskSheet.ets` 里 */
+  /**
+   * 半模态的**内容 builder** —— 只是一行装配（组件化约定：页面里的 `@Builder` 只做「喂系统接口」的适配，
+   * 不含任何视觉结构）。内容与选项都在 `components/AddTaskSheet.ets`。
+   *
+   * store 必须传进去：保存时要 `store.addTask()` 把新任务落进列表（半模态是页面的一部分，store 归页面持有）。
+   */
   @Builder
-  addTaskSheetContent() {
-    AddTaskSheet()
+  addTaskSheet() {
+    AddTaskSheet({
+      store: this.store,
+      onSaved: () => {
+        // 保存成功：收起半模态 + 给一条反馈（列表那边会自己重分组刷新）
+        this.addSheetShown = false;
+        this.toast($r('app.string.task_saved'));
+      },
+      onClose: () => {
+        this.addSheetShown = false;
+      }
+    })
   }
 
   build() {
@@ -160,18 +175,9 @@ struct A_Main {
     // 不会重建，所以页签切换、迷你栏折叠都影响不到它。第一个参数必须是 `!!` 双向绑定（见 `addSheetShown`）。
     // 官方另有一条要留意：宿主节点还没上树就把 isShow 置 true，半模态不生效 ——
     // 本页的宿主是常驻的导航根节点，不存在这个问题。
-    .bindSheet(this.addSheetShown!!, this.addTaskSheetContent(), {
-      // 挡位先给官方「半屏」：现在内容区只有一句占位。
-      // 等表单进场再考虑 `detents: [SheetSize.MEDIUM, SheetSize.LARGE]` 多挡位跟手。
-      height: SheetSize.MEDIUM,
-      // 底部弹出（这是默认值，显式写出来把语义钉住；SIDE / CONTENT_COVER 等是 20+ 的其它形态）
-      preferType: SheetType.BOTTOM,
-      // 官方默认就有拖拽条与右上角关闭按钮，两边都显式写出来，免得以后主题改动把关闭入口弄丢
-      dragBar: true,
-      showClose: true,
-      // 标题用资源：与底部那颗按钮的无障碍文案同一个字符串（「添加任务」）
-      title: { title: $r('app.string.action_add_task') }
-    })
+    // **内容与选项都不在这里**：`AddTaskSheet()` 是内容、`addTaskSheetOptions()` 是挡位/标题/关闭按钮，
+    // 两者都在 `components/AddTaskSheet.ets` 里（组件化约定见 `references/02-编码规约.md` §10 规则 5）。
+    .bindSheet(this.addSheetShown!!, this.addTaskSheet(), addTaskSheetOptions())
     .width('100%')
     .height('100%')
   }
