@@ -9,6 +9,7 @@
     "pages/GroupSubPage",
     "pages/GroupListPage",
     "pages/GroupDetailPage",
-    "pages/SettingsPage"
+    "pages/SettingsPage",
+    "pages/ProfilePage"
   ]
 }

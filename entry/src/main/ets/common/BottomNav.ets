@@ -1,19 +1,23 @@
 /**
- * 底部导航：待办 / 群聊 / 设置。
- * 三个页面各自把它挂在最底下，点别处就 replaceUrl 过去（不留返回栈，符合 tab 语义）。
+ * 底部导航：待办 / 群聊 / 画像 / 设置。
+ * 四个页面各自把它挂在最底下，点别处就 replaceUrl 过去（不留返回栈，符合 tab 语义）。
  */
 const TAB_TODO: string = 'todo';
 const TAB_GROUP: string = 'group';
+const TAB_PROFILE: string = 'profile';
 const TAB_SETTINGS: string = 'settings';
 
 @Component
 export struct BottomNav {
-  /** 当前页签：'todo' | 'group' | 'settings' */
+  /** 当前页签：'todo' | 'group' | 'profile' | 'settings' */
   @Prop current: string;
 
   private urlOf(key: string): string {
     if (key === TAB_GROUP) {
       return 'pages/GroupListPage';
+    }
+    if (key === TAB_PROFILE) {
+      return 'pages/ProfilePage';
     }
     if (key === TAB_SETTINGS) {
       return 'pages/SettingsPage';
@@ -24,6 +28,9 @@ export struct BottomNav {
   private labelOf(key: string): string {
     if (key === TAB_GROUP) {
       return '群聊';
+    }
+    if (key === TAB_PROFILE) {
+      return '画像';
     }
     if (key === TAB_SETTINGS) {
       return '设置';
@@ -54,6 +61,7 @@ export struct BottomNav {
     Row() {
       this.tabItem(TAB_TODO)
       this.tabItem(TAB_GROUP)
+      this.tabItem(TAB_PROFILE)
       this.tabItem(TAB_SETTINGS)
     }
     .width('100%')

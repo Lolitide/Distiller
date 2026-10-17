@@ -1,14 +1,17 @@
 import { ApiClient } from '../common/ApiClient';
 import { Config } from '../common/Config';
 import { Store } from '../common/Store';
+import { AttachmentStore } from '../common/AttachmentStore';
 import { BottomNav } from '../common/BottomNav';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { PollService } from '../service/PollService';
-import { BindCodeData, BindCodeBody, BindStatusData, MyData, DeletedData } from '../common/Types';
-import { safeToast, safeReplace } from '../common/UiParts';
+import { BindCodeData, BindCodeBody, BindStatusData, MyData, DeletedData, formatBytes } from '../common/Types';
+import { safeToast, safeReplace, safePush } from '../common/UiParts';
 
 const PRIVACY_TEXT = '本应用通过 QQ 机器人接收您主动订阅的群聊中公开可见的文本消息，用于生成您个人待办与提醒。\n' +
   '我们的服务器不保存聊天消息正文：消息仅用于判断是否属于您的订阅范围，并只在服务器内存中保留最多 30 分钟供您同步；超过 30 分钟未同步的消息将被自动删除且无法找回。\n' +
+  '群里的图片和文件在您同步到本机后，会保存在**本机沙箱**里（不属于服务器存储）；您可在本页随时清除。\n' +
+  '「我的画像」的全部词条同样**只保存在本机**。分析画像时，只会把从您本人发言中统计出的「词 + 出现次数」这类统计数字发送到您的服务器做归纳，**不发送任何聊天原文**，且服务器不保存这些内容。\n' +
   '服务器保存的仅为您的订阅关系（您选择了哪些群）与匿名设备标识；您可随时撤回订阅，或一键删除服务器上属于您的全部数据。\n' +
   '未订阅的群、他人订阅的群的消息，我们既不保存，也不会向您分发。';
 
@@ -27,6 +30,11 @@ struct SettingsPage {
   @State pairCode: string = '';
   @State bindHint: string = '';
   @State hideSelf: boolean = false;
+  /** 本机已落盘的附件（图片/文件）占用 */
+  @State attachBytes: number = 0;
+  @State attachCount: number = 0;
+  /** 本机画像词条数 */
+  @State profileCount: number = 0;
   private bindTimerId: number = -1;
   private bindPollCount: number = 0;
   private baselineBoundAt: string = '';
@@ -48,6 +56,17 @@ struct SettingsPage {
     this.msgCount = Store.getMessages().length;
     this.lastSync = PollService.lastSyncAt;
     this.boundTail = Store.getBoundTail();
+    this.attachBytes = AttachmentStore.totalBytes();
+    this.attachCount = AttachmentStore.count();
+    this.profileCount = Store.getProfile().length;
+  }
+
+  attachText(): string {
+    if (this.attachCount === 0) {
+      return '暂无';
+    }
+    const size: string = formatBytes(this.attachBytes);
+    return this.attachCount + ' 个 · ' + (size.length > 0 ? size : '0B');
   }
 
   async loadBindStatus(): Promise<void> {
@@ -176,9 +195,17 @@ struct SettingsPage {
 
   clearLocalMessages(): void {
     Store.clearMessages();
+    // 附件是消息的一部分：清了消息就必须连带清附件，否则本机留下无主文件
+    AttachmentStore.deleteAll();
     AppStorage.setOrCreate<number>('msgVersion', (AppStorage.get<number>('msgVersion') ?? 0) + 1);
     this.refreshLocal();
-    safeToast(this.getUIContext(), '已清空本机消息');
+    safeToast(this.getUIContext(), '已清空本机消息与附件');
+  }
+
+  clearAttachments(): void {
+    AttachmentStore.deleteAll();
+    this.refreshLocal();
+    safeToast(this.getUIContext(), '已清除本机已存的图片/文件');
   }
 
   confirmDeleteServer(): void {
@@ -203,6 +230,7 @@ struct SettingsPage {
     const res = await ApiClient.del<DeletedData>('/api/relay/my/data');
     if (res.ok) {
       Store.clearAll();
+      AttachmentStore.deleteAll();
       AppStorage.setOrCreate<number>('msgVersion', (AppStorage.get<number>('msgVersion') ?? 0) + 1);
       safeToast(this.getUIContext(), '已删除服务端数据');
       safeReplace(this.getUIContext(), 'pages/OnboardingPage');
@@ -281,6 +309,27 @@ struct SettingsPage {
           .width('100%')
 
           Column({ space: 8 }) {
+            Text('我的画像')
+              .fontSize(16)
+              .fontWeight(FontWeight.Medium)
+            Row({ space: 12 }) {
+              Text('本机已保存 ' + this.profileCount + ' 条词条')
+                .fontSize(13)
+                .layoutWeight(1)
+              Button('查看 / 分析')
+                .onClick(() => {
+                  safePush(this.getUIContext(), 'pages/ProfilePage');
+                })
+            }
+            .width('100%')
+            Text('从你自己发过的消息里统计出的关注点，只存在本机；可逐条删除、手动补充、导出备份。')
+              .fontSize(12)
+              .fontColor(Color.Gray)
+          }
+          .alignItems(HorizontalAlign.Start)
+          .width('100%')
+
+          Column({ space: 8 }) {
             Text('绑定信息')
               .fontSize(16)
               .fontWeight(FontWeight.Medium)
@@ -334,6 +383,19 @@ struct SettingsPage {
             Text('清理')
               .fontSize(16)
               .fontWeight(FontWeight.Medium)
+            Row({ space: 12 }) {
+              Text('本机已存图片/文件：' + this.attachText())
+                .fontSize(13)
+                .layoutWeight(1)
+              Button('清除附件')
+                .onClick(() => {
+                  this.clearAttachments();
+                })
+            }
+            .width('100%')
+            Text('群里的图片和文件会在收到后立刻存到本机，这样超过服务端 30 分钟窗口也能查看；可按 200MB 上限自动淘汰最旧的，也可随时在这里手动清除。')
+              .fontSize(12)
+              .fontColor(Color.Gray)
             Button('清空本机消息')
               .onClick(() => {
                 this.clearLocalMessages();

@@ -1,7 +1,7 @@
 import { preferences } from '@kit.ArkData';
 import { Config } from './Config';
 import { ApiClient } from './ApiClient';
-import { RobotMessage, GroupItem, LocalSubscription } from './Types';
+import { RobotMessage, GroupItem, LocalSubscription, ProfileEntry } from './Types';
 
 const STORE_NAME = 'zhiliao_store';
 const K_DEVICE_ID = 'device_id';
@@ -14,6 +14,8 @@ const K_BASE_URL = 'base_url';
 const K_BOUND_TAIL = 'bound_openid_tail';
 const K_PENDING = 'pending_parse_json';
 const K_HIDE_SELF = 'hide_self';
+const K_PROFILE = 'profile_json';
+const K_PROFILE_AT = 'profile_at';
 
 export class Store {
   private static pref: preferences.Preferences | null = null;
@@ -180,8 +182,41 @@ export class Store {
     }
   }
 
-  static getPending(): RobotMessage[] {
-    const raw: string = Store.getString(K_PENDING, '[]');
+  // ---------------------------------------------------------------- 用户画像
+  //
+  // 画像词条**只存在这台手机上**（preferences 单键 JSON），随「清空本机数据」一起删。
+  // 落盘内容只有「词 + 计数 + 类别 + 权重」，不含任何聊天原话。
+  // 后端只在分析那一次看到「词频表」，不留存（见 profile_summarize.py）。
+
+  static getProfile(): ProfileEntry[] {
+    const raw: string = Store.getString(K_PROFILE, '[]');
+    try {
+      return JSON.parse(raw) as ProfileEntry[];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  static saveProfile(list: ProfileEntry[]): void {
+    Store.putString(K_PROFILE, JSON.stringify(list));
+  }
+
+  static clearProfile(): void {
+    Store.putString(K_PROFILE, '[]');
+    Store.putString(K_PROFILE_AT, '0');
+  }
+
+  /** 上次分析画像的时刻（毫秒）；0 表示还没分析过。 */
+  static getProfileAt(): number {
+    const n: number = Number(Store.getString(K_PROFILE_AT, '0'));
+    return Number.isNaN(n) ? 0 : n;
+  }
+
+  static setProfileAt(v: number): void {
+    Store.putString(K_PROFILE_AT, String(v));
+  }
+
+  static getPending(): RobotMessage[] {    const raw: string = Store.getString(K_PENDING, '[]');
     try {
       return JSON.parse(raw) as RobotMessage[];
     } catch (e) {
@@ -225,5 +260,7 @@ export class Store {
     Store.putString(K_MAX_SEQ, '0');
     Store.putString(K_BOUND_TAIL, '');
     Store.putString(K_PENDING, '[]');
+    Store.putString(K_PROFILE, '[]');
+    Store.putString(K_PROFILE_AT, '0');
   }
 }

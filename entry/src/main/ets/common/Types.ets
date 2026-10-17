@@ -2,7 +2,7 @@
  * 知了 · 机器人通道 —— 接口类型定义（Types.ets）
  */
 
-import { CampusEvent } from '../nlp/EventTypes';
+import { CampusEvent, CandidateStep, LEVEL_MEDIUM } from '../nlp/EventTypes';
 import { TimeSlot } from '../nlp/TimeParser';
 
 // ============================================================ 统一响应包
@@ -120,6 +120,28 @@ export interface ServeParse {
   items: string[];
   confidence: number;
   tags: string[];
+
+  // ---- 卡片字段（《任务字段表&idea更新》v1；后端 card_fields 产出）----
+  /** urgent / high / normal / later —— 映射层换算成 0/1/2 */
+  priority?: string;
+  /** 0 易 / 1 中 / 2 难 */
+  level?: number;
+  /** bot / manual / paste / share / voice */
+  channel?: string;
+  /** 截止时刻（毫秒）；0 = 没有 */
+  dueAt?: number;
+  /** 截止原话（等于 timeText） */
+  dueText?: string;
+  /** none / day / week / month / year / workingDay */
+  repeat?: string;
+  /** 重复周期原话 */
+  repeatText?: string;
+  /** 置信度 ×100（0~100） */
+  certainty?: number;
+  /** 缺失字段名：place / who / dueAt */
+  missingFields?: string[];
+  /** 子步骤（副卡片） */
+  steps?: CandidateStep[];
 }
 
 /** GET /api/relay/messages?after=<seq>&limit=<n> */
@@ -193,12 +215,23 @@ export interface ParseCandidate {
   who: string;
   deadline: string;
   items: string[];
-  steps: string[];
+  /** 子步骤：`{content, done}`（《任务字段表》#25） */
+  steps: CandidateStep[];
   tags: string[];
   confidence: number;
   engine: string;
   source: ParseCandidateSource;
   created_at: string;
+  // ---- 卡片字段（《任务字段表&idea更新》v1）----
+  level?: number;
+  category?: string;
+  channel?: string;
+  due_at?: number;
+  due_text?: string;
+  repeat?: string;
+  repeat_text?: string;
+  certainty?: number;
+  missing_fields?: string[];
 }
 
 /** POST /api/relay/parse 的响应 data */
@@ -277,6 +310,12 @@ export interface RobotMessage extends ServeMessage {
   handled: boolean;
   /** 用户明确「忽略」的消息：列表不再展示，数据保留（回传过 dismiss 后的本地态） */
   dismissed?: boolean;
+  /** 卡片那个完成圆圈：true = 已完成（对应 Task.status = 3） */
+  done?: boolean;
+  /** 完成时刻（毫秒）；未完成时为空 */
+  doneAt?: number;
+  /** 提醒开关（**用户意图**，只存本机）。有 dueAt 才给开关 */
+  alarm?: boolean;
   parsedAt?: string;
   parseOk?: boolean;
   category?: string;
@@ -300,6 +339,143 @@ export interface LocalSubscription {
   min_priority: string;
   mute: boolean;
   enabled: boolean;
+}
+
+// ============================================================ 用户画像（只存本机）
+
+/**
+ * 画像词条的类别。
+ *
+ * **必须与后端 `profile_summarize.KINDS` 逐字一致**——后端返回的 kind 落不进这里
+ * 就会被 `toProfileKind` 归到「关注点」。
+ */
+export enum ProfileKind {
+  /** 关注点：竞赛 / 考研 / 社团 */
+  INTEREST = 'interest',
+  /** 常去地点：康桥苑 / 主楼A103 */
+  PLACE = 'place',
+  /** 身份线索：书院 / 专业 / 年级 */
+  ROLE = 'role',
+  /** 作息：晚上 / 周末 */
+  SCHEDULE = 'schedule',
+  /** 提醒偏好：从用户自己的操作里总结出来的 */
+  PREFERENCE = 'preference'
+}
+
+/** 后端 `POST /api/relay/profile` 返回的一条词条（端侧再补 id/时间/来源等本地字段） */
+export interface ProfileEntryRaw {
+  kind: string;
+  term: string;
+  weight: number;
+  /** 出现次数（端侧统计出来的，后端原样回传） */
+  evidence: number;
+  /** 由**规则**生成的说明（如「出现 12 次」），不是模型编的 */
+  reason: string;
+}
+
+/** `POST /api/relay/profile` 的响应 data */
+export interface ProfileData {
+  entries: ProfileEntryRaw[];
+  /** 'llm'（模型归纳）| 'rules'（规则回退） */
+  engine: string;
+}
+
+/**
+ * 一条画像词条（**只存在这台手机上**）。
+ *
+ * 落盘内容只有「词 + 计数 + 类别 + 权重」，**不含任何聊天原话**——
+ * 与按群词表（`group_lexicon`）同一套口径。
+ */
+export interface ProfileEntry {
+  /** 'p_' + kind + '_' + term，幂等：同一个词重复分析不会变成两条 */
+  id: string;
+  kind: ProfileKind;
+  term: string;
+  /** 0~100，越大越能代表这个人 */
+  weight: number;
+  evidence: number;
+  firstTs: number;
+  lastTs: number;
+  /** 'rules' | 'llm' | 'manual' */
+  source: string;
+  reason: string;
+  /** 用户手动加的：AI 更新时只刷权重，绝不改词、绝不删 */
+  manual: boolean;
+}
+
+/** 一条素材词：**只有词和数字，没有原话**。这是出端侧的唯一形态。 */
+export interface ProfileTerm {
+  kind: string;
+  term: string;
+  count: number;
+}
+
+/** 画像素材的行为计数（全是数字/枚举串，不含内容） */
+export interface ProfileCounters {
+  /** 采集到的「我自己发的」消息条数 */
+  selfMsgs: number;
+  /** 其中被判定为待办/通知/活动/出行计划的条数 */
+  todoCount: number;
+  /** 被忽略过的条数 */
+  dismissCount: number;
+  /** 最活跃时段，如 '21:00-23:00'；算不出为空串 */
+  activeHours: string;
+}
+
+/** 送给后端做归纳的素材包（`POST /api/relay/profile`） */
+export interface ProfileMaterial {
+  terms: ProfileTerm[];
+  counters: ProfileCounters;
+}
+
+/** `POST /api/relay/profile` 的请求体 */
+export interface ProfileBody {
+  material: ProfileMaterial;
+  max_entries: number;
+}
+
+/** 画像导出文件（换手机时用户自己搬运；导入时当**不可信输入**逐字段校验） */
+export interface ProfileExport {
+  version: number;
+  exported_at: string;
+  entries: ProfileEntry[];
+}
+
+export function toProfileKind(raw: string): ProfileKind {
+  if (raw === 'place') {
+    return ProfileKind.PLACE;
+  }
+  if (raw === 'role') {
+    return ProfileKind.ROLE;
+  }
+  if (raw === 'schedule') {
+    return ProfileKind.SCHEDULE;
+  }
+  if (raw === 'preference') {
+    return ProfileKind.PREFERENCE;
+  }
+  return ProfileKind.INTEREST;
+}
+
+export function profileKindLabel(k: ProfileKind): string {
+  if (k === ProfileKind.PLACE) {
+    return '常去地点';
+  }
+  if (k === ProfileKind.ROLE) {
+    return '身份线索';
+  }
+  if (k === ProfileKind.SCHEDULE) {
+    return '作息';
+  }
+  if (k === ProfileKind.PREFERENCE) {
+    return '提醒偏好';
+  }
+  return '关注点';
+}
+
+/** 词条的稳定 id：同一个 (类别, 词) 永远得到同一个 id。 */
+export function profileEntryId(kind: ProfileKind, term: string): string {
+  return 'p_' + kind + '_' + term;
 }
 
 /** 页面跳转参数 */
@@ -348,7 +524,18 @@ function serverEvent(m: RobotMessage, p: ServeParse): CampusEvent {
     sender: m.sender,
     timestamp: m.timestamp,
     msgId: m.msg_id,
-    tags: p.tags
+    tags: p.tags,
+    // ---- 卡片字段（映射层换算）----
+    priority: priorityToInt(p.priority ?? ''),
+    level: p.level ?? LEVEL_MEDIUM,
+    dueAt: (p.dueAt !== undefined && p.dueAt > 0) ? p.dueAt : dueAtOf(p.timeNormalized),
+    repeat: p.repeat ?? 'none',
+    repeatText: p.repeatText ?? '',
+    steps: p.steps ?? [],
+    certainty: p.certainty ?? Math.round((p.confidence ?? 0) * 100),
+    missingFields: p.missingFields ?? [],
+    channel: p.channel ?? 'bot',
+    category: p.category
   };
   return ev;
 }
@@ -379,9 +566,125 @@ export function parseCandidateToEvent(c: ParseCandidate, sourceText: string,
     sender: '我',
     timestamp: ts,
     msgId: msgId,
-    tags: c.tags
+    tags: c.tags,
+    priority: priorityToInt(c.priority ?? ''),
+    level: c.level ?? LEVEL_MEDIUM,
+    dueAt: (c.due_at !== undefined && c.due_at > 0) ? c.due_at : dueAtOf(c.time_normalized),
+    repeat: c.repeat ?? 'none',
+    repeatText: c.repeat_text ?? '',
+    steps: c.steps ?? [],
+    certainty: c.certainty ?? Math.round((c.confidence ?? 0) * 100),
+    missingFields: c.missing_fields ?? [],
+    channel: c.channel ?? 'manual',
+    category: c.category
   };
   return ev;
+}
+
+// ============================================================ 卡片字段（映射层）
+//
+// 口径见 `HM_Cicada/任务字段表/任务字段表&idea更新.md` v1。
+// 后端给的是「规则值」，这里做**展示层的换算**：
+//   priority 字符串 -> 三态红圈 / confidence -> 0~100 / time_normalized -> 毫秒戳。
+
+/** 后端 priority（urgent/high/normal/later）-> 0 普通 / 1 重要 / 2 紧急。 */
+export function priorityToInt(raw: string): number {
+  if (raw === 'urgent') {
+    return 2;
+  }
+  if (raw === 'high') {
+    return 1;
+  }
+  return 0;
+}
+
+/**
+ * `time_normalized` -> 毫秒时间戳（认不出返回 0，与后端的 `due_at` 同口径）。
+ *
+ * 只有日期（`2026-10-17`）时按**当天 23:59:59** 算——否则零点一过就显示"已过期"，
+ * 而"今天截止"显然应该指今天的结束。
+ */
+export function dueAtOf(timeNormalized: string): number {
+  const s: string = (timeNormalized ?? '').trim();
+  if (s.length < 10) {
+    return 0;
+  }
+  const hasClock: boolean = s.length >= 16;
+  const iso: string = hasClock
+    ? s.substring(0, 10) + 'T' + s.substring(11, 16) + ':00'
+    : s.substring(0, 10) + 'T23:59:59';
+  const t: number = Date.parse(iso);
+  return Number.isNaN(t) ? 0 : t;
+}
+
+/**
+ * 卡片的截止文案（**由 dueAt 与当前时间算出，不落库**）。
+ *
+ * | 剩余      | 文案            |
+ * | ≥24h 今天 | `今天截止`      |
+ * | ≥24h 明天 | `明天截止`      |
+ * | ≥24h 后天 | `后天截止`      |
+ * | ≥24h n 天 | `n 天后截止`    |
+ * | <24h      | `__h 后截止`    |
+ * | 已过      | `已过期`        |
+ *
+ * **卡片上不显示时分**（宽度放不下，且与"n 天后截止"并列会互相打架）；
+ * 精确时刻只在详情页出现。
+ */
+export function dueLabel(dueAt: number, nowMs: number): string {
+  if (dueAt <= 0) {
+    return '';
+  }
+  const diff: number = dueAt - nowMs;
+  if (diff <= 0) {
+    return '已过期';
+  }
+  const HOUR: number = 3600 * 1000;
+  if (diff < 24 * HOUR) {
+    const h: number = Math.max(1, Math.ceil(diff / HOUR));
+    return h + 'h 后截止';
+  }
+  const a: Date = new Date(nowMs);
+  const b: Date = new Date(dueAt);
+  const dayA: number = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+  const dayB: number = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+  const days: number = Math.round((dayB - dayA) / (24 * HOUR));
+  if (days <= 0) {
+    return '今天截止';
+  }
+  if (days === 1) {
+    return '明天截止';
+  }
+  if (days === 2) {
+    return '后天截止';
+  }
+  return days + '天后截止';
+}
+
+/** 重复周期的展示文案（优先用原文，如「每周一三五」）。 */
+export function repeatLabel(repeat: string, repeatText: string): string {
+  if (repeat.length === 0 || repeat === 'none') {
+    return '';
+  }
+  if (repeatText.length > 0) {
+    return repeatText;
+  }
+  if (repeat === 'day') {
+    return '每天';
+  }
+  if (repeat === 'week') {
+    return '每周';
+  }
+  if (repeat === 'month') {
+    return '每月';
+  }
+  if (repeat === 'year') {
+    return '每年';
+  }
+  if (repeat === 'workingDay') {
+    return '工作日';
+  }
+  return '';
 }
 
 export function toRobotMessages(remote: ServeMessage[]): RobotMessage[] {
