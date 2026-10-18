@@ -35,6 +35,7 @@ import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
 import { DateTimePickerBody } from './DateTimePickerBody';
 import { OptionPickerBody } from './OptionPickerBody';
+import { RepeatPickerBody } from './RepeatPickerBody';
 import { TagInputBody } from './TagInputBody';
 
 const DOMAIN: number = 0x0000;
@@ -64,6 +65,12 @@ const PICKER_REPEAT: number = 3;
 const PICKER_PRIORITY: number = 4;
 const PICKER_SOURCE: number = 5;
 const PICKER_TAG: number = 6;
+
+/**
+ * 重复面板的固定高度（vp）。
+ * 要能同时装下：档位轮（约 200vp）+ 星期提示与七个圆钮（约 70vp）+ 间隔行（约 50vp）+ 底部条（约 60vp）。
+ */
+const REPEAT_SHEET_HEIGHT_VP: number = 460;
 
 /**
  * 来源档位下标 —— 顺序与任务详情页元信息卡的 `SOURCE_OPTIONS` / `SOURCE_VALUES` 一致
@@ -103,6 +110,10 @@ export struct AddTaskAttributeChips {
   @Local remindDraft: Date = new Date();
   /** 重复面板草稿档位（点「确定」才落到 `repeatIndex`） */
   @Local repeatDraftIndex: number = REPEAT_NONE;
+  /** 重复面板草稿：选中的星期（1~7，空数组＝跟随截止日） */
+  @Local repeatDraftDays: number[] = [];
+  /** 重复面板草稿：每 N 周（最小 1） */
+  @Local repeatDraftInterval: number = 1;
   /** 重要程度面板草稿档位（点「确定」才落到 `priorityIndex`） */
   @Local priorityDraftIndex: number = PRIORITY_NORMAL;
   /** 来源面板草稿档位（点「确定」才落到 `sourceIndex`） */
@@ -333,9 +344,11 @@ export struct AddTaskAttributeChips {
     this.pickerKind = PICKER_REMIND;
   }
 
-  /** 重复面板：草稿从当前档位起（默认不重复） */
+  /** 重复面板：草稿从当前档位 / 星期 / 间隔起（默认不重复、不选星期、间隔 1） */
   private openRepeatPicker(): void {
     this.repeatDraftIndex = this.draft.repeatIndex;
+    this.repeatDraftDays = this.draft.repeatDaysOfWeek.slice();
+    this.repeatDraftInterval = this.draft.repeatInterval;
     this.pickerKind = PICKER_REPEAT;
   }
 
@@ -397,6 +410,9 @@ export struct AddTaskAttributeChips {
       this.draft.remindAt = this.remindDraft.getTime();
     } else if (this.pickerKind === PICKER_REPEAT) {
       this.draft.repeatIndex = this.repeatDraftIndex;
+      // 只有「每周」才把星期与间隔写回；其它档位的星期留在草稿里不影响规则生成（`repeatRules` 只在 WEEKLY 读它）
+      this.draft.repeatDaysOfWeek = this.repeatDraftDays.slice();
+      this.draft.repeatInterval = this.repeatDraftInterval;
     } else if (this.pickerKind === PICKER_PRIORITY) {
       this.draft.priorityIndex = this.priorityDraftIndex;
     } else if (this.pickerKind === PICKER_SOURCE) {
@@ -684,12 +700,22 @@ export struct AddTaskAttributeChips {
         }
       })
     } else if (this.pickerKind === PICKER_REPEAT) {
-      // 官方单列文本选择器（与详情页重复选择器同一个组件）
-      OptionPickerBody({
+      // 重复面板：档位轮 + （每周时）星期多选 + 间隔。
+      // 用专门的 `RepeatPickerBody` 而不是单列 `OptionPickerBody`：字段表 §1.1 要求能录「每周一、二、四」，
+      // 单列选择器录不进具体星期。
+      RepeatPickerBody({
         options: this.repeatOptionTexts,
         selectedIndex: this.repeatDraftIndex,
+        daysOfWeek: this.repeatDraftDays,
+        interval: this.repeatDraftInterval,
         onSelectedIndexChange: (index: number) => {
           this.repeatDraftIndex = index;
+        },
+        onDaysOfWeekChange: (days: number[]) => {
+          this.repeatDraftDays = days;
+        },
+        onIntervalChange: (interval: number) => {
+          this.repeatDraftInterval = interval;
         },
         onCancel: () => {
           this.closePicker();
@@ -803,7 +829,9 @@ export struct AddTaskAttributeChips {
     .bindSheet(this.pickerOpen, this.pickerBody(), {
       title: { title: this.pickerTitle },
       preferType: SheetType.CENTER,
-      height: SheetSize.FIT_CONTENT,
+      // 重复面板要装「档位轮 + 星期多选 + 间隔 + 底部条」，`FIT_CONTENT` 会在开面板时就把高度定死，
+      // 之后切换到「每周」时多出来的星期行会被裁掉 → 这一个面板给它固定高度。
+      height: this.pickerKind === PICKER_REPEAT ? REPEAT_SHEET_HEIGHT_VP : SheetSize.FIT_CONTENT,
       showClose: false,
       dragBar: false,
       onDisappear: () => {

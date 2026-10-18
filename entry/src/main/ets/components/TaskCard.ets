@@ -36,6 +36,36 @@ const CARD_HEIGHT_VP: number = 76;
 /** 文字行距（vp）：HDS 原排版的行距实测 ≈20vp（标题）/ ≈16vp（副标题、描述），这里统一到 20vp 的下限档，避免挤压 */
 const LINE_HEIGHT_VP: number = 20;
 
+/* ── 第二行（标签胶囊 / 重要性标识 / 截止 / 重复）的尺寸 ── */
+/** 第二行行高（vp）：比标题略矮，胶囊与圆圈在这个高度里居中 */
+const SECOND_LINE_HEIGHT_VP: number = 18;
+/** 第二行元素间距（vp） */
+const SECOND_LINE_GAP_VP: number = 6;
+/**
+ * 标签胶囊最多显示几个，其余折成 `+n`。
+ *
+ * **取 1 而不是 2**：第二行要同时装「标签胶囊 + 重要性标识 + 截止信息 + 重复性标识」，
+ * 而右侧还可能有「响铃提醒」开关（HDS 的 C 区，约占 126px）。实测显示 2 个胶囊时
+ * 「已过期」「每周一、二、四」都会被截断（见 _shots 的对比截图），收敛到 1 个 + `+n` 后能完整显示。
+ */
+const TAG_CHIP_MAX: number = 1;
+/** 标签胶囊左右内边距（vp） */
+const TAG_CHIP_SIDE_PADDING_VP: number = 6;
+/** 标签胶囊上下内边距（vp） */
+const TAG_CHIP_VERTICAL_PADDING_VP: number = 1;
+/** 标签胶囊圆角（vp）：取其高度的一半，做成完整胶囊 */
+const TAG_CHIP_RADIUS_VP: number = 8;
+
+/* ── 重要性标识（字段表 §2.1 的三态图形）── */
+/** 圈内那个感叹号 */
+const PRIORITY_MARK: string = '!';
+/** 标识直径（vp）：与第二行行高同档，不撑高卡片 */
+const PRIORITY_BADGE_SIZE_VP: number = 14;
+/** 标识字号（vp）：圈内感叹号 */
+const PRIORITY_BADGE_FONT_SIZE: number = 10;
+/** 空心圈的描边宽度（vp） */
+const PRIORITY_BADGE_BORDER_VP: number = 1.5;
+
 @ComponentV2
 export struct TaskCard {
   @Require @Param task: Task;
@@ -64,28 +94,17 @@ export struct TaskCard {
   }
 
   /**
-   * 卡片底色用**重要程度**表达（需求方 2026-10-15：「description 里面的重要程度不显示了，
-   * 改成普通卡片白色 / 重要黄色 / 严重红色」）＋ 完成态灰化。
+   * 卡片底色：**统一白底，完成态灰化**。
    *
-   * **优先级：完成态灰化 > 重要程度色**（做完的卡片统一灰掉，不再按轻重着色）。
-   * 配色**全部取官方 token**（真值查自预览器资源表）：
-   *   普通 → `ohos_id_color_card_bg`（`#ffffffff` 卡片白）
-   *   重要 → `ohos_id_color_palette_aux11`（`#fff5dc62` 浅黄）—— ⚠️ 官方**没有"黄色"语义色**，
-   *          这是官方调色板里最贴的暖色（属已知偏离：语义 token 用不了，借调色板 token）
-   *   严重 → `comp_background_warning_secondary`（`#FDD9D9` 浅红）—— 官方语义色里 `alert`=橙(`#ff7500`)、
-   *          `warning`=红(`#fa2a2d`)，两者都是饱和色、当整片卡面太重，故取「警示背景**次级色**」
-   *   完成 → `gray_03`（`#d1d1d6`）
+   * ⚠️ 2026-10-17 按字段表 §2.1 改为图形标识后，这里**不再**按重要程度着色
+   * （旧口径：普通白 / 重要浅黄 / 严重浅红 —— 已废弃，重要程度改由第二行的红圈/红实心圆表达）。
+   *   统一白底 → `ohos_id_color_card_bg`（`#ffffffff`）
+   *   完成   → `gray_03`（`#d1d1d6`，官方浅灰阶第三档）
    */
   @Computed
   get cardBackground(): Resource {
     if (this.completed) {
       return $r('sys.color.gray_03');
-    }
-    if (this.task.priority === TaskPriority.URGENT) {
-      return $r('sys.color.comp_background_warning_secondary');
-    }
-    if (this.task.priority === TaskPriority.IMPORTANT) {
-      return $r('sys.color.ohos_id_color_palette_aux11');
     }
     return $r('sys.color.ohos_id_color_card_bg');
   }
@@ -122,22 +141,55 @@ export struct TaskCard {
     });
   }
 
-  /** 副标题：在 HH:mm 截止 */
+  /** 卡片第二行：截止信息（`在 HH:mm 截止`）。没有到期时间就为空，不占位 */
   @Computed
   get dueLabel(): string {
     return TaskListViewModel.dueLabel(this.task);
   }
 
-  /** 描述行：优先级链取前两项 */
+  /** 卡片第二行：重复性标识（`每周一、二、四`）。非周期任务为空 */
   @Computed
-  get descriptionLabel(): string {
-    return TaskListViewModel.descriptionLabel(this.task, new Date());
+  get repeatLabel(): string {
+    return TaskListViewModel.repeatLabel(this.task);
+  }
+
+  /**
+   * 卡片第二行：标签胶囊的文本，**最多显示两个**，第三个起折成 `+n`。
+   * （字段表 §2：第二行依次是 标签胶囊 → 重要性标识 → 截止信息 → 重复性标识）
+   */
+  @Computed
+  get tagChipList(): string[] {
+    const tags: string[] | undefined = this.task.tags;
+    if (tags === undefined || tags.length === 0) {
+      return [];
+    }
+    if (tags.length <= TAG_CHIP_MAX) {
+      return tags;
+    }
+    const head: string[] = tags.slice(0, TAG_CHIP_MAX);
+    head.push(`+${tags.length - TAG_CHIP_MAX}`);
+    return head;
+  }
+
+  /** 重要性标识是否占位：**0（普通）不占位**，不是"显示一个普通样式" */
+  @Computed
+  get showPriorityBadge(): boolean {
+    return this.task.priority !== TaskPriority.NORMAL;
+  }
+
+  /** 严重（2）＝ 红色实心圆 + 白感叹号；重要（1）＝ 红色空心圈 + 红感叹号 */
+  @Computed
+  get prioritySolid(): boolean {
+    return this.task.priority === TaskPriority.URGENT;
   }
 
   /** 自定义文字区之后，卡片的无障碍文本要自己拼（HDS 不再从 primaryText/description 取） */
   @Computed
   get accessibilityLabel(): string {
-    return `${this.task.name} ${this.dueLabel} ${this.descriptionLabel}`;
+    const priorityText: string = this.showPriorityBadge
+      ? `${TaskListViewModel.priorityLabel(this.task.priority)} ` : '';
+    const repeatText: string = this.repeatLabel === '' ? '' : `${this.repeatLabel} `;
+    return `${priorityText}${this.task.name} ${this.dueLabel} ${repeatText}`;
   }
 
   @Builder
@@ -161,9 +213,13 @@ export struct TaskCard {
 
   /**
    * 自定义文字区（官方 `TextItemOptions.customBuilder`）。
-   * 标题**加粗**用官方 `FontWeight.Bold`；三行都限一行 + 省略号，避免长文本把固定高度的卡片撑破。
-   * 副标题 / 描述**空的时候不渲染**（需求方 2026-10-14 定：空的不占行）—— 卡片高度由 `CARD_HEIGHT_VP` 钉死，
-   * 所以行数少了不会让卡片变矮、留白也不会跟着变。
+   *
+   * **卡片只有两行**（字段表 §2，2026-10-17 定）：
+   *   第 1 行 = 任务名（粗体）
+   *   第 2 行 = **标签胶囊 → 重要性标识 → 截止信息 → 重复性标识**，四样依次排在同一行
+   * 不再有「来源于 …」那第三行（`source` 按字段表只在详情页显示）。
+   *
+   * 空的部分**不占位**；卡片高度由 `CARD_HEIGHT_VP` 钉死，所以行内元素少了也不会变矮。
    */
   @Builder
   textBlock() {
@@ -178,30 +234,85 @@ export struct TaskCard {
         .width('100%')
         .textAlign(TextAlign.Start)
 
-      if (this.dueLabel !== '') {
-        Text(this.dueLabel)
-          .fontSize($r('sys.float.ohos_id_text_size_body2'))
-          .fontColor(this.textColor)
-          .lineHeight(`${LINE_HEIGHT_VP}vp`)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .width('100%')
-          .textAlign(TextAlign.Start)
-      }
+      Row({ space: SECOND_LINE_GAP_VP }) {
+        // ① 标签胶囊
+        ForEach(this.tagChipList, (chip: string) => {
+          Text(chip)
+            .fontSize($r('sys.float.ohos_id_text_size_caption'))
+            .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+            .maxLines(1)
+            .padding({
+              left: TAG_CHIP_SIDE_PADDING_VP,
+              right: TAG_CHIP_SIDE_PADDING_VP,
+              top: TAG_CHIP_VERTICAL_PADDING_VP,
+              bottom: TAG_CHIP_VERTICAL_PADDING_VP
+            })
+            .backgroundColor($r('sys.color.comp_background_secondary'))
+            .borderRadius(TAG_CHIP_RADIUS_VP)
+            .flexShrink(0)
+        }, (chip: string) => chip)
 
-      if (this.descriptionLabel !== '') {
-        Text(this.descriptionLabel)
-          .fontSize($r('sys.float.ohos_id_text_size_body2'))
-          .fontColor(this.textColor)
-          .lineHeight(`${LINE_HEIGHT_VP}vp`)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .width('100%')
-          .textAlign(TextAlign.Start)
+        // ② 重要性标识（图形）：0 不占位 / 1 红圈红叹 / 2 红实心圆白叹
+        if (this.showPriorityBadge) {
+          this.priorityBadge()
+        }
+
+        // ③ 截止信息
+        if (this.dueLabel !== '') {
+          Text(this.dueLabel)
+            .fontSize($r('sys.float.ohos_id_text_size_body2'))
+            .fontColor(this.textColor)
+            .lineHeight(`${SECOND_LINE_HEIGHT_VP}vp`)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .flexShrink(1)
+        }
+
+        // ④ 重复性标识
+        if (this.repeatLabel !== '') {
+          Text(this.repeatLabel)
+            .fontSize($r('sys.float.ohos_id_text_size_body2'))
+            .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+            .lineHeight(`${SECOND_LINE_HEIGHT_VP}vp`)
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .flexShrink(1)
+        }
       }
+      .width('100%')
+      .height(`${SECOND_LINE_HEIGHT_VP}vp`)
+      .alignItems(VerticalAlign.Center)
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
+  }
+
+  /**
+   * 重要性标识（字段表 §2.1 的三态图形）。
+   *   1 → 红色空心圈 + 红色感叹号
+   *   2 → 红色实心圆 + 白色感叹号
+   * 用 `Stack` + `Text('!')` 手绘：官方 Symbol 库里没有"圈内感叹号"这一族，
+   * 且此处需要"空心/实心"两种描边，手绘比找 Symbol 更可控。红色统一取 `sys.color.warning`。
+   */
+  @Builder
+  priorityBadge() {
+    Stack() {
+      Text(PRIORITY_MARK)
+        .fontSize(PRIORITY_BADGE_FONT_SIZE)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.prioritySolid
+          ? $r('sys.color.ohos_id_color_text_primary_contrary')
+          : $r('sys.color.warning'))
+    }
+    .width(PRIORITY_BADGE_SIZE_VP)
+    .height(PRIORITY_BADGE_SIZE_VP)
+    .borderRadius(PRIORITY_BADGE_SIZE_VP / 2)
+    .backgroundColor(this.prioritySolid ? $r('sys.color.warning') : Color.Transparent)
+    .border({
+      width: this.prioritySolid ? 0 : PRIORITY_BADGE_BORDER_VP,
+      color: $r('sys.color.warning')
+    })
+    .flexShrink(0)
   }
 
   build() {

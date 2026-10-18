@@ -105,45 +105,14 @@ export struct TaskAttributeCard {
   }
 
   /**
-   * 重复文案：有规则时**把周几列出来**（「每周一、二、四」），规则表达不了时退回 `repeatText`，
-   * 都没有就给「不重复」。
+   * 重复文案：**统一由 `TaskListViewModel.repeatLabel` 生成**（「每周一、二、四」/「每 2 周周二」…），
+   * 本卡不再自己拼一遍——两处各写一份必然会漂移（原来这里就有一份等价实现）。
+   * 规则与 `repeatText` 都没有时给「不重复」。
    */
   @Computed
   get repeatLabel(): ResourceStr {
-    const rules: RepeatRule[] | undefined = this.task.repeat;
-    if (rules !== undefined && rules.length > 0) {
-      const parts: string[] = [];
-      rules.forEach((rule: RepeatRule) => {
-        const interval: number = rule.interval === undefined ? 1 : rule.interval;
-        // 「每 1 个周期」读作「每」：`interval = 1` 时拼成「每天 / 每周五 / 每月 1 号 / 每年」，
-        // 只有真的隔了 N 个周期才写「每 2 周…」。选择器目前只产出 `interval = 1`，
-        // 所以这里的第一种写法就是它的常态显示。
-        const prefix: string = interval === 1 ? '每' : `每 ${interval} `;
-        if (rule.frequency === RepeatFrequency.WEEKLY) {
-          const days: number[] | undefined = rule.daysOfWeek;
-          if (days !== undefined && days.length > 0) {
-            const names: string[] = [];
-            days.forEach((d: number) => {
-              // daysOfWeek 用 1~7 ＝ 周一~周日
-              names.push(WEEKDAY_SHORT_CN[(d - 1 + 7) % 7]);
-            });
-            parts.push(`${prefix}周${names.join('、')}`);
-          } else {
-            parts.push(`${prefix}周`);
-          }
-        } else if (rule.frequency === RepeatFrequency.DAILY) {
-          parts.push(`${prefix}天`);
-        } else if (rule.frequency === RepeatFrequency.MONTHLY) {
-          const days: number[] | undefined = rule.daysOfMonth;
-          parts.push(days !== undefined && days.length > 0 ? `${prefix}月 ${days.join('、')} 号` : `${prefix}月`);
-        } else {
-          parts.push(`${prefix}年`);
-        }
-      });
-      return parts.join('；');
-    }
-    const text: string | undefined = this.task.repeatText;
-    return text === undefined || text.length === 0 ? $r('app.string.attr_no_repeat') : text;
+    const label: string = TaskListViewModel.repeatLabel(this.task);
+    return label.length === 0 ? $r('app.string.attr_no_repeat') : label;
   }
 
   /** 这一行有没有值（没值时文案是「未设置…」，且**用灰色**显示） */

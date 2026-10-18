@@ -14,39 +14,41 @@
  *   **「重要程度」已从这条链里移除**（需求方 2026-10-15：「description 里面的重要程度不显示了」）——
  *   它改用**卡片底色**表达，见 `components/TaskCard.ets` 的 `cardBackground`。
  */
-import { Task, TaskAlarm, TaskPriority, TaskStatus } from '../model';
+import { RepeatFrequency, RepeatRule, Task, TaskAlarm, TaskPriority, TaskStatus } from '../model';
 
 const DAY_MS: number = 24 * 60 * 60 * 1000;
 const HOUR_MS: number = 60 * 60 * 1000;
-const MINUTE_MS: number = 60 * 1000;
 
 /**
- * 描述行**只拼一项**（需求方 2026-10-15：「description 每一个卡片显示的额外信息仅一行」）。
- * 原本是「取前两项、用 ` · ` 拼」，现在只取链上的**第一项**。
- * 链的顺序（提醒时间 > 耗时 > 来源 > 标签 > 备注）**需求方说「优先级待商榷」，本轮不动**。
+ * 截止文案（字段表 §2.2）。**卡片第二行**用这套相对说法；
+ * 详情页的「到期」行走它自己的绝对格式（`TaskAttributeCard.dueLabel`），两处不混用。
+ *
+ * 文案按项目惯例该进 `string.json`，但这里是「数字 + 单位 + 后缀」动态拼句，
+ * 而 `$r()` 的实参只能是 string / number、资源之间不能嵌套，故暂用常量拼（改资源要先换成 Span 拼接）。
  */
-const DESCRIPTION_MAX_PARTS: number = 1;
+const DUE_TODAY: string = '今天截止';
+const DUE_TOMORROW: string = '明天截止';
+const DUE_DAY_AFTER: string = '后天截止';
+const DUE_IN_DAYS_SUFFIX: string = ' 天后截止';
+const DUE_IN_HOURS_SUFFIX: string = 'h 后截止';
+const DUE_OVERDUE: string = '已过期';
+const DUE_NO_TIME: string = '未定时间';
+const TIME_SEPARATOR: string = ':';
 
 /** 重要程度的中文（直接显示原词，需求方 2026-10-14 定） */
 const PRIORITY_LABELS: string[] = ['普通', '重要', '紧急'];
 
-/*
- * TODO(界面): 下面这些文案按规矩该进 `resources/base/element/string.json`。
- * 没进的原因：描述行是「两个片段拼成一句」，而资源之间不能互相嵌套
- * （`$r()` 的实参只能是 string / number，不能是另一个 Resource），
- * 所以先在 ViewModel 里用常量拼字符串。要改成资源，得把描述行换成 Span 拼接，
- * 或用 resourceManager 把资源解成字符串。
- */
-const TIME_SUFFIX: string = ' 截止';
-const TIME_PREFIX: string = '在 ';
-const REMIND_PREFIX: string = '响铃还有 ';
-const REMIND_HOUR_UNIT: string = ' 小时 ';
-const REMIND_MINUTE_UNIT: string = ' 分钟';
-// v1 起没有「预计耗时」字段（27 项字段表里没有它），对应常量一并删掉
-const SOURCE_PREFIX: string = '来源于 ';
-const TAG_SEPARATOR: string = '、';
-const DESCRIPTION_SEPARATOR: string = ' · ';
-const TIME_SEPARATOR: string = ':';
+/* ── 重复标识文案（`repeatLabel` 用）── */
+/** 1~7 ＝ 周一~周日。取值顺序与官方 `RecurrenceRule.daysOfWeek` 一致（第 1 天是周一） */
+const WEEKDAY_SHORT_CN: string[] = ['一', '二', '三', '四', '五', '六', '日'];
+/** 同一条规则内的多天/多月用顿号 */
+const WEEKDAY_JOIN: string = '、';
+/** 多条规则之间用分号：它们表示**并集**（命中任一即今天要做），逗号会看成同一规则内的并列 */
+const REPEAT_RULE_SEPARATOR: string = '；';
+/** 「每 N 周/月/年」的前缀 */
+const EVERY_PREFIX: string = '每';
+/** 每天（interval ≤ 1 时不说「每 1 天」） */
+const EVERY_DAY: string = '每天';
 
 /** 一天的分组。`@ObservedV2` 是为了让「展开/收起」与任务变更能被界面观察到 */
 @ObservedV2
@@ -161,52 +163,154 @@ export class TaskListViewModel {
       });
   }
 
-  /** 卡片副标题：「在 HH:mm 截止」。没有到期时间就返回空串（副标题不显示） */
-  static dueLabel(task: Task): string {
-    const due: number | undefined = task.dueAt;
-    if (due === undefined) {
+  /**
+   * 卡片第二行的**截止文案**（字段表 §2.2 定稿的六种说法，2026-10-17 按规范改）：
+   *
+   *   ≥24h，整日差 0 天 → `今天截止`；1 天 → `明天截止`；2 天 → `后天截止`；n 天 → `n 天后截止`
+   *   < 24h            → `__h 后截止`
+   *   已过 / 状态为已过期 → `已过期`
+   *   已完成            → **不显示剩余**（返回空串，第二行只剩标签与性质）
+   *
+   * 旧实现是「在 HH:mm 截止」，在第二行要同时装「标签胶囊＋重要性标识＋截止＋重复标识」时**放不下**，
+   * 且与字段表 §2.2 不符，故改。
+   *
+   * `now` 由调用方传入（不在这里取 `Date.now()`），这样单测与走查能对准同一份 mock。
+   */
+  static dueLabel(task: Task, now: Date = new Date()): string {
+    if (task.status === TaskStatus.COMPLETED) {
       return '';
     }
-    return `${TIME_PREFIX}${TaskListViewModel.hhmm(due)}${TIME_SUFFIX}`;
+    const due: number | undefined = task.dueAt;
+    if (due === undefined) {
+      // 没有确切时间就退回原文表述（如「本周五」）；连原文都没有才说「未定时间」
+      const text: string | undefined = task.dueText;
+      return text === undefined || text === '' ? DUE_NO_TIME : text;
+    }
+    if (task.status === TaskStatus.EXPIRED || due <= now.getTime()) {
+      return DUE_OVERDUE;
+    }
+    const remain: number = due - now.getTime();
+    if (remain < DAY_MS) {
+      return `${Math.floor(remain / HOUR_MS)}${DUE_IN_HOURS_SUFFIX}`;
+    }
+    const offset: number = TaskListViewModel.wholeDayOffset(due, now.getTime());
+    if (offset === 0) {
+      return DUE_TODAY;
+    }
+    if (offset === 1) {
+      return DUE_TOMORROW;
+    }
+    if (offset === 2) {
+      return DUE_DAY_AFTER;
+    }
+    return `${offset}${DUE_IN_DAYS_SUFFIX}`;
+  }
+
+  /** 两个时刻相差几个整日（按**自然日**算，不是按 24h 除）；due 早于 now 时为负 */
+  static wholeDayOffset(due: number, now: number): number {
+    const dueDate: Date = new Date(due);
+    const nowDate: Date = new Date(now);
+    const dueStart: number = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate()).getTime();
+    const nowStart: number = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate()).getTime();
+    return Math.round((dueStart - nowStart) / DAY_MS);
   }
 
   /**
-   * 卡片描述行：按 **提醒时间 > 来源展示名 > 标签 > 备注** 取**第一项**。
-   * v1 契约的两处变化：① 没有 `estimatedHours` 了（27 项字段表里没有"耗时"）→ 这条链上删掉它；
-   * ② 「响铃提醒」开关**改读 `alarm`（用户意图）**，不再由 `reminderId` 派生
-   * （字段表 §1 第 16/18 项：`alarm=1` 而 `reminderId` 为空 ⇒ 开关开了但未生效）。
-   * 文档 §2 的卡片改版（第二行 = 标签胶囊＋重要性图形＋截止文案＋重复标识）**尚未做**。
+   * 重复标识文案（字段表 §2「第二行 → 重复性标识」）。
+   *
+   * 由 `repeat` 规则**生成**，不读 `repeatText`（规则是唯一真值源，手写原话会与规则漂移）；
+   * `repeatText` 只在规则表达不了时兜底（如「每学期第 3 周交」）。
+   *
+   * 例：`{ WEEKLY, daysOfWeek: [1,2,4] }` → `每周一、二、四`
+   *     `{ WEEKLY, interval: 2, daysOfWeek: [2] }` → `每 2 周的周二`
+   *     `{ DAILY, interval: 3 }` → `每 3 天`
+   *     `{ MONTHLY, daysOfMonth: [15] }` → `每月 15 号`
+   * 多条规则用「；」连接（并集语义）。
    */
-  static descriptionLabel(task: Task, now: Date): string {
-    const parts: string[] = [];
-
-    const remind: number | undefined = task.remindAt;
-    if (remind !== undefined && task.alarm === TaskAlarm.ON && remind > now.getTime()) {
-      parts.push(TaskListViewModel.remindCountdown(remind, now));
+  static repeatLabel(task: Task): string {
+    const rules: RepeatRule[] | undefined = task.repeat;
+    const custom: string | undefined = task.repeatText;
+    if (rules === undefined || rules.length === 0) {
+      return custom === undefined ? '' : custom;
     }
-    // 说明：这里**不再**放「重要程度」——它改用卡片底色表达（见 TaskCard.cardBackground）
-    const sourceDetail: string | undefined = task.originDetail;
-    if (parts.length < DESCRIPTION_MAX_PARTS && sourceDetail !== undefined) {
-      parts.push(`${SOURCE_PREFIX}${sourceDetail}`);
+    const labels: string[] = [];
+    rules.forEach((rule: RepeatRule) => {
+      const one: string = TaskListViewModel.oneRepeatLabel(rule);
+      if (one !== '') {
+        labels.push(one);
+      }
+    });
+    const joined: string = labels.join(REPEAT_RULE_SEPARATOR);
+    if (joined === '') {
+      return custom === undefined ? '' : custom;
     }
-    const tags: string[] | undefined = task.tags;
-    if (parts.length < DESCRIPTION_MAX_PARTS && tags !== undefined && tags.length > 0) {
-      parts.push(tags.join(TAG_SEPARATOR));
-    }
-    const note: string | undefined = task.note;
-    if (parts.length < DESCRIPTION_MAX_PARTS && note !== undefined) {
-      parts.push(note);
-    }
-
-    return parts.join(DESCRIPTION_SEPARATOR);
+    return custom === undefined || custom.length === 0 ? joined : `${joined}（${custom}）`;
   }
 
-  /** 提醒倒计时：响铃还有 HH 小时 mm 分钟 */
-  static remindCountdown(remindAt: number, now: Date): string {
-    const diff: number = remindAt - now.getTime();
-    const hours: number = Math.floor(diff / HOUR_MS);
-    const minutes: number = Math.floor((diff % HOUR_MS) / MINUTE_MS);
-    return `${REMIND_PREFIX}${hours}${REMIND_HOUR_UNIT}${minutes}${REMIND_MINUTE_UNIT}`;
+  /** 单条规则 → 中文说法。识别不了时返回空串 */
+  static oneRepeatLabel(rule: RepeatRule): string {
+    const interval: number = rule.interval === undefined ? 1 : rule.interval;
+    // 「每」必须有：每 1 周要说「每周一」，不能只说「周一」（那是"这周一"的意思）。
+    // interval > 1 时把数字夹在「每」和单位之间，**空格在数字两侧**：`每 2 周周二`，
+    // 而不是 `每2 周二`（踩过：空格放错位置，卡片上读起来像两个词）。
+    const every: string = interval > 1 ? `${EVERY_PREFIX} ${interval} ` : EVERY_PREFIX;
+    const weekdays: number[] | undefined = rule.daysOfWeek;
+    const monthDays: number[] | undefined = rule.daysOfMonth;
+    const months: number[] | undefined = rule.monthsOfYear;
+
+    if (rule.frequency === RepeatFrequency.WEEKLY) {
+      const base: string = `${every}周`;
+      if (weekdays === undefined || weekdays.length === 0) {
+        return base;
+      }
+      const names: string[] = [];
+      weekdays.forEach((day: number) => {
+        const name: string = TaskListViewModel.weekdayLabel(day);
+        if (name !== '') {
+          names.push(name);
+        }
+      });
+      if (names.length === 0) {
+        return base;
+      }
+      // 拼法分两种，别混：
+      //   interval = 1 → 「每周一、二、四」（base 已含「周」，直接接日子）
+      //   interval > 1 → 「每 2 周**的**周二」（不加「的」会读成「每 2 周周二」，语义黏在一起）
+      const tail: string = names.join(WEEKDAY_JOIN);
+      return interval > 1 ? `${base}的周${tail}` : `${base}${tail}`;
+    }
+    if (rule.frequency === RepeatFrequency.DAILY) {
+      return interval > 1 ? `${every}天` : EVERY_DAY;
+    }
+    if (rule.frequency === RepeatFrequency.MONTHLY) {
+      const base: string = `${every}月`;
+      if (monthDays !== undefined && monthDays.length > 0) {
+        const days: string[] = [];
+        monthDays.forEach((day: number) => {
+          days.push(`${day}`);
+        });
+        return `${base}${days.join(WEEKDAY_JOIN)} 号`;
+      }
+      return base;
+    }
+    // YEARLY
+    const base: string = `${every}年`;
+    if (months !== undefined && months.length > 0) {
+      const list: string[] = [];
+      months.forEach((month: number) => {
+        list.push(`${month} 月`);
+      });
+      return `${base}${list.join(WEEKDAY_JOIN)}`;
+    }
+    return base;
+  }
+
+  /** 1~7 → 「一」~「日」。越界返回空串（官方原文：range [1,7]，对应周一到周日） */
+  static weekdayLabel(day: number): string {
+    if (day < 1 || day > 7) {
+      return '';
+    }
+    return WEEKDAY_SHORT_CN[day - 1];
   }
 
   /** 毫秒时间戳 → 补零的 HH:mm */
