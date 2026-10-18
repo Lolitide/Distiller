@@ -222,7 +222,8 @@ export struct MainTabBar {
         .tabBar(TASK_LIST_TAB)
 
         TabContent() {
-          A_Settings()
+          // 设置页要 store 只为一件事：「清空全部任务」。其余设置项与本机任务数据无关
+          A_Settings({ store: this.store })
         }
         .tabBar(SETTINGS_TAB)
       }
