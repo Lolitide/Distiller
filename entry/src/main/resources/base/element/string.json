@@ -411,6 +411,190 @@
     {
       "name": "source_text",
       "value": "文本"
+    },
+    {
+      "name": "weekday_short_mon",
+      "value": "一"
+    },
+    {
+      "name": "weekday_short_tue",
+      "value": "二"
+    },
+    {
+      "name": "weekday_short_wed",
+      "value": "三"
+    },
+    {
+      "name": "weekday_short_thu",
+      "value": "四"
+    },
+    {
+      "name": "weekday_short_fri",
+      "value": "五"
+    },
+    {
+      "name": "weekday_short_sat",
+      "value": "六"
+    },
+    {
+      "name": "weekday_short_sun",
+      "value": "日"
+    },
+    {
+      "name": "repeat_weekday_hint",
+      "value": "选择星期"
+    },
+    {
+      "name": "repeat_interval_value",
+      "value": "每 %d 周"
+    },
+    {
+      "name": "repeat_weekday_required",
+      "value": "请至少选一天"
+    },
+    {
+      "name": "info_place",
+      "value": "地点"
+    },
+    {
+      "name": "info_who",
+      "value": "对象"
+    },
+    {
+      "name": "info_category",
+      "value": "类型"
+    },
+    {
+      "name": "info_level",
+      "value": "难易程度"
+    },
+    {
+      "name": "info_urls",
+      "value": "链接"
+    },
+    {
+      "name": "info_certainty",
+      "value": "置信度"
+    },
+    {
+      "name": "info_created",
+      "value": "创建于"
+    },
+    {
+      "name": "info_finished",
+      "value": "完成于"
+    },
+    {
+      "name": "info_unset",
+      "value": "未设置"
+    },
+    {
+      "name": "level_easy",
+      "value": "简单"
+    },
+    {
+      "name": "level_medium",
+      "value": "中等"
+    },
+    {
+      "name": "level_hard",
+      "value": "困难"
+    },
+    {
+      "name": "picker_title_level",
+      "value": "设置难易程度"
+    },
+    {
+      "name": "picker_title_category",
+      "value": "设置类型"
+    },
+    {
+      "name": "picker_title_place",
+      "value": "设置地点"
+    },
+    {
+      "name": "picker_title_who",
+      "value": "设置对象"
+    },
+    {
+      "name": "settings_section_remind",
+      "value": "提醒"
+    },
+    {
+      "name": "settings_remind_lead",
+      "value": "提醒提前量"
+    },
+    {
+      "name": "settings_remind_lead_0",
+      "value": "到点提醒"
+    },
+    {
+      "name": "settings_remind_lead_5",
+      "value": "提前 5 分钟"
+    },
+    {
+      "name": "settings_remind_lead_15",
+      "value": "提前 15 分钟"
+    },
+    {
+      "name": "settings_remind_lead_30",
+      "value": "提前 30 分钟"
+    },
+    {
+      "name": "settings_remind_lead_60",
+      "value": "提前 1 小时"
+    },
+    {
+      "name": "settings_section_parse",
+      "value": "解析"
+    },
+    {
+      "name": "settings_parse_mode",
+      "value": "解析方式"
+    },
+    {
+      "name": "settings_parse_auto",
+      "value": "自动（端侧优先）"
+    },
+    {
+      "name": "settings_parse_local",
+      "value": "仅本机（不外发）"
+    },
+    {
+      "name": "settings_parse_server",
+      "value": "服务端（质量更好）"
+    },
+    {
+      "name": "settings_section_data",
+      "value": "数据"
+    },
+    {
+      "name": "settings_clear_tasks",
+      "value": "清空全部任务"
+    },
+    {
+      "name": "settings_clear_confirm",
+      "value": "将删除本机全部任务，且不可恢复。确定继续吗？"
+    },
+    {
+      "name": "settings_clear_done",
+      "value": "已清空 %d 条任务"
+    },
+    {
+      "name": "settings_clear_empty",
+      "value": "没有可清空的任务"
+    },
+    {
+      "name": "settings_cloud_off",
+      "value": "云端同步（未接入）"
+    },
+    {
+      "name": "picker_title_remind_lead",
+      "value": "设置提醒提前量"
+    },
+    {
+      "name": "picker_title_parse_mode",
+      "value": "设置解析方式"
     }
   ]
 }

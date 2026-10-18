@@ -52,6 +52,15 @@ export class AddTaskDraft {
   @Trace remindAt: number = UNSET_NUMBER;
   /** 重复档位：0 不重复 / 1 每天 / 2 每周 / 3 每月 / 4 每年 */
   @Trace repeatIndex: number = REPEAT_NONE_INDEX;
+  /**
+   * 「每周」时选中的星期，取值 1~7（**1 ＝ 周一**，与官方 `RecurrenceRule.daysOfWeek` 同序）。
+   *
+   * 空数组 ＝ **跟随截止日那一天**（老口径）：用户只选「每周」不选具体星期时，
+   * 用截止日落在的星期当锚点，不至于录出一条"没有星期"的每周规则。
+   */
+  @Trace repeatDaysOfWeek: number[] = [];
+  /** 「每周」时的间隔：每 N 周重复一次，最小 1。1 ＝ 每周（与 `daysOfWeek` 组合即「每周一、二、四」） */
+  @Trace repeatInterval: number = 1;
   /** 重要程度档位：0 普通 / 1 重要 / 2 紧急（必填，默认普通） */
   @Trace priorityIndex: number = PRIORITY_NORMAL_INDEX;
   /** 来源档位：`-1` ＝ 未设置 */
@@ -133,6 +142,8 @@ export class AddTaskDraft {
     this.dueAt = UNSET_NUMBER;
     this.remindAt = UNSET_NUMBER;
     this.repeatIndex = REPEAT_NONE_INDEX;
+    this.repeatDaysOfWeek = [];
+    this.repeatInterval = 1;
     this.priorityIndex = PRIORITY_NORMAL_INDEX;
     this.sourceIndex = UNSET_INDEX;
     this.tags = [];
@@ -153,8 +164,11 @@ export class AddTaskDraft {
   }
 
   /**
-   * 档位 → 单条 `RepeatRule`（与详情页 `applyRepeat` 同一口径）：
-   * 「每周 / 每月 / 每年」需要锚点，锚点优先用**截止日**、没有就用今天。
+   * 档位 → 单条 `RepeatRule`（与详情页 `applyRepeat` 同一口径）。
+   *
+   * 「每周」优先用**用户选的星期** `repeatDaysOfWeek`（支持「每周一、二、四」这种多天规则）；
+   * 没选具体星期时才回退到「截止日落在的那一天」。
+   * 「每月 / 每年」仍用截止日当锚点（本版不给选几号/几月，字段表 §1.1 的核心诉求是星期）。
    * 「不重复」返回空数组（契约里 `repeat` 为空＝不重复）。
    */
   private repeatRules(): RepeatRule[] {
@@ -168,7 +182,14 @@ export class AddTaskDraft {
       rule.frequency = RepeatFrequency.DAILY;
     } else if (this.repeatIndex === 2) {
       rule.frequency = RepeatFrequency.WEEKLY;
-      rule.daysOfWeek = [toDaysOfWeek(anchor)];
+      // 用户选了具体星期就用它（可多天）；没选就跟随截止日
+      rule.daysOfWeek = this.repeatDaysOfWeek.length > 0
+        ? this.repeatDaysOfWeek.slice()
+        : [toDaysOfWeek(anchor)];
+      // interval 只在 >1 时写：官方原文「不填或取 0/1 都表示每 1 个周期」，写 1 是冗余
+      if (this.repeatInterval > 1) {
+        rule.interval = this.repeatInterval;
+      }
     } else if (this.repeatIndex === 3) {
       rule.frequency = RepeatFrequency.MONTHLY;
       rule.daysOfMonth = [anchor.getDate()];
