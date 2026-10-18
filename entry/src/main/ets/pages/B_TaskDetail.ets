@@ -20,6 +20,7 @@ import { TaskStatusIcon } from '../components/TaskStatusIcon';
 import { TaskStepsSection } from '../components/TaskStepsSection';
 import { TaskAttributeCard } from '../components/TaskAttributeCard';
 import { TaskMetaCard } from '../components/TaskMetaCard';
+import { TaskInfoCard } from '../components/TaskInfoCard';
 import { TaskTagsCard } from '../components/TaskTagsCard';
 import { TaskNoteCard } from '../components/TaskNoteCard';
 import { TaskAlarm, TaskStatus } from '../model';
@@ -309,7 +310,19 @@ export struct B_TaskDetail {
               top: CONTENT_GAP_VP
             })
 
-            // 第五块：标签卡（每条标签一行 + 固定「＋ 添加标签」，需求方 2026-10-17 的设计图）
+            // 第五块：更多信息卡（难易程度 / 类型 / 地点 / 对象 / 链接 / 置信度 / 创建于 / 完成于）
+            // 字段表 v1 里这些项都标了「详情 ✅」，但此前详情页没有任何渲染点（见 _shots/差异清单.md）
+            Column() {
+              TaskInfoCard({ task: this.param.task })
+            }
+            .width('100%')
+            .padding({
+              left: CONTENT_SIDE_PADDING_VP,
+              right: CONTENT_SIDE_PADDING_VP,
+              top: CONTENT_GAP_VP
+            })
+
+            // 第六块：标签卡（每条标签一行 + 固定「＋ 添加标签」，需求方 2026-10-17 的设计图）
             Column() {
               TaskTagsCard({ task: this.param.task })
             }
