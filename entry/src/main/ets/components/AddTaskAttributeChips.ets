@@ -37,6 +37,7 @@ import { DateTimePickerBody } from './DateTimePickerBody';
 import { OptionPickerBody } from './OptionPickerBody';
 import { RepeatRuleEditor } from './RepeatRuleEditor';
 import { CenterDialogFrame, DialogTitle } from './CenterDialogFrame';
+import { ThemeStore } from '../utils/Theme';
 import { RepeatRule } from '../model';
 import { TagInputBody } from './TagInputBody';
 
@@ -105,9 +106,15 @@ export struct AddTaskAttributeChips {
   /** 标签输入面板的草稿 */
   @Local tagDraft: string = '';
   /** 打开的是哪个面板：`PICKER_NONE` / `PICKER_DUE` / `PICKER_REMIND` / `PICKER_REPEAT` / `PICKER_PRIORITY` / `PICKER_SOURCE` */
+  /** 视觉个性化：M3 色系（浮窗底色、勾选色） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
   @Local pickerKind: number = PICKER_NONE;
   /** 弹窗 id（openCustomDialog 返回；-1 表示未打开） */
   @Local pickerDialogId: number = -1;
+  /** 「重要性」锚定浮窗显隐（2026-10-19 从居中弹窗改过来） */
+  @Local priorityPopupShown: boolean = false;
+  /** 「来源」锚定浮窗显隐 */
+  @Local sourcePopupShown: boolean = false;
   /** 截止面板草稿（点「确定」才落到 `dueAt`） */
   @Local dueDraft: Date = new Date();
   /** 提醒面板草稿（点「确定」才落到 `remindAt`） */
@@ -447,6 +454,11 @@ export struct AddTaskAttributeChips {
     this.draft.repeatIndex = REPEAT_NONE;
   }
 
+  /** 「重要性」浮窗点选即写回草稿（2026-10-19：浮窗是轻量菜单，不再需要二次「确定」） */
+  private confirmPriority(): void {
+    this.draft.priorityIndex = this.priorityDraftIndex;
+  }
+
   /** 点 × 清空这一项 → 来源回到「未设置」 */
   private clearSource(): void {
     this.draft.sourceIndex = SOURCE_UNSET;
@@ -622,7 +634,21 @@ export struct AddTaskAttributeChips {
     .backgroundColor($r('sys.color.segment_button_v2_capsule_button_background'))
     .borderRadius($r('sys.float.chip_border_radius_small'))
     .onClick(() => {
-      this.openPriorityPicker();
+      // 2026-10-19：改成**锚定浮窗**（图二样式），不再开居中弹窗
+      this.priorityPopupShown = true;
+    })
+    .bindPopup(this.priorityPopupShown, {
+      builder: this.priorityMenu(),
+      placement: Placement.Top,
+      popupColor: this.themeStore.scheme.surfaceContainerHigh,
+      radius: 16,
+      enableArrow: false,
+      focusable: true,
+      onStateChange: (event) => {
+        if (!event.isVisible) {
+          this.priorityPopupShown = false;
+        }
+      }
     })
     .accessibilityText(this.priorityChipLabel)
   }
@@ -658,9 +684,96 @@ export struct AddTaskAttributeChips {
     .backgroundColor($r('sys.color.segment_button_v2_capsule_button_background'))
     .borderRadius($r('sys.float.chip_border_radius_small'))
     .onClick(() => {
-      this.openSourcePicker();
+      this.sourcePopupShown = true;
+    })
+    .bindPopup(this.sourcePopupShown, {
+      builder: this.sourceMenu(),
+      placement: Placement.Top,
+      popupColor: this.themeStore.scheme.surfaceContainerHigh,
+      radius: 16,
+      enableArrow: false,
+      focusable: true,
+      onStateChange: (event) => {
+        if (!event.isVisible) {
+          this.sourcePopupShown = false;
+        }
+      }
     })
     .accessibilityText(this.sourceChipLabel)
+  }
+
+  /**
+   * 「重要性」浮窗菜单（2026-10-19）：三档竖排、当前项用 M3 `primary` 打勾。
+   * 与设置页 `PopupSelector` 同一副长相（M3 菜单）。
+   */
+  @Builder
+  priorityMenu() {
+    Column() {
+      ForEach(this.priorityOptionTexts, (option: string, index: number) => {
+        Row() {
+          Text(option)
+            .fontSize($r('sys.float.ohos_id_text_size_body1'))
+            .fontColor($r('sys.color.ohos_id_color_text_primary'))
+            .layoutWeight(1)
+            .maxLines(1)
+            .textAlign(TextAlign.Start)
+          if (this.priorityDraftIndex === index) {
+            SymbolGlyph($r('sys.symbol.checkmark'))
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor([this.themeStore.scheme.primary])
+              .margin({ left: 8 })
+          }
+        }
+        .width('100%')
+        .height(48)
+        .padding({ left: 12, right: 12 })
+        .alignItems(VerticalAlign.Center)
+        .onClick(() => {
+          this.priorityPopupShown = false;
+          this.priorityDraftIndex = index;
+          this.confirmPriority();
+        })
+        .accessibilityText(option)
+      }, (option: string, index: number) => `${option}-${index}`)
+    }
+    .width(180)
+    .padding(8)
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  /** 「来源」浮窗菜单（同上，五档通道） */
+  @Builder
+  sourceMenu() {
+    Column() {
+      ForEach(this.sourceOptionTexts, (option: string, index: number) => {
+        Row() {
+          Text(option)
+            .fontSize($r('sys.float.ohos_id_text_size_body1'))
+            .fontColor($r('sys.color.ohos_id_color_text_primary'))
+            .layoutWeight(1)
+            .maxLines(1)
+            .textAlign(TextAlign.Start)
+          if (this.draft.sourceIndex === index) {
+            SymbolGlyph($r('sys.symbol.checkmark'))
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor([this.themeStore.scheme.primary])
+              .margin({ left: 8 })
+          }
+        }
+        .width('100%')
+        .height(48)
+        .padding({ left: 12, right: 12 })
+        .alignItems(VerticalAlign.Center)
+        .onClick(() => {
+          this.sourcePopupShown = false;
+          this.draft.sourceIndex = index;
+        })
+        .accessibilityText(option)
+      }, (option: string, index: number) => `${option}-${index}`)
+    }
+    .width(180)
+    .padding(8)
+    .alignItems(HorizontalAlign.Start)
   }
 
   /**
