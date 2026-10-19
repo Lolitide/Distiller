@@ -18,6 +18,7 @@ import { DateTimePickerBody } from './DateTimePickerBody';
 import { CenterDialogFrame, DialogTitle } from './CenterDialogFrame';
 import { OptionPickerBody } from './OptionPickerBody';
 import { RepeatRuleEditor } from './RepeatRuleEditor';
+import { Theme, ThemeStore } from '../utils/Theme';
 
 /** 圆形图标直径（vp） */
 const ICON_CIRCLE_SIZE_VP: number = 32;
@@ -53,6 +54,8 @@ const REPEAT_OPTIONS: string[] = ['不重复', '每天', '每周', '每月', '�
 
 @ComponentV2
 export struct TaskAttributeCard {
+  /** 视觉个性化：图标圈用 M3 primary / onPrimary */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
   /** 要编辑的任务 */
   @Require @Param task: Task;
   /** 列表 store：清掉日期类字段后要让列表**重新分组**（否则任务会赖在原分组里） */
@@ -411,10 +414,10 @@ export struct TaskAttributeCard {
       Circle()
         .width(ICON_CIRCLE_SIZE_VP)
         .height(ICON_CIRCLE_SIZE_VP)
-        .fill($r('sys.color.ohos_id_color_emphasize'))
+        .fill(this.themeStore.scheme.primary)
       SymbolGlyph(icon)
         .fontSize(ICON_GLYPH_SIZE_VP)
-        .fontColor([$r('sys.color.ohos_id_color_text_primary_contrary')])
+        .fontColor([this.themeStore.scheme.onPrimary])
     }
   }
 

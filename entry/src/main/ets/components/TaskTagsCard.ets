@@ -18,6 +18,7 @@
  */
 import { ColorMetrics, LengthMetrics } from '@kit.ArkUI';
 import { Task } from '../model';
+import { ThemeStore } from '../utils/Theme';
 
 /** 圆形图标直径（vp） */
 const ICON_CIRCLE_SIZE_VP: number = 32;
@@ -38,6 +39,8 @@ const TAG_EDIT_ID: string = 'tagEditInput';
 
 @ComponentV2
 export struct TaskTagsCard {
+  /** 视觉个性化：图标圈用 M3 primary / onPrimary */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
   /** 要编辑的任务（`@ObservedV2`，改 `tags` 后卡片与列表都会跟着刷新） */
   @Require @Param task: Task;
 
@@ -137,10 +140,10 @@ export struct TaskTagsCard {
       Circle()
         .width(ICON_CIRCLE_SIZE_VP)
         .height(ICON_CIRCLE_SIZE_VP)
-        .fill($r('sys.color.ohos_id_color_emphasize'))
+        .fill(this.themeStore.scheme.primary)
       SymbolGlyph(icon)
         .fontSize(ICON_GLYPH_SIZE_VP)
-        .fontColor([$r('sys.color.ohos_id_color_text_primary_contrary')])
+        .fontColor([this.themeStore.scheme.onPrimary])
     }
   }
 
