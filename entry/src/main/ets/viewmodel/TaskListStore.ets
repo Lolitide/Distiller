@@ -14,7 +14,7 @@
  *   · `selectedIds` —— 已勾选的任务 id（用**整体换新数组**的方式改，观测最稳）
  * 只做内存里的增删；真落库要走 `repository/`（见 `deleteSelected` 的 TODO）。
  */
-import { Task, TaskAlarm, TaskPriority, TaskStatus } from '../model';
+import { Task, TaskAlarm, TaskPriority, TaskStatus, TaskStep } from '../model';
 import { MOCK_TASKS } from '../mock/MockTasks';
 import { TaskDayGroup, TaskListViewModel } from './TaskListViewModel';
 
@@ -463,6 +463,27 @@ export class TaskListStore {
     if (!isOn) {
       task.reminderId = undefined;
     }
+  }
+
+  /**
+   * 点列表副卡片上某一步的圆圈：切换该步的完成态（`done` 存 0/1）。
+   *
+   * **必须整数组换新**：`Task.steps` 是 `@Trace` 的数组字段，原地改 `steps[i].done`
+   * 不会触发 `@ObservedV2` 的刷新（数组元素的深层变更不在观测范围内），
+   * 界面上会出现"点了没反应"。所以这里复制一份、替换元素、再整体赋回。
+   */
+  toggleStepDone(task: Task, index: number): void {
+    const list: TaskStep[] | undefined = task.steps;
+    if (list === undefined || index < 0 || index >= list.length) {
+      return;
+    }
+    const next: TaskStep[] = list.slice();
+    const old: TaskStep = next[index];
+    const updated: TaskStep = new TaskStep();
+    updated.content = old.content;
+    updated.done = old.done === 1 ? 0 : 1;
+    next[index] = updated;
+    task.steps = next;
   }
 
   /** 进入编辑（多选）模式：每次进来都从「一条没勾」开始 */
