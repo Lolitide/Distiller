@@ -18,6 +18,12 @@
  * `Date` 不可变，所以每次都是「整根换新」。
  */
 import { PickerFooter } from './PickerFooter';
+import { Theme } from '../utils/Theme';
+
+/** 模式切换按钮高度（vp） */
+const MODE_HEIGHT_VP: number = 32;
+/** 模式切换按钮间距（vp） */
+const MODE_GAP_VP: number = 8;
 
 /** 日期取 `date`、时分保留 `time` 的时分 */
 function mergeDatePart(date: Date, time: Date): Date {
@@ -28,6 +34,51 @@ function mergeDatePart(date: Date, time: Date): Date {
 /** 日期保留 `date`、时分换成本次的 `hour`/`minute` */
 function mergeTimePart(date: Date, hour: number, minute: number): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour, minute, 0, 0);
+}
+
+/** 补零到两位 */
+function pad2(value: number): string {
+  return value < 10 ? `0${value}` : `${value}`;
+}
+
+/** `Date` → `2026-10-19 14:30`（回填给输入框的格式，与解析格式一致） */
+function formatStamp(date: Date): string {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+    + ` ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+/**
+ * `2026-10-19 14:30` → `Date`。
+ *
+ * 宽松接受三种写法（用户手打不会严格按一种来）：
+ *   `2026-10-19 14:30` / `2026/10/19 14:30` / `2026-10-19`（不带时分 ⇒ 默认 23:59，即"当天结束前"）
+ * 解析不出来返回 `undefined`，由调用方决定怎么提示。
+ */
+function parseStamp(text: string): Date | undefined {
+  const trimmed: string = text.trim();
+  const match: RegExpMatchArray | null =
+    trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:\s+(\d{1,2}):(\d{1,2}))?$/);
+  if (match === null) {
+    return undefined;
+  }
+  const year: number = Number(match[1]);
+  const month: number = Number(match[2]);
+  const day: number = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return undefined;
+  }
+  const hasTime: boolean = match[4] !== undefined;
+  const hour: number = hasTime ? Number(match[4]) : 23;
+  const minute: number = hasTime ? Number(match[5]) : 59;
+  if (hour > 23 || minute > 59) {
+    return undefined;
+  }
+  const result: Date = new Date(year, month - 1, day, hour, minute, 0, 0);
+  // 回读校验：防止 2 月 30 日这种被 Date 自动进位成 3 月 2 日
+  if (result.getFullYear() !== year || result.getMonth() !== month - 1 || result.getDate() !== day) {
+    return undefined;
+  }
+  return result;
 }
 
 @ComponentV2
@@ -41,21 +92,104 @@ export struct DateTimePickerBody {
   /** 点「确定」 */
   @Event onConfirm: () => void = () => {};
 
+  /** 展示模式：`false` ＝ 滚轮（默认），`true` ＝ 手动输入 */
+  @Local inputMode: boolean = false;
+  /** 输入框里的文本（切到输入模式时由当前选择回填） */
+  @Local inputText: string = '';
+
   build() {
     Column() {
-      DatePicker({ selected: this.selected })
-        .width('100%')
-        .onDateChange((value: Date) => {
-          // 只取日期部分，时分保留草稿里的（DatePicker 回来的 Date 带的是系统时分）
-          this.onSelectedChange(mergeDatePart(value, this.selected));
-        })
+      // ① 模式切换：滚轮 / 手动输入（2026-10-19：「设置截止日期、时间也要给用户输入的方式」）。
+      //    滚轮适合"改几分钟"，键盘输入适合"直接敲 11月3日 09:00"这种明确目标 —— 两种都要有。
+      Row({ space: MODE_GAP_VP }) {
+        Text('滚轮')
+          .fontSize(Theme.FONT_BODY)
+          .fontColor(this.inputMode
+            ? $r('sys.color.ohos_id_color_text_primary')
+            : $r('sys.color.ohos_id_color_text_primary_contrary'))
+          .height(MODE_HEIGHT_VP)
+          .padding({ left: Theme.GAP_M, right: Theme.GAP_M })
+          .backgroundColor(this.inputMode
+            ? $r('sys.color.comp_background_secondary')
+            : $r('sys.color.ohos_id_color_emphasize'))
+          .borderRadius(MODE_HEIGHT_VP / 2)
+          .textAlign(TextAlign.Center)
+          .onClick(() => {
+            this.inputMode = false;
+          })
+        Text('手动输入')
+          .fontSize(Theme.FONT_BODY)
+          .fontColor(this.inputMode
+            ? $r('sys.color.ohos_id_color_text_primary_contrary')
+            : $r('sys.color.ohos_id_color_text_primary'))
+          .height(MODE_HEIGHT_VP)
+          .padding({ left: Theme.GAP_M, right: Theme.GAP_M })
+          .backgroundColor(this.inputMode
+            ? $r('sys.color.ohos_id_color_emphasize')
+            : $r('sys.color.comp_background_secondary'))
+          .borderRadius(MODE_HEIGHT_VP / 2)
+          .textAlign(TextAlign.Center)
+          .onClick(() => {
+            // 切到输入模式时把当前选择**回填成文本**，用户改的是同一个值而不是从空开始
+            this.inputText = formatStamp(this.selected);
+            this.inputMode = true;
+          })
+      }
+      .width('100%')
+      .padding({ left: Theme.GAP_L, right: Theme.GAP_L, top: Theme.GAP_M })
+      .justifyContent(FlexAlign.Start)
 
-      TimePicker({ selected: this.selected })
-        .useMilitaryTime(true)
+      if (this.inputMode) {
+        // ② 手动输入：一个文本框，格式提示写在 placeholder 里
+        Column() {
+          TextInput({ text: this.inputText, placeholder: '例如 2026-10-19 14:30' })
+            .id('dateTimeInput')
+            .width('100%')
+            .height(Theme.HIT_MIN + Theme.GAP_S)
+            .fontSize(Theme.FONT_BODY)
+            .fontColor($r('sys.color.ohos_id_color_text_primary'))
+            .placeholderColor($r('sys.color.ohos_id_color_text_tertiary'))
+            .backgroundColor($r('sys.color.comp_background_secondary'))
+            .borderRadius(Theme.RADIUS_CHIP)
+            .padding({ left: Theme.GAP_M, right: Theme.GAP_M })
+            .maxLines(1)
+            .enterKeyType(EnterKeyType.Done)
+            .onChange((value: string) => {
+              this.inputText = value;
+              // 边打边解析：解析得出来就即时更新草稿，解析不出来就保持上一次的有效值
+              const parsed: Date | undefined = parseStamp(value);
+              if (parsed !== undefined) {
+                this.onSelectedChange(parsed);
+              }
+            })
+
+          if (this.inputInvalid) {
+            Text('格式不认识，请用「2026-10-19 14:30」这样的写法')
+              .fontSize(Theme.FONT_CAPTION)
+              .fontColor($r('sys.color.ohos_id_color_warning'))
+              .width('100%')
+              .padding({ top: Theme.GAP_S })
+              .textAlign(TextAlign.Start)
+          }
+        }
         .width('100%')
-        .onChange((value: TimePickerResult) => {
-          this.onSelectedChange(mergeTimePart(this.selected, value.hour, value.minute));
-        })
+        .padding({ left: Theme.GAP_L, right: Theme.GAP_L, top: Theme.GAP_M })
+      } else {
+        // ③ 滚轮：官方 DatePicker + TimePicker
+        DatePicker({ selected: this.selected })
+          .width('100%')
+          .onDateChange((value: Date) => {
+            // 只取日期部分，时分保留草稿里的（DatePicker 回来的 Date 带的是系统时分）
+            this.onSelectedChange(mergeDatePart(value, this.selected));
+          })
+
+        TimePicker({ selected: this.selected })
+          .useMilitaryTime(true)
+          .width('100%')
+          .onChange((value: TimePickerResult) => {
+            this.onSelectedChange(mergeTimePart(this.selected, value.hour, value.minute));
+          })
+      }
 
       // 底部「取消 / 确定」与单列文本面板共用同一个组件（不各写一份）
       PickerFooter({
@@ -68,5 +202,12 @@ export struct DateTimePickerBody {
       })
     }
     .width('100%')
+  }
+
+  /** 输入框里的内容解析不出来时给红字提示（空串不算错，用户可能正在清空重打） */
+  @Computed
+  get inputInvalid(): boolean {
+    const text: string = this.inputText.trim();
+    return text.length > 0 && parseStamp(text) === undefined;
   }
 }
