@@ -2,6 +2,7 @@ import { LengthMetrics } from '@kit.ArkUI';
 import { Task } from '../model';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { TaskCard } from '../components/TaskCard';
+import { TaskSubCard } from '../components/TaskSubCard';
 import { GROUP_HEADER_LIST_PULL_UP_VP, TaskGroupHeader } from '../components/TaskGroupHeader';
 import { EmptyHint } from '../components/EmptyHint';
 import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
@@ -144,24 +145,38 @@ export struct A_TaskList {
             if (group.expanded) {
               ForEach(this.store.visibleTasks(group), (task: Task) => {
                 ListItem() {
-                  TaskCard({
-                    task: task,
-                    store: this.store,
-                    onToggleComplete: () => {
-                      this.store.toggleComplete(task);
-                    },
-                    onRemindChange: (isOn: boolean) => {
-                      this.store.setRemind(task, isOn);
-                    },
-                    // 点整卡 → 压入任务详情页（编辑态下不跳，避免和多选冲突）
-                    onOpen: () => {
-                      if (this.store.editing) {
-                        return;
+                  // 主卡片 + （有步骤时）副卡片，竖着贴在同一个列表项里 —— 设计稿 `任务子卡片.jpg`
+                  Column({ space: $r('sys.float.padding_level2') }) {
+                    TaskCard({
+                      task: task,
+                      store: this.store,
+                      onToggleComplete: () => {
+                        this.store.toggleComplete(task);
+                      },
+                      onRemindChange: (isOn: boolean) => {
+                        this.store.setRemind(task, isOn);
+                      },
+                      // 点整卡 → 压入任务详情页（编辑态下不跳，避免和多选冲突）
+                      onOpen: () => {
+                        if (this.store.editing) {
+                          return;
+                        }
+                        AppStorage.get<NavPathStack>(NAV_STACK_KEY)
+                          ?.pushPathByName(ROUTE_TASK_DETAIL, new TaskDetailParam(task, this.store));
                       }
-                      AppStorage.get<NavPathStack>(NAV_STACK_KEY)
-                        ?.pushPathByName(ROUTE_TASK_DETAIL, new TaskDetailParam(task, this.store));
+                    })
+
+                    // 副卡片：有步骤才出现（设计稿里主卡片下方的步骤区）
+                    if (task.steps !== undefined && task.steps.length > 0) {
+                      TaskSubCard({
+                        task: task,
+                        onToggleStep: (index: number) => {
+                          this.store.toggleStepDone(task, index);
+                        }
+                      })
                     }
-                  })
+                  }
+                  .width('100%')
                 }
               }, (task: Task) => `${task.id}`)
             }
