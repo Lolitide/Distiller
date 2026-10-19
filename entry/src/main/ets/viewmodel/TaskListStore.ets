@@ -43,6 +43,9 @@ export class TagUsage {
   clicks: number = 0;
 }
 
+/** 一分钟的毫秒数：把「提前 N 分钟」换算成时间戳偏移 */
+const MINUTE_MS: number = 60 * 1000;
+
 /**
  * 固定项：**顺序即优先级，永远排在标签项前面**（袁正锟 2026-10-16）。
  * 「全部」是官方 ChipGroup 的必需品 —— 它的 `selectedIndexes` 默认 `[0]` 且单选模式下**总会有一个被选中**，
@@ -462,8 +465,26 @@ export class TaskListStore {
     task.alarm = isOn ? TaskAlarm.ON : TaskAlarm.OFF;
     if (!isOn) {
       task.reminderId = undefined;
+      return;
     }
+    // 打开提醒时**按设置页的「提醒提前量」把提醒时刻算出来**（2026-10-19：
+    // 「alarm 为开关，提醒时间日期由系统决定，用户也可在设置中自定义」）。
+    // 只有任务有截止时间才算得出来；没有截止时间的任务保持原样（提醒时刻由用户在详情页手动设）。
+    const due: number | undefined = task.dueAt;
+    if (due === undefined) {
+      return;
+    }
+    task.remindAt = due - this.remindLeadMinutes * MINUTE_MS;
   }
+
+  /**
+   * 设置页的「提醒提前量」（分钟）：由页面读首选项后写进来。
+   *
+   * 为什么放在 store 而不是每处去读 `preferences`：提醒开关散落在列表卡片与详情页，
+   * 各读一次会各自异步、还可能读到不同的值；收口成一个字段后，
+   * `setRemind` 里算 `remindAt` 就是同步的、可预测的。
+   */
+  @Trace remindLeadMinutes: number = 0;
 
   /**
    * 点列表副卡片上某一步的圆圈：切换该步的完成态（`done` 存 0/1）。
