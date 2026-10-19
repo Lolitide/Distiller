@@ -1,7 +1,7 @@
 /*
  * 任务详情的「更多信息」卡 —— 承载字段表 v1 里标了**详情 ✅ 但此前没有任何渲染点**的 8 项：
  *
- *   `level` 难易程度 · `category` 类型 · `place` 地点 · `who` 对象
+ *   `level` 难易程度 · `category` 类型 · `place` 地点
  *   `urls` 链接 · `certainty` 置信度 · `createdAt` 创建于 · `finishedAt` 完成于
  *
  * 造型取「标签–值」两列行（不再画图标圈）：这八项是**属性读数**，不是动作，
@@ -9,7 +9,7 @@
  *
  * 哪些能改：
  *   · `level` / `category` —— 走 `OptionPickerBody`（单列选择器），与元信息卡的「重要程度/来源」同一套；
- *   · `place` / `who`      —— 走 `TagInputBody`（单行文本输入），与「添加标签」同一套；
+ *   · `place`             —— 走 `TagInputBody`（单行文本输入），与「添加标签」同一套；
  *   · `certainty` / `createdAt` / `finishedAt` —— **只读**：置信度来自解析、两个时间戳由系统写
  *     （字段表：`createdAt` 非用户填；`finishedAt` 只有系统能写）。
  *   · `urls` —— 只读展示（多条用换行拼接）；手动增删链接留到下一轮。
@@ -23,6 +23,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Task, TaskLevel, TASK_CATEGORY_PRESETS } from '../model';
 import { OptionPickerBody } from './OptionPickerBody';
 import { TagInputBody } from './TagInputBody';
+import { Theme } from '../utils/Theme';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'TaskInfoCard';
@@ -41,10 +42,13 @@ const SHEET_NONE: number = 0;
 const SHEET_LEVEL: number = 1;
 const SHEET_CATEGORY: number = 2;
 const SHEET_PLACE: number = 3;
-const SHEET_WHO: number = 4;
 
 /** 难易程度选项（下标即 `TaskLevel` 的值：0 简单 / 1 中等 / 2 困难） */
 const LEVEL_OPTIONS: string[] = ['简单', '中等', '困难'];
+/** 三档分段按钮之间的间距（vp） */
+const SEGMENT_GAP_VP: number = 8;
+/** 分段按钮高度（vp） */
+const SEGMENT_HEIGHT_VP: number = 32;
 
 @ComponentV2
 export struct TaskInfoCard {
@@ -122,18 +126,6 @@ export struct TaskInfoCard {
   }
 
   @Computed
-  get whoLabel(): string {
-    const value: string | undefined = this.task.who;
-    return value === undefined || value === '' ? this.unsetText : value;
-  }
-
-  @Computed
-  get whoSet(): boolean {
-    const value: string | undefined = this.task.who;
-    return value !== undefined && value !== '';
-  }
-
-  @Computed
   get urlsLabel(): string {
     const urls: string[] | undefined = this.task.urls;
     if (urls === undefined || urls.length === 0) {
@@ -202,11 +194,9 @@ export struct TaskInfoCard {
     this.sheetKind = SHEET_CATEGORY;
   }
 
-  private openTextSheet(kind: number): void {
-    this.textDraft = kind === SHEET_PLACE
-      ? (this.task.place === undefined ? '' : this.task.place)
-      : (this.task.who === undefined ? '' : this.task.who);
-    this.sheetKind = kind;
+  private openPlaceSheet(): void {
+    this.textDraft = this.task.place === undefined ? '' : this.task.place;
+    this.sheetKind = SHEET_PLACE;
   }
 
   private closeSheet(): void {
@@ -224,25 +214,58 @@ export struct TaskInfoCard {
       const next: string = this.textDraft.trim();
       // 空串存 `undefined`：「没填」与「填了空白」在契约里不是一回事
       this.task.place = next === '' ? undefined : next;
-    } else if (this.sheetKind === SHEET_WHO) {
-      const next: string = this.textDraft.trim();
-      this.task.who = next === '' ? undefined : next;
     }
     this.sheetKind = SHEET_NONE;
   }
 
   @Computed
   get sheetTitle(): Resource {
-    if (this.sheetKind === SHEET_LEVEL) {
-      return $r('app.string.picker_title_level');
-    }
     if (this.sheetKind === SHEET_CATEGORY) {
       return $r('app.string.picker_title_category');
     }
-    if (this.sheetKind === SHEET_PLACE) {
-      return $r('app.string.picker_title_place');
+    return $r('app.string.picker_title_place');
+  }
+
+  /**
+   * 难易程度在**三档分段按钮**里的选中下标（0 简单 / 1 中等 / 2 困难）。
+   * 显式换算，不把枚举当数组下标用。
+   */
+  @Computed
+  get levelIndex(): number {
+    const level: TaskLevel | undefined = this.task.level;
+    if (level === TaskLevel.EASY) {
+      return 0;
     }
-    return $r('app.string.picker_title_who');
+    if (level === TaskLevel.HARD) {
+      return 2;
+    }
+    return 1;
+  }
+
+  /** 点三档分段：直接写回 `task.level`（不再走半模态） */
+  private applyLevel(index: number): void {
+    this.task.level = index === 0
+      ? TaskLevel.EASY
+      : (index === 2 ? TaskLevel.HARD : TaskLevel.MEDIUM);
+  }
+
+  /** 一颗三档分段按钮（`selected` 由调用点读 `@Computed` 求值，避免 @Builder 值参数不刷新的坑） */
+  @Builder
+  segment(text: string, selected: boolean, onTap: () => void) {
+    Text(text)
+      .fontSize(Theme.FONT_BODY)
+      .fontColor(selected
+        ? $r('sys.color.ohos_id_color_text_primary_contrary')
+        : $r('sys.color.ohos_id_color_text_primary'))
+      .height(SEGMENT_HEIGHT_VP)
+      .padding({ left: Theme.GAP_M, right: Theme.GAP_M })
+      .backgroundColor(selected
+        ? $r('sys.color.ohos_id_color_emphasize')
+        : $r('sys.color.comp_background_secondary'))
+      .borderRadius(SEGMENT_HEIGHT_VP / 2)
+      .textAlign(TextAlign.Center)
+      .onClick(onTap)
+      .accessibilityText(text)
   }
 
   /* ── 行（**值一律在 build 里直接读 `@Computed`**）── */
@@ -335,19 +358,23 @@ export struct TaskInfoCard {
       .height(ROW_HEIGHT_VP)
       .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
       .alignItems(VerticalAlign.Center)
-      .onClick(() => {
-        this.openLevelSheet();
+
+      // ①-b 难易程度：**三档内联分段按钮**（2026-10-19：「任务难易程度可用三档按钮直接设置」）。
+      // 原来是点整行开半模态选轮，三档的东西开弹窗属于模态滥用。
+      Row({ space: SEGMENT_GAP_VP }) {
+        ForEach(LEVEL_OPTIONS, (label: string, index: number) => {
+          this.segment(label, this.levelIndex === index, () => {
+            this.applyLevel(index);
+          })
+        }, (label: string, index: number) => `${label}-${index}`)
+      }
+      .width('100%')
+      .padding({
+        left: ROW_SIDE_PADDING_VP,
+        right: ROW_SIDE_PADDING_VP,
+        bottom: Theme.GAP_M
       })
-      .bindSheet(this.sheetKind === SHEET_LEVEL, this.sheetBody(), {
-        title: { title: this.sheetTitle },
-        preferType: SheetType.CENTER,
-        height: SheetSize.FIT_CONTENT,
-        showClose: false,
-        dragBar: false,
-        onDisappear: () => {
-          this.sheetKind = SHEET_NONE;
-        }
-      })
+      .justifyContent(FlexAlign.Start)
 
       this.rowDivider()
 
@@ -410,46 +437,9 @@ export struct TaskInfoCard {
       .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
       .alignItems(VerticalAlign.Center)
       .onClick(() => {
-        this.openTextSheet(SHEET_PLACE);
+        this.openPlaceSheet();
       })
       .bindSheet(this.sheetKind === SHEET_PLACE, this.sheetBody(), {
-        title: { title: this.sheetTitle },
-        preferType: SheetType.CENTER,
-        height: SheetSize.FIT_CONTENT,
-        showClose: false,
-        dragBar: false,
-        onDisappear: () => {
-          this.sheetKind = SHEET_NONE;
-        }
-      })
-
-      this.rowDivider()
-
-      // ④ 对象（可改）
-      Row() {
-        this.rowLabel($r('app.string.info_who'))
-        Scroll() {
-          Text(this.whoLabel)
-            .fontSize($r('sys.float.ohos_id_text_size_body1'))
-            .fontColor(this.whoSet
-              ? $r('sys.color.ohos_id_color_text_primary')
-              : $r('sys.color.ohos_id_color_text_secondary'))
-            .maxLines(1)
-            .textAlign(TextAlign.Start)
-        }
-        .scrollable(ScrollDirection.Horizontal)
-        .scrollBar(BarState.Off)
-        .layoutWeight(1)
-        .align(Alignment.Start)
-      }
-      .width('100%')
-      .height(ROW_HEIGHT_VP)
-      .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-      .alignItems(VerticalAlign.Center)
-      .onClick(() => {
-        this.openTextSheet(SHEET_WHO);
-      })
-      .bindSheet(this.sheetKind === SHEET_WHO, this.sheetBody(), {
         title: { title: this.sheetTitle },
         preferType: SheetType.CENTER,
         height: SheetSize.FIT_CONTENT,
