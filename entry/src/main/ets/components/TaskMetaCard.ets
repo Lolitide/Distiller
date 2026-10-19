@@ -350,54 +350,6 @@ export struct TaskMetaCard {
    */
   build() {
     Column() {
-      // ① 重要程度：**三档内联分段按钮**（2026-10-19：「任务重要性可用三档按钮直接设置」，
-      //    不再开半模态 —— 三档的东西开弹窗属于模态滥用）
-      Row() {
-        Row() {
-          this.iconCircle($r('sys.symbol.star'))
-          // 两行文案统一「过长不换行、不用省略号截断」，装进横向 Scroll 可左右滑动看全文
-          // （袁正锟 2026-10-17：「都统一成横向滑动」；与属性卡、标签同一套做法）
-          Scroll() {
-            Text(this.priorityLabel)
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              // 「普通」也是有效档位，所以这一行**没有灰色未设置态**
-              .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              .maxLines(1)
-              .textAlign(TextAlign.Start)
-          }
-          .scrollable(ScrollDirection.Horizontal)
-          .scrollBar(BarState.Off)
-          .layoutWeight(1)
-          .margin({ left: ICON_TEXT_GAP_VP })
-          .align(Alignment.Start)
-        }
-        .layoutWeight(1)
-        .height('100%')
-        .alignItems(VerticalAlign.Center)
-      }
-      .width('100%')
-      .height(ROW_HEIGHT_VP)
-      .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-      .alignItems(VerticalAlign.Center)
-
-      // 三档分段：普通 / 重要 / 紧急（整行铺开，点哪个就是哪个）
-      Row({ space: SEGMENT_GAP_VP }) {
-        ForEach(PRIORITY_OPTIONS, (label: string, index: number) => {
-          this.segment(label, this.priorityIndex === index, () => {
-            this.applyPriority(index);
-          })
-        }, (label: string, index: number) => `${label}-${index}`)
-      }
-      .width('100%')
-      .padding({
-        left: ROW_SIDE_PADDING_VP,
-        right: ROW_SIDE_PADDING_VP,
-        bottom: THEME_GAP_M
-      })
-      .justifyContent(FlexAlign.Start)
-
-      this.rowDivider()
-
       // ② 来源
       Row() {
         Row() {

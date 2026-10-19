@@ -1,18 +1,17 @@
 /*
  * 设置页（一级页，底部页签第二个）。
  *
- * 分组依据（2026-10-19 重新排布）：
- *   视觉个性化 / 通知个性化 / 权限管理 / 解析 / 数据 / 关于
- * 其中「提醒提前量、解析方式、数据清理」来自 `docs/开发指南.md` W2-T09；
- * 「云端数据」一节来自 W3-T06（P1，本轮**只占位**）；
- * 「视觉个性化 / 通知个性化 / 权限管理 / 关于」四类由 2026-10-19 的需求补齐。
+ * ## 2026-10-19 第二版重做（作者反馈）
  *
- * 交互约定（2026-10-19：「模态动画滥用」）：
- *   能在页面上直接选的三档就**内联分段按钮**，不再开半模态；
- *   只有「清空数据」这类危险动作才弹官方确认框。
+ * 上一版被批「滥用按钮」：密度、提前量、解析方式全铺成一排按钮。
+ * 这一版按作者的原话改：
+ *   · **主题色** → 三个**颜色圆点**（不写色名）；
+ *   · **卡片密度 / 提醒提前量 / 解析方式** → **点一行弹选择器**，不再铺按钮；
+ *   · 权限管理补齐 **通知 / 日历 / 订阅消息管理** 三项（先占位，如实标未接入）；
+ *   · 修「滑到底看不全」：`Scroll` 加 `contentEndOffset`，最后一项不再被页签栏压住；
+ *   · 修「大标题压住内容」：让位段做成内容首项，与任务列表同一套。
  *
- * 取值纪律（技能硬约束第 5 条）：颜色/间距/字号一律来自 `utils/Theme.ets`
- * 或官方语义 token（`$r('sys.*')`），本文件不写裸色值。
+ * 取值纪律：颜色/间距/字号来自 `utils/Theme.ets` 或官方语义 token。
  */
 import { common } from '@kit.AbilityKit';
 import { bundleManager } from '@kit.AbilityKit';
@@ -33,6 +32,7 @@ import {
   ParseMode,
   SettingsRepository
 } from '../repository/SettingsRepository';
+import { OptionPickerBody } from '../components/OptionPickerBody';
 import { Task } from '../model';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 
@@ -49,33 +49,53 @@ const LABEL_WIDTH_VP: number = 108;
 const SECTION_GAP_VP: number = 16;
 /** 页面左右留白（vp） */
 const PAGE_SIDE_PADDING_VP: number = 16;
-/** 顶部留白（vp）：让开浮层标题栏（值同 MainTitleBar.CONTENT_TOP_OFFSET_VP） */
-const PAGE_TOP_PADDING_VP: number = 112;
+/**
+ * 让开浮层标题栏的高度（vp）：与任务列表同一个来历 —— 把这一段做成**内容首项**，
+ * 标题才会跟着滚动收缩；用固定 `padding-top` 的话，滚起来大字会压在内容上（上一版就是这么坏的）。
+ */
+const TITLE_CLEARANCE_VP: number = 112;
+/** 让开悬浮页签栏（vp）：与 `A_TaskList.LIST_BOTTOM_CLEARANCE_VP` 同值 */
+const BOTTOM_CLEARANCE_VP: number = 80;
 /** 分隔线宽（vp） */
 const DIVIDER_WIDTH_VP: number = 0.5;
 /** 分组标题内缩 / 与卡片间距（vp） */
 const SECTION_TITLE_INSET_VP: number = 4;
 const SECTION_TITLE_GAP_VP: number = 8;
-/** 分段按钮的高度与圆角（vp） */
-const SEGMENT_HEIGHT_VP: number = 32;
-/** 分段按钮之间的间距（vp） */
-const SEGMENT_GAP_VP: number = 8;
+/** 主题色圆点直径（vp） */
+const ACCENT_DOT_SIZE_VP: number = 28;
+/** 主题色圆点选中时的外圈（vp） */
+const ACCENT_DOT_RING_VP: number = 2;
 
 /** 提醒提前量的可选档（分钟）：0 ＝ 到点提醒 */
 const REMIND_LEAD_OPTIONS: number[] = [0, 5, 15, 30, 60];
+/** 解析方式的档位文案 */
+const PARSE_MODE_OPTIONS: string[] = ['自动（端侧优先）', '仅本机', '服务端'];
+/** 卡片密度的档位文案 */
+const DENSITY_OPTIONS: string[] = ['标准', '紧凑'];
+
+/** 当前打开的选择器 */
+const SHEET_NONE: number = 0;
+const SHEET_DENSITY: number = 1;
+const SHEET_REMIND_LEAD: number = 2;
+const SHEET_PARSE_MODE: number = 3;
 
 @ComponentV2
 export struct A_Settings {
-  /** 任务 store：只为「清空全部任务」这一项 */
+  /** 任务 store：清空任务 + 提醒提前量同步 */
   @Require @Param store: TaskListStore;
 
   /** 视觉个性化状态（跨页共享，见 utils/Theme.ets） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
 
-  /** 提醒提前量（分钟），异步读回来前先用默认值 */
   @Local remindLead: number = DEFAULT_REMIND_LEAD;
-  /** 解析方式 */
   @Local parseMode: number = DEFAULT_PARSE_MODE;
+
+  /** 当前打开的选择器 */
+  @Local sheetKind: number = SHEET_NONE;
+  /** 选择器草稿 */
+  @Local densityDraft: number = DENSITY_STANDARD;
+  @Local remindLeadDraft: number = DEFAULT_REMIND_LEAD;
+  @Local parseModeDraft: number = DEFAULT_PARSE_MODE;
 
   aboutToAppear(): void {
     this.loadSettings();
@@ -91,26 +111,49 @@ export struct A_Settings {
       return;
     }
     this.remindLead = await SettingsRepository.getRemindLead(context);
-    // 启动时把已存的提前量同步给 store，否则首次进列表时铃铛算不出 remindAt
-    this.store.remindLeadMinutes = this.remindLead;
     this.parseMode = await SettingsRepository.getParseMode(context);
+    this.store.remindLeadMinutes = this.remindLead;
+  }
+
+  /* ── 文案 ── */
+
+  private remindLeadLabel(minutes: number): string {
+    if (minutes === 0) {
+      return '到点提醒';
+    }
+    if (minutes === 60) {
+      return '提前 1 小时';
+    }
+    return `提前 ${minutes} 分钟`;
   }
 
   private parseModeLabel(mode: number): string {
-    if (mode === ParseMode.LOCAL) {
-      return '仅本机';
-    }
-    if (mode === ParseMode.SERVER) {
-      return '服务端';
-    }
-    return '自动';
+    return PARSE_MODE_OPTIONS[mode < 0 || mode >= PARSE_MODE_OPTIONS.length ? 0 : mode];
   }
 
-  /** 提醒提前量：先落内存（界面立刻变），再异步写盘 */
+  private densityLabel(density: number): string {
+    return DENSITY_OPTIONS[density === DENSITY_COMPACT ? 1 : 0];
+  }
+
+  /** 版本号从安装包读，不写死 */
+  @Computed
+  get versionLabel(): string {
+    try {
+      const info: bundleManager.BundleInfo = bundleManager.getBundleInfoForSelfSync(
+        bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT);
+      return info.versionName === undefined ? '—' : info.versionName;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'read version failed: %{public}s', err.message);
+      return '—';
+    }
+  }
+
+  /* ── 写入 ── */
+
   private applyRemindLead(minutes: number): void {
     this.remindLead = minutes;
-    // 同步给 store：列表卡片的铃铛按它算 remindAt。
-    // （`A_Main.aboutToAppear` 只在启动时跑一次，页签切换不会重跑 → 不在这写就永远不生效）
+    // 同步给 store：列表铃铛按它算 remindAt（页签切换不会重跑 aboutToAppear，必须直接写）
     this.store.remindLeadMinutes = minutes;
     const context: common.Context | undefined = this.hostContext();
     if (context !== undefined) {
@@ -126,17 +169,93 @@ export struct A_Settings {
     }
   }
 
-  /** 版本号**从安装包读**，不写死（写死会随发版漂移） */
+  /* ── 选择器 ── */
+
+  private openSheet(kind: number): void {
+    if (kind === SHEET_DENSITY) {
+      this.densityDraft = this.themeStore.density;
+    } else if (kind === SHEET_REMIND_LEAD) {
+      const index: number = REMIND_LEAD_OPTIONS.indexOf(this.remindLead);
+      this.remindLeadDraft = index < 0 ? 0 : index;
+    } else if (kind === SHEET_PARSE_MODE) {
+      this.parseModeDraft = this.parseMode;
+    }
+    this.sheetKind = kind;
+  }
+
+  private closeSheet(): void {
+    this.sheetKind = SHEET_NONE;
+  }
+
+  private confirmSheet(): void {
+    if (this.sheetKind === SHEET_DENSITY) {
+      this.themeStore.density = this.densityDraft;
+    } else if (this.sheetKind === SHEET_REMIND_LEAD) {
+      this.applyRemindLead(REMIND_LEAD_OPTIONS[this.remindLeadDraft]);
+    } else if (this.sheetKind === SHEET_PARSE_MODE) {
+      this.applyParseMode(this.parseModeDraft);
+    }
+    this.sheetKind = SHEET_NONE;
+  }
+
   @Computed
-  get versionLabel(): string {
-    try {
-      const info: bundleManager.BundleInfo = bundleManager.getBundleInfoForSelfSync(
-        bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT);
-      return info.versionName === undefined ? '—' : info.versionName;
-    } catch (error) {
-      const err = error as BusinessError;
-      hilog.error(DOMAIN, TAG, 'read version failed: %{public}s', err.message);
-      return '—';
+  get sheetTitle(): ResourceStr {
+    if (this.sheetKind === SHEET_DENSITY) {
+      return '卡片密度';
+    }
+    if (this.sheetKind === SHEET_REMIND_LEAD) {
+      return '提醒提前量';
+    }
+    return '解析方式';
+  }
+
+  @Builder
+  sheetBody() {
+    if (this.sheetKind === SHEET_DENSITY) {
+      OptionPickerBody({
+        options: DENSITY_OPTIONS,
+        selectedIndex: this.densityDraft,
+        onSelectedIndexChange: (index: number) => {
+          this.densityDraft = index;
+        },
+        onCancel: () => {
+          this.closeSheet();
+        },
+        onConfirm: () => {
+          this.confirmSheet();
+        }
+      })
+    } else if (this.sheetKind === SHEET_REMIND_LEAD) {
+      OptionPickerBody({
+        options: [
+          this.remindLeadLabel(0), this.remindLeadLabel(5), this.remindLeadLabel(15),
+          this.remindLeadLabel(30), this.remindLeadLabel(60)
+        ],
+        selectedIndex: this.remindLeadDraft,
+        onSelectedIndexChange: (index: number) => {
+          this.remindLeadDraft = index;
+        },
+        onCancel: () => {
+          this.closeSheet();
+        },
+        onConfirm: () => {
+          this.confirmSheet();
+        }
+      })
+    } else {
+      OptionPickerBody({
+        options: PARSE_MODE_OPTIONS,
+        selectedIndex: this.parseModeDraft,
+        onSelectedIndexChange: (index: number) => {
+          this.parseModeDraft = index;
+        },
+        onCancel: () => {
+          this.closeSheet();
+        },
+        onConfirm: () => {
+          this.confirmSheet();
+        }
+      })
     }
   }
 
@@ -151,9 +270,6 @@ export struct A_Settings {
     }
   }
 
-  /**
-   * 清空本机全部任务：先弹官方警告弹窗确认，确认后逐条软删（与详情页删除同一语义）。
-   */
   private clearAllTasks(): void {
     const total: number = this.store.totalCount;
     if (total === 0) {
@@ -200,16 +316,6 @@ export struct A_Settings {
   }
 
   @Builder
-  rowLabel(label: ResourceStr) {
-    Text(label)
-      .fontSize($r('sys.float.ohos_id_text_size_body1'))
-      .fontColor($r('sys.color.ohos_id_color_text_primary'))
-      .width(LABEL_WIDTH_VP)
-      .maxLines(1)
-      .textAlign(TextAlign.Start)
-  }
-
-  @Builder
   rowDivider() {
     Divider()
       .strokeWidth(DIVIDER_WIDTH_VP)
@@ -217,127 +323,49 @@ export struct A_Settings {
       .margin({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
   }
 
-  /**
-   * 内联分段按钮（一颗）。
-   *
-   * ⚠️ `@Builder` 的**值参数不随状态刷新**（本项目踩过两次：卡片行、详情信息卡）。
-   * 所以 `selected` 不能在构建后靠参数更新 —— 各行的 `selected` 必须在**调用点**读
-   * `this.*` 状态、由外层重渲染时重新求值（见下面每个 `xxxRow()`）。
-   */
+  /** 「左标签 + 右值 + 可点」的一行，点了开选择器 */
   @Builder
-  segment(text: string, selected: boolean, onTap: () => void) {
-    Text(text)
-      .fontSize(Theme.FONT_BODY)
-      .fontColor(selected
-        ? $r('sys.color.ohos_id_color_text_primary_contrary')
-        : $r('sys.color.ohos_id_color_text_primary'))
-      .height(SEGMENT_HEIGHT_VP)
-      .padding({ left: Theme.GAP_S, right: Theme.GAP_S })
-      .backgroundColor(selected
-        ? ThemeStore.instance().accent.light
-        : $r('sys.color.comp_background_secondary'))
-      .borderRadius(SEGMENT_HEIGHT_VP / 2)
-      .textAlign(TextAlign.Center)
-      .onClick(onTap)
-  }
-
-  /* ① 视觉个性化：主题色 */
-
-  @Builder
-  accentRow() {
+  navRow(label: ResourceStr, value: string, kind: number) {
     Row() {
-      this.rowLabel('主题色')
-      Row({ space: SEGMENT_GAP_VP }) {
-        ForEach(ACCENT_OPTIONS, (option: AccentOption, index: number) => {
-          this.segment(option.label, this.themeStore.accentIndex === index, () => {
-            this.themeStore.accentIndex = index;
-          })
-        }, (option: AccentOption, index: number) => `${option.label}-${index}`)
-      }
-      .layoutWeight(1)
-      .justifyContent(FlexAlign.End)
-    }
-    .width('100%')
-    .height(ROW_HEIGHT_VP)
-    .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-    .alignItems(VerticalAlign.Center)
-  }
-
-  /* ① 视觉个性化：卡片密度 */
-
-  @Builder
-  densityRow() {
-    Row() {
-      this.rowLabel('卡片密度')
-      Row({ space: SEGMENT_GAP_VP }) {
-        this.segment('标准', this.themeStore.density === DENSITY_STANDARD, () => {
-          this.themeStore.density = DENSITY_STANDARD;
-        })
-        this.segment('紧凑', this.themeStore.density === DENSITY_COMPACT, () => {
-          this.themeStore.density = DENSITY_COMPACT;
-        })
-      }
-      .layoutWeight(1)
-      .justifyContent(FlexAlign.End)
-    }
-    .width('100%')
-    .height(ROW_HEIGHT_VP)
-    .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-    .alignItems(VerticalAlign.Center)
-  }
-
-  /* ② 通知个性化：提醒提前量 */
-
-  /**
-   * 提醒提前量：**标签在上、分段占满整行**。
-   *
-   * 这一行有 5 个档位，和左侧 108vp 标签挤在同一行时放不下：
-   * 实测 377vp 屏上「60 分」被压到只剩 52px（文字被裁）。所以本行改成两段式布局，
-   * 其余只有 2~3 档的行仍用「左标签 + 右分段」的一行式。
-   */
-  @Builder
-  remindLeadRow() {
-    Column() {
-      Text('提醒提前量')
-        .fontSize(Theme.FONT_BODY)
+      Text(label)
+        .fontSize($r('sys.float.ohos_id_text_size_body1'))
         .fontColor($r('sys.color.ohos_id_color_text_primary'))
-        .width('100%')
+        .width(LABEL_WIDTH_VP)
         .maxLines(1)
         .textAlign(TextAlign.Start)
-
-      Row({ space: SEGMENT_GAP_VP }) {
-        // 文案取最短形态（「到点」「5分」…），5 个分段要挤进 329vp
-        ForEach(REMIND_LEAD_OPTIONS, (minutes: number) => {
-          this.segment(minutes === 0 ? '到点' : `${minutes}分`,
-            this.remindLead === minutes, () => {
-              this.applyRemindLead(minutes);
-            })
-        }, (minutes: number) => `${minutes}`)
-      }
-      .width('100%')
-      .justifyContent(FlexAlign.Start)
-      .margin({ top: Theme.GAP_S })
-    }
-    .width('100%')
-    .padding({
-      left: ROW_SIDE_PADDING_VP,
-      right: ROW_SIDE_PADDING_VP,
-      top: Theme.GAP_M,
-      bottom: Theme.GAP_M
-    })
-    .alignItems(HorizontalAlign.Start)
-  }
-
-  /* ③ 权限管理（未接入，如实标注） */
-
-  @Builder
-  permissionRow() {
-    Row() {
-      this.rowLabel('通知权限')
-      Text('未接入')
+      Text(value)
         .fontSize($r('sys.float.ohos_id_text_size_body2'))
         .fontColor($r('sys.color.ohos_id_color_text_secondary'))
         .layoutWeight(1)
+        .maxLines(1)
+        .textAlign(TextAlign.End)
+      SymbolGlyph($r('sys.symbol.chevron_right'))
+        .fontSize(Theme.FONT_CAPTION)
+        .fontColor([$r('sys.color.icon_tertiary')])
+        .margin({ left: Theme.GAP_S })
+    }
+    .width('100%')
+    .height(ROW_HEIGHT_VP)
+    .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+    .alignItems(VerticalAlign.Center)
+    .onClick(() => {
+      this.openSheet(kind);
+    })
+  }
+
+  /** 「左标签 + 右说明」的只读行（未接入项用） */
+  @Builder
+  infoRow(label: ResourceStr, value: string) {
+    Row() {
+      Text(label)
+        .fontSize($r('sys.float.ohos_id_text_size_body1'))
+        .fontColor($r('sys.color.ohos_id_color_text_primary'))
+        .layoutWeight(1)
+        .maxLines(1)
+        .textAlign(TextAlign.Start)
+      Text(value)
+        .fontSize($r('sys.float.ohos_id_text_size_body2'))
+        .fontColor($r('sys.color.ohos_id_color_text_secondary'))
         .maxLines(1)
         .textAlign(TextAlign.End)
     }
@@ -347,48 +375,39 @@ export struct A_Settings {
     .alignItems(VerticalAlign.Center)
   }
 
-  /* ④ 解析：解析方式 */
-
+  /** 主题色：三个**颜色圆点**，不写色名（2026-10-19 作者要求） */
   @Builder
-  parseModeRow() {
+  accentDots() {
     Row() {
-      this.rowLabel('解析方式')
-      Row({ space: SEGMENT_GAP_VP }) {
-        this.segment('自动', this.parseMode === ParseMode.AUTO, () => {
-          this.applyParseMode(ParseMode.AUTO);
-        })
-        this.segment('仅本机', this.parseMode === ParseMode.LOCAL, () => {
-          this.applyParseMode(ParseMode.LOCAL);
-        })
-        this.segment('服务端', this.parseMode === ParseMode.SERVER, () => {
-          this.applyParseMode(ParseMode.SERVER);
-        })
-      }
-      .layoutWeight(1)
-      .justifyContent(FlexAlign.End)
-    }
-    .width('100%')
-    .height(ROW_HEIGHT_VP)
-    .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-    .alignItems(VerticalAlign.Center)
-  }
-
-  /** 一行普通文本（左标签 + 右说明），给"只读 / 未接入"项用 */
-  @Builder
-  plainRow(label: ResourceStr, value: string) {
-    Row() {
-      Text(label)
+      Text('主题色')
         .fontSize($r('sys.float.ohos_id_text_size_body1'))
         .fontColor($r('sys.color.ohos_id_color_text_primary'))
         .layoutWeight(1)
         .maxLines(1)
         .textAlign(TextAlign.Start)
-      if (value !== '') {
-        Text(value)
-          .fontSize($r('sys.float.ohos_id_text_size_body2'))
-          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-          .maxLines(1)
-          .textAlign(TextAlign.End)
+
+      Row({ space: Theme.GAP_M }) {
+        ForEach(ACCENT_OPTIONS, (option: AccentOption, index: number) => {
+          Stack() {
+            // 选中档在外圈加一道描边，让"当前是哪个"一眼可见
+            Row()
+              .width(ACCENT_DOT_SIZE_VP)
+              .height(ACCENT_DOT_SIZE_VP)
+              .backgroundColor(option.light)
+              .borderRadius(ACCENT_DOT_SIZE_VP / 2)
+              .border({
+                width: this.themeStore.accentIndex === index ? ACCENT_DOT_RING_VP : 0,
+                color: $r('sys.color.ohos_id_color_text_primary'),
+                radius: ACCENT_DOT_SIZE_VP / 2
+              })
+          }
+          .width(Theme.HIT_MIN)
+          .height(Theme.HIT_MIN)
+          .onClick(() => {
+            this.themeStore.accentIndex = index;
+          })
+          .accessibilityText(option.label)
+        }, (option: AccentOption, index: number) => `${option.label}-${index}`)
       }
     }
     .width('100%')
@@ -400,12 +419,15 @@ export struct A_Settings {
   build() {
     Scroll() {
       Column() {
+        // 让开浮层标题栏：做成**内容首项**，标题才会跟着滚（固定 padding-top 会让大字压住内容）
+        Row().width('100%').height(TITLE_CLEARANCE_VP)
+
         // ① 视觉个性化
         this.sectionTitle('视觉个性化')
         Column() {
-          this.accentRow()
+          this.accentDots()
           this.rowDivider()
-          this.densityRow()
+          this.navRow('卡片密度', this.densityLabel(this.themeStore.density), SHEET_DENSITY)
         }
         .width('100%')
         .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
@@ -419,21 +441,25 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
-          this.remindLeadRow()
+          this.navRow('提醒提前量', this.remindLeadLabel(this.remindLead), SHEET_REMIND_LEAD)
         }
         .width('100%')
         .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
         .borderRadius(Theme.RADIUS_CARD)
         .clip(true)
 
-        // ③ 权限管理
+        // ③ 权限管理：通知 / 日历 / 订阅消息（先占位，如实标未接入）
         Column() {
           this.sectionTitle('权限管理')
         }
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
-          this.permissionRow()
+          this.infoRow('通知权限', '未接入')
+          this.rowDivider()
+          this.infoRow('日历权限', '未接入')
+          this.rowDivider()
+          this.infoRow('订阅消息管理', '未接入')
         }
         .width('100%')
         .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
@@ -447,7 +473,7 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
-          this.parseModeRow()
+          this.navRow('解析方式', this.parseModeLabel(this.parseMode), SHEET_PARSE_MODE)
         }
         .width('100%')
         .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
@@ -478,8 +504,7 @@ export struct A_Settings {
           })
 
           this.rowDivider()
-          // 云端同步：P1 未接入，如实标注，不做假开关
-          this.plainRow($r('app.string.settings_cloud_off'), '')
+          this.infoRow($r('app.string.settings_cloud_off'), '')
         }
         .width('100%')
         .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
@@ -493,27 +518,36 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
-          this.plainRow('版本', this.versionLabel)
+          this.infoRow('版本', this.versionLabel)
           this.rowDivider()
-          this.plainRow('隐私说明', '未接入')
+          this.infoRow('隐私说明', '未接入')
         }
         .width('100%')
         .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
         .borderRadius(Theme.RADIUS_CARD)
         .clip(true)
+
+        // 底部让开悬浮页签栏：不留这段的话最后一项会被压住（上一版就是漏了它）
+        Row().width('100%').height(BOTTOM_CLEARANCE_VP)
       }
       .width('100%')
-      .padding({
-        left: PAGE_SIDE_PADDING_VP,
-        right: PAGE_SIDE_PADDING_VP,
-        top: PAGE_TOP_PADDING_VP,
-        bottom: SECTION_GAP_VP
-      })
+      .padding({ left: PAGE_SIDE_PADDING_VP, right: PAGE_SIDE_PADDING_VP })
+      .alignItems(HorizontalAlign.Start)
     }
     .width('100%')
     .height('100%')
     .scrollBar(BarState.Off)
     .align(Alignment.Top)
     .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
+    .bindSheet(this.sheetKind !== SHEET_NONE, this.sheetBody(), {
+      title: { title: this.sheetTitle },
+      preferType: SheetType.CENTER,
+      height: SheetSize.FIT_CONTENT,
+      showClose: false,
+      dragBar: false,
+      onDisappear: () => {
+        this.sheetKind = SHEET_NONE;
+      }
+    })
   }
 }

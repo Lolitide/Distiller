@@ -469,6 +469,10 @@
       "value": "难易程度"
     },
     {
+      "name": "info_priority",
+      "value": "重要性"
+    },
+    {
       "name": "info_urls",
       "value": "链接"
     },
