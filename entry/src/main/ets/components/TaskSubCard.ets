@@ -18,7 +18,7 @@
  * 「当前一步」＝**第一个未完成的步骤**；全部完成时显示最后一步（便于退回）。
  */
 import { Task, TaskStep } from '../model';
-import { Theme } from '../utils/Theme';
+import { Theme, ThemeStore } from '../utils/Theme';
 
 /**
  * 整条副卡片的高度（vp）：草图要求「< 主卡片的一半」。
@@ -44,6 +44,8 @@ export struct TaskSubCard {
   @Param dimmed: boolean = false;
   /** 点圆圈 → 由页面交给 store 切换该步的完成态（组件不碰数据） */
   @Event onToggleStep: (index: number) => void = () => {};
+  /** 视觉个性化状态：副卡片高度按密度档取值（紧凑档更矮） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
 
   @Computed
   get steps(): TaskStep[] {
@@ -129,7 +131,7 @@ export struct TaskSubCard {
         .textAlign(TextAlign.End)
     }
     .width('100%')
-    .height(SUB_CARD_HEIGHT_VP)
+    .height(this.themeStore.subCardHeight)
     .padding({ left: SUB_SIDE_PADDING_VP, right: SUB_SIDE_PADDING_VP })
     .alignItems(VerticalAlign.Center)
     // 与主卡片同一个卡片白；折叠态换成**更暗的一层底色**

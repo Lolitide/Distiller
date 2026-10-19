@@ -4,7 +4,7 @@ import { MainTitleBar } from '../components/MainTitleBar';
 import { TaskCard } from '../components/TaskCard';
 import { TaskSubCard } from '../components/TaskSubCard';
 import { TaskStep } from '../model';
-import { Theme } from '../utils/Theme';
+import { Theme, ThemeStore } from '../utils/Theme';
 import { GROUP_HEADER_LIST_PULL_UP_VP, TaskGroupHeader } from '../components/TaskGroupHeader';
 import { EmptyHint } from '../components/EmptyHint';
 import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
@@ -85,6 +85,9 @@ export struct A_TaskList {
    * 编辑态再传给每张卡片（圆圈 ↔ 方框勾选框）。
    */
   @Require @Param store: TaskListStore;
+
+  /** 视觉个性化状态：卡片间距按密度档取值（紧凑档更紧） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
 
   /**
    * 哪些任务的副卡片被**长按展开**了（存 task.id）。
@@ -335,7 +338,7 @@ export struct A_TaskList {
                   // 卡片之间的间距（2026-10-19 第五次调整）。
                   // ⚠️ `ListItemGroup.spaceWidth` 在本项目里**实测不生效**（`Resource` / 裸数字 /
                   //    `'12vp'` 三种写法都试过，两卡始终紧贴、间距 0px），所以改成给每项加下外边距。
-                  .margin({ bottom: Theme.LIST_ITEM_SPACE })
+                  .margin({ bottom: this.themeStore.listItemSpace })
                   // 分组展开/收起时，这一组里的**每张卡片**也做淡入（2026-10-19 第五次：
                   // 「为所有任务卡片展开时增加展开项的动画」）——
                   // `transition` 在 ListItem 内容被创建/销毁时自动播放，组收起来就是反向。
