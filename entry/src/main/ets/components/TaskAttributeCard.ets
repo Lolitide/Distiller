@@ -16,6 +16,7 @@ import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 import { DateTimePickerBody } from './DateTimePickerBody';
 import { OptionPickerBody } from './OptionPickerBody';
+import { RepeatRuleEditor } from './RepeatRuleEditor';
 
 /** 圆形图标直径（vp） */
 const ICON_CIRCLE_SIZE_VP: number = 32;
@@ -48,17 +49,6 @@ const DUE_DEFAULT_MINUTE: number = 59;
  * 现在按「锚点日的周几 / 号数」生成单条规则，要支持多选得再做一个二级选择器（见 `applyRepeat` 注释）。
  */
 const REPEAT_OPTIONS: string[] = ['不重复', '每天', '每周', '每月', '每年'];
-const REPEAT_INDEX_NONE: number = 0;
-const REPEAT_INDEX_DAILY: number = 1;
-const REPEAT_INDEX_WEEKLY: number = 2;
-const REPEAT_INDEX_MONTHLY: number = 3;
-const REPEAT_INDEX_YEARLY: number = 4;
-
-/** `Date.getDay()`（0=周日…6=周六）→ 契约里的 `daysOfWeek`（**1~7 ＝ 周一~周日**，官方 range [1,7]） */
-function toDaysOfWeek(date: Date): number {
-  const weekday: number = date.getDay();
-  return weekday === 0 ? 7 : weekday;
-}
 
 @ComponentV2
 export struct TaskAttributeCard {
@@ -80,7 +70,6 @@ export struct TaskAttributeCard {
   @Local dueDraft: Date = new Date();
   @Local repeatSheetOpen: boolean = false;
   /** 重复面板的草稿档位（`REPEAT_OPTIONS` 的下标） */
-  @Local repeatDraftIndex: number = REPEAT_INDEX_NONE;
 
   /** 提醒文案：如「在 10月16日 20:00 提醒我」；没设提醒时给「未设置提醒」 */
   @Computed
@@ -301,7 +290,6 @@ export struct TaskAttributeCard {
    * 一列文本正好装下；要「一选多天（周一、三、五）/ 间隔 N」得再上一层二级选择器（见 `applyRepeat`）。
    */
   private openRepeatSheet(): void {
-    this.repeatDraftIndex = this.repeatSeedIndex();
     this.repeatSheetOpen = true;
   }
 
@@ -310,35 +298,18 @@ export struct TaskAttributeCard {
     this.repeatSheetOpen = false;
   }
 
-  /** 重复面板「确定」：把草稿档位写成规则再收起 */
-  private confirmRepeat(): void {
-    this.applyRepeat(this.repeatDraftIndex);
-    this.repeatSheetOpen = false;
-  }
-
   /**
-   * 选择器打开时停在哪一档：按**第一条**规则的频率倒推。
-   * 没有规则就停在「不重复」。
+   * 交给编辑器的**回填规则**：取第一条。
    *
-   * ⚠️ 现有规则可能是**多条**（如「每周一」+「每月 15 号」，契约支持并集），
-   * 一列文本只能显示其中一档 —— 这里按第一条显示，改动时会整体替换（见 `applyRepeat`）。
+   * 契约允许多条规则（并集），但编辑器一次只编一条 —— 这是已知限制：
+   * 编辑完会**整体替换** `repeat`。要支持"多规则并存编辑"得再做规则列表页，本轮不做。
    */
-  private repeatSeedIndex(): number {
+  private firstRule(): RepeatRule | undefined {
     const rules: RepeatRule[] | undefined = this.task.repeat;
     if (rules === undefined || rules.length === 0) {
-      return REPEAT_INDEX_NONE;
+      return undefined;
     }
-    const frequency: RepeatFrequency = rules[0].frequency;
-    if (frequency === RepeatFrequency.DAILY) {
-      return REPEAT_INDEX_DAILY;
-    }
-    if (frequency === RepeatFrequency.WEEKLY) {
-      return REPEAT_INDEX_WEEKLY;
-    }
-    if (frequency === RepeatFrequency.MONTHLY) {
-      return REPEAT_INDEX_MONTHLY;
-    }
-    return REPEAT_INDEX_YEARLY;
+    return rules[0];
   }
 
   /**
@@ -371,30 +342,22 @@ export struct TaskAttributeCard {
    * TODO(需求方): 要做「一选多天（周一、三、五）/ 间隔 N」就得再上一层二级选择器
    * （文本列只有单值，单选多列也不行），届时要能**合并**而不是整体替换 `repeat`。
    */
-  private applyRepeat(index: number): void {
-    if (index === REPEAT_INDEX_NONE) {
+  /**
+   * 把编辑器产出的规则写回任务。
+   *
+   * 2026-10-19 起改由 `RepeatRuleEditor` 产出**完整规则**（含每周多天 / 每月月初月中月末 / 间隔），
+   * 这里只负责落库 + 清掉 `repeatText`（规则是唯一真值源，手写原话会与规则漂移）。
+   * `undefined` ＝ 不重复。
+   */
+  private applyRepeatRule(rule: RepeatRule | undefined): void {
+    if (rule === undefined) {
       this.task.repeat = [];
       this.task.repeatText = undefined;
-      return;
-    }
-    const anchor: Date = this.repeatAnchorDay();
-    const rule: RepeatRule = new RepeatRule();
-    rule.interval = 1;
-    if (index === REPEAT_INDEX_DAILY) {
-      rule.frequency = RepeatFrequency.DAILY;
-    } else if (index === REPEAT_INDEX_WEEKLY) {
-      rule.frequency = RepeatFrequency.WEEKLY;
-      rule.daysOfWeek = [toDaysOfWeek(anchor)];
-    } else if (index === REPEAT_INDEX_MONTHLY) {
-      rule.frequency = RepeatFrequency.MONTHLY;
-      rule.daysOfMonth = [anchor.getDate()];
     } else {
-      rule.frequency = RepeatFrequency.YEARLY;
-      rule.monthsOfYear = [anchor.getMonth() + 1];
-      rule.daysOfMonth = [anchor.getDate()];
+      this.task.repeat = [rule];
+      this.task.repeatText = undefined;
     }
-    this.task.repeat = [rule];
-    this.task.repeatText = undefined;
+    this.repeatSheetOpen = false;
   }
 
   /**
@@ -483,20 +446,20 @@ export struct TaskAttributeCard {
     })
   }
 
-  /** 重复面板内容 —— 复用 `OptionPickerBody`（官方 `TextPicker` 一列五档 ＋ 共用底部条） */
+  /**
+   * 重复面板内容 —— 换成 **`RepeatRuleEditor`**（2026-10-19）。
+   * 旧的 `OptionPickerBody` 只有「不重复/每天/每周/每月/每年」五档，
+   * 选「每周」也只能落成锚点日那一天，**没法自定义周几、也没法选月初/月中/月末**。
+   */
   @Builder
   repeatSheet() {
-    OptionPickerBody({
-      options: REPEAT_OPTIONS,
-      selectedIndex: this.repeatDraftIndex,
-      onSelectedIndexChange: (index: number) => {
-        this.repeatDraftIndex = index;
-      },
+    RepeatRuleEditor({
+      initialRule: this.firstRule(),
       onCancel: () => {
         this.closeRepeatSheet();
       },
-      onConfirm: () => {
-        this.confirmRepeat();
+      onConfirm: (rule: RepeatRule | undefined) => {
+        this.applyRepeatRule(rule);
       }
     })
   }

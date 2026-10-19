@@ -35,7 +35,8 @@ import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
 import { DateTimePickerBody } from './DateTimePickerBody';
 import { OptionPickerBody } from './OptionPickerBody';
-import { RepeatPickerBody } from './RepeatPickerBody';
+import { RepeatRuleEditor } from './RepeatRuleEditor';
+import { RepeatRule } from '../model';
 import { TagInputBody } from './TagInputBody';
 
 const DOMAIN: number = 0x0000;
@@ -157,6 +158,15 @@ export struct AddTaskAttributeChips {
   /** 重复 chip 文案：不重复 → 「重复」；否则显示档位名（「每天」/「每周」…） */
   @Computed
   get repeatChipLabel(): string {
+    // 编辑器给过完整规则时，**直接显示规则文案**（「每周一、二、四」「每月月末」），
+    // 比只显示「每周」「每月」这种档位名更有信息量 —— 否则用户看不出自己选的是月末。
+    const rule: RepeatRule | undefined = this.draft.repeatRule;
+    if (rule !== undefined) {
+      const text: string = TaskListViewModel.oneRepeatLabel(rule);
+      if (text.length > 0) {
+        return text;
+      }
+    }
     if (this.draft.repeatIndex === REPEAT_NONE) {
       return this.labelText($r('app.string.chip_repeat'));
     }
@@ -700,28 +710,17 @@ export struct AddTaskAttributeChips {
         }
       })
     } else if (this.pickerKind === PICKER_REPEAT) {
-      // 重复面板：档位轮 + （每周时）星期多选 + 间隔。
-      // 用专门的 `RepeatPickerBody` 而不是单列 `OptionPickerBody`：字段表 §1.1 要求能录「每周一、二、四」，
-      // 单列选择器录不进具体星期。
-      RepeatPickerBody({
-        options: this.repeatOptionTexts,
-        selectedIndex: this.repeatDraftIndex,
-        daysOfWeek: this.repeatDraftDays,
-        interval: this.repeatDraftInterval,
-        onSelectedIndexChange: (index: number) => {
-          this.repeatDraftIndex = index;
-        },
-        onDaysOfWeekChange: (days: number[]) => {
-          this.repeatDraftDays = days;
-        },
-        onIntervalChange: (interval: number) => {
-          this.repeatDraftInterval = interval;
-        },
+      // 重复面板：与详情页**同一个** `RepeatRuleEditor`（2026-10-19 统一）。
+      // 旧的 `RepeatPickerBody` 只有「档位 + 星期多选 + 间隔」，没有「每月月初/月中/月末」，
+      // 所以两处口径会对不上 —— 现在两处都走编辑器，产出的都是完整 `RepeatRule`。
+      RepeatRuleEditor({
+        initialRule: this.draft.firstRepeatRule(),
         onCancel: () => {
           this.closePicker();
         },
-        onConfirm: () => {
-          this.confirmPicker();
+        onConfirm: (rule: RepeatRule | undefined) => {
+          this.draft.applyRepeatRule(rule);
+          this.closePicker();
         }
       })
     } else if (this.pickerKind === PICKER_PRIORITY) {

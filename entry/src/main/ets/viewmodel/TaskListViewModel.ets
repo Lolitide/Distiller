@@ -257,6 +257,7 @@ export class TaskListViewModel {
     const weekdays: number[] | undefined = rule.daysOfWeek;
     const monthDays: number[] | undefined = rule.daysOfMonth;
     const months: number[] | undefined = rule.monthsOfYear;
+    const dates: number[] | undefined = rule.dates;
 
     if (rule.frequency === RepeatFrequency.WEEKLY) {
       const base: string = `${every}周`;
@@ -290,6 +291,12 @@ export class TaskListViewModel {
           days.push(`${day}`);
         });
         return `${base}${days.join(WEEKDAY_JOIN)} 号`;
+      }
+      // 「月末」在规则里表达不了，存的是 `dates`（未来若干个月的当月最后一天）。
+      // 这里必须**单独认出来**：否则月末规则会和"只说了每月、没说哪天"一样显示成「每月」，
+      // 用户看不出自己选的是月末。
+      if (dates !== undefined && dates.length > 0) {
+        return `${base}月末`;
       }
       return base;
     }
