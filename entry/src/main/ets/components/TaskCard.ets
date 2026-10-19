@@ -47,18 +47,12 @@ const SECOND_LINE_GAP_VP: number = 6;
  * 定宽 + 右对齐 → 所有卡片的截止文案右边缘落在同一条竖线上，
  * 不会因为「明天截止」和「10 天后截止」长短不同而左右跳动。
  */
-/** 标签槽宽度（vp）：按 4 个汉字宽算，文字居中；没标签也占住这个宽度（2026-10-19 效果图） */
-const TAG_CHIP_WIDTH_VP: number = 60;
 /** 「XXX」槽宽度（vp）：定宽居中，14h / 3 天 / 已过期 都放得下 */
 const DUE_VALUE_WIDTH_VP: number = 48;
-/** 截止胶囊左右内边距（vp） */
-const DUE_CHIP_SIDE_PADDING_VP: number = 6;
-/** 截止胶囊描边宽度（vp） */
-const DUE_CHIP_BORDER_VP: number = 1;
-/** 「XXX」与「后截止」之间的间距（vp） */
-const DUE_SUFFIX_GAP_VP: number = 2;
 /** 重复标识图标字号（vp）：第二行最后那个小图标 */
 const REPEAT_ICON_SIZE_VP: number = 16;
+/** 重复图标槽宽度（vp）：**始终占位**，这样有无重复铃铛位置都不动 */
+const REPEAT_SLOT_WIDTH_VP: number = 28;
 /** 铃铛图标字号（vp） */
 const BELL_ICON_SIZE_VP: number = 20;
 /** 铃铛可点区域边长（vp）：官方最小可点 40 */
@@ -159,11 +153,39 @@ export struct TaskCard {
    * 用 `SuffixCustomBuilder` 自绘：官方 `SuffixIcon` 的选项里没有 `onClick`，点不动
    * （与左侧圆圈同一个坑，左侧走的是 `PrefixCustomBuilder`）。
    */
+  /**
+   * C 区：**重复图标 + 铃铛**。
+   *
+   * 2026-10-19 第二次调整：「重复性图标若有，放在通知按钮左边，不在任务名称一行，
+   * 也不在 tag 那一行。**预留一块间距放它**」。
+   * 所以这里是一个 Row：左边固定宽度的重复槽（没有重复也占位，避免铃铛左右跳动），
+   * 右边是铃铛本体。整块仍走 `SuffixCustomBuilder`（官方的 `SuffixIcon` 没有 onClick）。
+   */
   @Computed
-  get bellButton(): SuffixCustomBuilder {
+  get suffixButtons(): SuffixCustomBuilder {
     return new SuffixCustomBuilder((): void => {
-      this.bellGlyph();
+      this.suffixRow();
     });
+  }
+
+  @Builder
+  suffixRow() {
+    Row() {
+      // 重复标识槽：**固定占位**（无重复时为空也不塌陷）
+      Stack() {
+        if (this.repeatLabel !== '') {
+          SymbolGlyph($r('sys.symbol.repeat'))
+            .fontSize(REPEAT_ICON_SIZE_VP)
+            .fontColor([$r('sys.color.icon_secondary')])
+        }
+      }
+      .width(REPEAT_SLOT_WIDTH_VP)
+      .height(BELL_HIT_SIZE_VP)
+      .accessibilityText(this.repeatLabel)
+
+      this.bellGlyph()
+    }
+    .alignItems(VerticalAlign.Center)
   }
 
   /** 铃铛可点区域边长（vp）：官方最小可点 40，视觉 20、热区 40 */
@@ -207,18 +229,22 @@ export struct TaskCard {
   }
 
   /**
-   * 卡片第二行的标签胶囊：**只显示 1 个**（2026-10-19 定：「标签胶囊仅显示 1 个 tag，
-   * 不做多个的区分，所有的标签可以显示在详情页里」）。
-   * 因此**不再折出 `+n` 计数徽标** —— 那会看起来像"还有别的标签要区分"，与"只显示一个"的意图相反；
-   * 全部标签在详情页的 `TaskTagsCard` 里逐条列出。
+   * 第二行最左边那个胶囊要显示的文字（2026-10-19 第三次调整）：
+   *
+   *   ① 有标签 → 显示**第一个标签**（只显示 1 个，其余在详情页看）；
+   *   ② 没有标签、但有类型 → 显示**类型名**（`category`，如「作业」「考试」）；
+   *   ③ 两样都没有 → 空串，整块不渲染。
+   *
+   * 宽度**按字数自适应**（作者：「标签还是多少个字就多宽吧」），不再定宽 4 字。
    */
   @Computed
-  get tagChipList(): string[] {
+  get chipText(): string {
     const tags: string[] | undefined = this.task.tags;
-    if (tags === undefined || tags.length === 0) {
-      return [];
+    if (tags !== undefined && tags.length > 0) {
+      return tags[0];
     }
-    return [tags[0]];
+    const category: string | undefined = this.task.category;
+    return category === undefined ? '' : category;
   }
 
   /** 重要性标识是否占位：**0（普通）不占位**，不是"显示一个普通样式" */
@@ -285,27 +311,32 @@ export struct TaskCard {
         .textAlign(TextAlign.Start)
 
       Row({ space: SECOND_LINE_GAP_VP }) {
-        // ===== 固定槽位对齐（2026-10-19 作者效果图）=====
-        // 第二行从左到右是**五个固定宽度的槽**，内容居中：
-        //   ① tag（按 4 个字定宽） ② 重要性 ③ 「XXX」 ④ 「后截止」 ⑤ 重复图标
-        // 每个槽**没有内容也占住宽度**，所以所有卡片纵向严格对齐，不会因为
-        // 「有/没有标签」「14h/3天/已过期」而左右错位。
+        // ===== 第二行（2026-10-19 第三次调整）=====
+        // ① tag：**几个字就多宽**（不再定宽 4 字）；没标签时显示**类型名**；
+        //    两样都没有才空着（此时整行只剩重要性与截止）。
+        // ② 重要性：固定槽（没有也占位），保持后面内容不左右跳。
+        // ③④ 截止：「XXX」定宽居中 + 「后截止」固定文本，**去掉描边框、字号调大到 body2**
+        //    （作者：「截止时间不需要加边框，这样字号太小了」）。
+        // ⑤ 重复图标已移到 C 区（铃铛左边），第二行不再有它。
 
-        // ① 标签：定宽 4 字、文字居中；没有标签也画一个透明占位
-        Text(this.tagChipList.length > 0 ? this.tagChipList[0] : '')
-          .fontSize($r('sys.float.ohos_id_text_size_caption'))
-          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-          .maxLines(1)
-          .textAlign(TextAlign.Center)
-          .width(TAG_CHIP_WIDTH_VP)
-          .backgroundColor(this.tagChipList.length > 0
-            ? $r('sys.color.comp_background_secondary')
-            : Color.Transparent)
-          .borderRadius(TAG_CHIP_RADIUS_VP)
-          .padding({ top: TAG_CHIP_VERTICAL_PADDING_VP, bottom: TAG_CHIP_VERTICAL_PADDING_VP })
-          .flexShrink(0)
+        // ① 标签 / 类型名
+        if (this.chipText !== '') {
+          Text(this.chipText)
+            .fontSize($r('sys.float.ohos_id_text_size_caption'))
+            .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+            .maxLines(1)
+            .padding({
+              left: TAG_CHIP_SIDE_PADDING_VP,
+              right: TAG_CHIP_SIDE_PADDING_VP,
+              top: TAG_CHIP_VERTICAL_PADDING_VP,
+              bottom: TAG_CHIP_VERTICAL_PADDING_VP
+            })
+            .backgroundColor($r('sys.color.comp_background_secondary'))
+            .borderRadius(TAG_CHIP_RADIUS_VP)
+            .flexShrink(0)
+        }
 
-        // ② 重要性标识：**固定槽**（没有也占位）。0 档画透明占位，1/2 档画红圈
+        // ② 重要性标识：**固定槽**（没有也占位）。0 档留空，1/2 档画红圈
         Stack() {
           if (this.showPriorityBadge) {
             this.priorityBadge()
@@ -315,55 +346,24 @@ export struct TaskCard {
         .height(PRIORITY_BADGE_SIZE_VP)
         .flexShrink(0)
 
-        // ③④ 截止：**一个定宽描边框**，里面左槽居中放「XXX」、右接固定的「后截止」。
-        // 框宽固定（XXX 槽 48vp + 固定文本），所以所有卡片的框右边缘对齐、文字位置也不跳。
-        Row({ space: DUE_SUFFIX_GAP_VP }) {
-          // ③「XXX」定宽居中（今天 / 明天 / 后天 / 3 天 / 14h / 已过期）
-          Text(this.dueParts.value)
-            .fontSize($r('sys.float.ohos_id_text_size_caption'))
-            .fontColor(this.textColor)
-            .maxLines(1)
-            .textAlign(TextAlign.Center)
-            .width(DUE_VALUE_WIDTH_VP)
-            .flexShrink(0)
+        // ③「XXX」定宽居中（今天 / 明天 / 后天 / 3 天 / 14h / 已过期）
+        Text(this.dueParts.value)
+          .fontSize($r('sys.float.ohos_id_text_size_body2'))
+          .fontColor(this.textColor)
+          .maxLines(1)
+          .textAlign(TextAlign.Center)
+          .width(DUE_VALUE_WIDTH_VP)
+          .flexShrink(0)
 
-          // ④「后截止」固定文本；已过期/未定时间时为空，但框仍在（保持对齐）
-          Text(this.dueParts.suffix)
-            .fontSize($r('sys.float.ohos_id_text_size_caption'))
-            .fontColor(this.textColor)
-            .maxLines(1)
-            .textAlign(TextAlign.Start)
-            .flexShrink(0)
-        }
-        .padding({
-          left: DUE_CHIP_SIDE_PADDING_VP,
-          right: DUE_CHIP_SIDE_PADDING_VP,
-          top: TAG_CHIP_VERTICAL_PADDING_VP,
-          bottom: TAG_CHIP_VERTICAL_PADDING_VP
-        })
-        .border({
-          width: DUE_CHIP_BORDER_VP,
-          color: $r('sys.color.comp_divider')
-        })
-        .borderRadius(TAG_CHIP_RADIUS_VP)
-        .flexShrink(0)
-        // 完全没有截止信息时把框隐藏（但 `Visibility.Hidden` 仍占位，不影响后续槽位对齐）
-        .visibility(this.dueParts.value === '' ? Visibility.Hidden : Visibility.Visible)
+        // ④「后截止」固定文本；已过期/未定时间时为空
+        Text(this.dueParts.suffix)
+          .fontSize($r('sys.float.ohos_id_text_size_body2'))
+          .fontColor(this.textColor)
+          .maxLines(1)
+          .textAlign(TextAlign.Start)
+          .flexShrink(0)
 
-        // ⑤ 重复性标识：最后一个小图标（没有也占位）
-        Stack() {
-          if (this.repeatLabel !== '') {
-            SymbolGlyph($r('sys.symbol.repeat'))
-              .fontSize(REPEAT_ICON_SIZE_VP)
-              .fontColor([$r('sys.color.icon_secondary')])
-              .accessibilityText(this.repeatLabel)
-          }
-        }
-        .width(REPEAT_ICON_SIZE_VP)
-        .height(REPEAT_ICON_SIZE_VP)
-        .flexShrink(0)
-
-        // 右侧弹性空白：把剩下的空间都留给铃铛
+        // 右侧弹性空白：剩下的空间留给 C 区（重复槽 + 铃铛）
         Blank()
       }
       .width('100%')
@@ -416,7 +416,7 @@ export struct TaskCard {
         }
       },
       // C 区：铃铛按钮（每一项都有，点它切 alarm）
-      suffixItem: this.bellButton,
+      suffixItem: this.suffixButtons,
       accessibilityOptions: {
         accessibilityText: this.accessibilityLabel
       }

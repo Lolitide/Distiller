@@ -24,12 +24,27 @@ const LIST_BOTTOM_CLEARANCE_VP: number = 80;
 
 /* ── 副卡片「堆叠」形态（2026-10-19 实验性 UI）── */
 
-/** 收起时露出的下边缘高度（vp）：只为示意底下还压着一张卡，不承载内容 */
-const STACK_LAYER_EDGE_VP: number = 12;
-/** 堆叠层宽度：比主卡片窄一点，才读得出是压在底下 */
+/**
+ * 收起时露出的下边缘高度（vp）。
+ * 按作者给的图：收起态**只保留一条很细的边缘线**，不承载内容 —— 从 12vp 收到 6vp。
+ */
+const STACK_LAYER_EDGE_VP: number = 6;
+/**
+ * 副卡片宽度（vp，百分比）：**展开态与收起态用同一个宽度**，按图约为主卡的 92%、居中。
+ * 之前展开 100% / 收起 92%，切换时宽度会跳一下。
+ */
 const STACK_LAYER_WIDTH: string = '92%';
-/** 堆叠层与主卡片之间的缝隙（vp） */
-const STACK_LAYER_OFFSET_VP: number = 4;
+/**
+ * 堆叠层与主卡片之间的缝隙（vp）。
+ * 图里副卡片是**贴着主卡片下沿**长出来的，所以不再留缝（原来 4vp）。
+ */
+const STACK_LAYER_OFFSET_VP: number = 0;
+/**
+ * 主卡片自身的左右留白（vp）。
+ * 副卡片必须先缩进同样的距离再取百分比，才是「主卡片的 92%」——
+ * 直接写 `92%` 会按整屏宽度算，结果比主卡片还宽（实测 1214px vs 1208px）。
+ */
+const CARD_SIDE_MARGIN_VP: number = 16;
 /** 长按判定时长（毫秒） */
 const LONG_PRESS_MS: number = 500;
 /** 副卡片展开/收起动画时长（毫秒）：2026-10-19 与作者确认 220ms + EaseOut */
@@ -242,43 +257,50 @@ export struct A_TaskList {
                     )
 
                     if (this.hasSteps(task)) {
-                      if (this.isStepsExpanded(task.id)) {
-                        // 展开态：完整副卡片。
-                        // 进场动画：从下方淡入 + 上移（`transition` 在组件创建/销毁时自动播放）
-                        Column() {
-                          TaskSubCard({
-                            task: task,
-                            onToggleStep: (index: number) => {
-                              this.store.toggleStepDone(task, index);
-                            }
-                          })
-                        }
-                        .width('100%')
-                        .margin({ top: STACK_LAYER_OFFSET_VP })
-                        .transition(
-                          TransitionEffect.OPACITY
-                            .combine(TransitionEffect.move(TransitionEdge.BOTTOM))
-                            .animation({ duration: EXPAND_ANIM_MS, curve: Curve.EaseOut })
-                        )
-                      } else {
-                        // 收起态：只露一条下边缘，宽度略窄 → 读作「底下压着一张小卡」。
-                        // 同样带来回过渡，否则展开→收起时会"啪"地跳一下
-                        Row()
+                      // ⚠️ 百分比是相对**父容器**算的：直接给副卡片写 `92%` 会按整屏宽度（1320px）算，
+                      // 结果比主卡片（1208px）还宽（实测 1214px）。所以这里先把左右各缩进 16vp
+                      //（与主卡片自身的左右留白一致），再在内部取 92%，才是"主卡片的 92%"。
+                      Column() {
+                        if (this.isStepsExpanded(task.id)) {
+                          // 展开态：完整副卡片。**宽度与收起态一致**，切换时宽度不跳。
+                          // 进场动画：从下方淡入 + 上移（`transition` 在组件创建/销毁时自动播放）
+                          Column() {
+                            TaskSubCard({
+                              task: task,
+                              onToggleStep: (index: number) => {
+                                this.store.toggleStepDone(task, index);
+                              }
+                            })
+                          }
                           .width(STACK_LAYER_WIDTH)
-                          .height(STACK_LAYER_EDGE_VP)
-                          .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
-                          .borderRadius({
-                            bottomLeft: Theme.RADIUS_CARD,
-                            bottomRight: Theme.RADIUS_CARD
-                          })
-                          .margin({ top: STACK_LAYER_OFFSET_VP })
-                          .accessibilityText($r('app.string.subcard_stacked_hint'))
                           .transition(
                             TransitionEffect.OPACITY
                               .combine(TransitionEffect.move(TransitionEdge.BOTTOM))
                               .animation({ duration: EXPAND_ANIM_MS, curve: Curve.EaseOut })
                           )
+                        } else {
+                          // 收起态：只露一条**很细**的下边缘线，读作「底下压着一张小卡」。
+                          // 同样带来回过渡，否则展开→收起时会"啪"地跳一下
+                          Row()
+                            .width(STACK_LAYER_WIDTH)
+                            .height(STACK_LAYER_EDGE_VP)
+                            .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+                            .borderRadius({
+                              bottomLeft: Theme.RADIUS_CARD,
+                              bottomRight: Theme.RADIUS_CARD
+                            })
+                            .accessibilityText($r('app.string.subcard_stacked_hint'))
+                            .transition(
+                              TransitionEffect.OPACITY
+                                .combine(TransitionEffect.move(TransitionEdge.BOTTOM))
+                                .animation({ duration: EXPAND_ANIM_MS, curve: Curve.EaseOut })
+                            )
+                        }
                       }
+                      .width('100%')
+                      .padding({ left: CARD_SIDE_MARGIN_VP, right: CARD_SIDE_MARGIN_VP })
+                      .margin({ top: STACK_LAYER_OFFSET_VP })
+                      .alignItems(HorizontalAlign.Center)
                     }
                   }
                   .width('100%')
