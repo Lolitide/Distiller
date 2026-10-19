@@ -307,7 +307,7 @@ export struct TaskCard {
         .fontSize($r('sys.float.ohos_id_text_size_body1'))
         .fontWeight(FontWeight.Bold)
         .fontColor(this.textColor)
-        .lineHeight(`${LINE_HEIGHT_VP}vp`)
+        .lineHeight(`${this.themeStore.lineHeight}vp`)
         .maxLines(1)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .width('100%')
@@ -391,7 +391,7 @@ export struct TaskCard {
         Blank()
       }
       .width('100%')
-      .height(`${SECOND_LINE_HEIGHT_VP}vp`)
+      .height(`${this.themeStore.secondLineHeight}vp`)
       .alignItems(VerticalAlign.Center)
     }
     .width('100%')

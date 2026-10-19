@@ -33,6 +33,8 @@ import {
   SettingsRepository
 } from '../repository/SettingsRepository';
 import { OptionPickerBody } from '../components/OptionPickerBody';
+import { SettingsNavRow } from '../components/SettingsNavRow';
+import { ToggleSlider } from '../components/ToggleSlider';
 import { Task } from '../model';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 
@@ -63,8 +65,11 @@ const SECTION_TITLE_INSET_VP: number = 4;
 const SECTION_TITLE_GAP_VP: number = 8;
 /** 主题色圆点直径（vp） */
 const ACCENT_DOT_SIZE_VP: number = 28;
-/** 主题色圆点选中时的外圈（vp） */
-const ACCENT_DOT_RING_VP: number = 2;
+/**
+ * 主题色选中时，叠加在色板上的「白圈」与色板边缘之间的间距（vp）。
+ * 白圈直径 = 色板直径 − 2×本值 → 它比按钮小一圈，色板只剩一道色环。
+ */
+const ACCENT_SELECT_RING_VP: number = 5;
 
 /** 提醒提前量的可选档（分钟）：0 ＝ 到点提醒 */
 const REMIND_LEAD_OPTIONS: number[] = [0, 5, 15, 30, 60];
@@ -73,9 +78,8 @@ const PARSE_MODE_OPTIONS: string[] = ['自动（端侧优先）', '仅本机', '
 /** 卡片密度的档位文案 */
 const DENSITY_OPTIONS: string[] = ['标准', '紧凑'];
 
-/** 当前打开的选择器 */
+/** 当前打开的选择器（卡片密度已改成页内滑动控件，不再走弹窗） */
 const SHEET_NONE: number = 0;
-const SHEET_DENSITY: number = 1;
 const SHEET_REMIND_LEAD: number = 2;
 const SHEET_PARSE_MODE: number = 3;
 
@@ -100,7 +104,6 @@ export struct A_Settings {
   /** 当前打开的选择器 */
   @Local sheetKind: number = SHEET_NONE;
   /** 选择器草稿 */
-  @Local densityDraft: number = DENSITY_STANDARD;
   @Local remindLeadDraft: number = DEFAULT_REMIND_LEAD;
   @Local parseModeDraft: number = DEFAULT_PARSE_MODE;
 
@@ -136,10 +139,6 @@ export struct A_Settings {
 
   private parseModeLabel(mode: number): string {
     return PARSE_MODE_OPTIONS[mode < 0 || mode >= PARSE_MODE_OPTIONS.length ? 0 : mode];
-  }
-
-  private densityLabel(density: number): string {
-    return DENSITY_OPTIONS[density === DENSITY_COMPACT ? 1 : 0];
   }
 
   /** 版本号从安装包读，不写死 */
@@ -179,9 +178,7 @@ export struct A_Settings {
   /* ── 选择器 ── */
 
   private openSheet(kind: number): void {
-    if (kind === SHEET_DENSITY) {
-      this.densityDraft = this.themeStore.density;
-    } else if (kind === SHEET_REMIND_LEAD) {
+    if (kind === SHEET_REMIND_LEAD) {
       const index: number = REMIND_LEAD_OPTIONS.indexOf(this.remindLead);
       this.remindLeadDraft = index < 0 ? 0 : index;
     } else if (kind === SHEET_PARSE_MODE) {
@@ -195,9 +192,7 @@ export struct A_Settings {
   }
 
   private confirmSheet(): void {
-    if (this.sheetKind === SHEET_DENSITY) {
-      this.themeStore.density = this.densityDraft;
-    } else if (this.sheetKind === SHEET_REMIND_LEAD) {
+    if (this.sheetKind === SHEET_REMIND_LEAD) {
       this.applyRemindLead(REMIND_LEAD_OPTIONS[this.remindLeadDraft]);
     } else if (this.sheetKind === SHEET_PARSE_MODE) {
       this.applyParseMode(this.parseModeDraft);
@@ -207,9 +202,6 @@ export struct A_Settings {
 
   @Computed
   get sheetTitle(): ResourceStr {
-    if (this.sheetKind === SHEET_DENSITY) {
-      return '卡片密度';
-    }
     if (this.sheetKind === SHEET_REMIND_LEAD) {
       return '提醒提前量';
     }
@@ -218,21 +210,7 @@ export struct A_Settings {
 
   @Builder
   sheetBody() {
-    if (this.sheetKind === SHEET_DENSITY) {
-      OptionPickerBody({
-        options: DENSITY_OPTIONS,
-        selectedIndex: this.densityDraft,
-        onSelectedIndexChange: (index: number) => {
-          this.densityDraft = index;
-        },
-        onCancel: () => {
-          this.closeSheet();
-        },
-        onConfirm: () => {
-          this.confirmSheet();
-        }
-      })
-    } else if (this.sheetKind === SHEET_REMIND_LEAD) {
+    if (this.sheetKind === SHEET_REMIND_LEAD) {
       OptionPickerBody({
         options: [
           this.remindLeadLabel(0), this.remindLeadLabel(5), this.remindLeadLabel(15),
@@ -330,36 +308,6 @@ export struct A_Settings {
       .margin({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
   }
 
-  /** 「左标签 + 右值 + 可点」的一行，点了开选择器 */
-  @Builder
-  navRow(label: ResourceStr, value: string, kind: number) {
-    Row() {
-      Text(label)
-        .fontSize($r('sys.float.ohos_id_text_size_body1'))
-        .fontColor($r('sys.color.ohos_id_color_text_primary'))
-        .width(LABEL_WIDTH_VP)
-        .maxLines(1)
-        .textAlign(TextAlign.Start)
-      Text(value)
-        .fontSize($r('sys.float.ohos_id_text_size_body2'))
-        .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-        .layoutWeight(1)
-        .maxLines(1)
-        .textAlign(TextAlign.End)
-      SymbolGlyph($r('sys.symbol.chevron_right'))
-        .fontSize(Theme.FONT_CAPTION)
-        .fontColor([$r('sys.color.icon_tertiary')])
-        .margin({ left: Theme.GAP_S })
-    }
-    .width('100%')
-    .height(ROW_HEIGHT_VP)
-    .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-    .alignItems(VerticalAlign.Center)
-    .onClick(() => {
-      this.openSheet(kind);
-    })
-  }
-
   /** 「左标签 + 右说明」的只读行（未接入项用） */
   @Builder
   infoRow(label: ResourceStr, value: string) {
@@ -382,6 +330,39 @@ export struct A_Settings {
     .alignItems(VerticalAlign.Center)
   }
 
+  /**
+   * 卡片密度：**二档滑动控件**（2026-10-19 作者要求）。
+   *
+   * 之前是「点一行 → 弹选择器 → 再点确定」，两个动作才改一个二选一的开关；
+   * 而且右侧那行值因为 `@Builder` 值参数不刷新，选完还显示旧值。
+   * 现在一行内直接滑动切换，值也由 `@Param` 响应式驱动。
+   */
+  @Builder
+  densityRow() {
+    Row() {
+      Text('卡片密度')
+        .fontSize($r('sys.float.ohos_id_text_size_body1'))
+        .fontColor($r('sys.color.ohos_id_color_text_primary'))
+        .width(LABEL_WIDTH_VP)
+        .maxLines(1)
+        .textAlign(TextAlign.Start)
+
+      Blank()
+
+      ToggleSlider({
+        options: DENSITY_OPTIONS,
+        selectedIndex: this.themeStore.density,
+        onSelect: (index: number) => {
+          this.themeStore.density = index;
+        }
+      })
+    }
+    .width('100%')
+    .height(ROW_HEIGHT_VP)
+    .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+    .alignItems(VerticalAlign.Center)
+  }
+
   /** 主题色：三个**颜色圆点**，不写色名（2026-10-19 作者要求） */
   @Builder
   accentDots() {
@@ -396,17 +377,25 @@ export struct A_Settings {
       Row({ space: Theme.GAP_M }) {
         ForEach(ACCENT_OPTIONS, (option: AccentOption, index: number) => {
           Stack() {
-            // 选中档在外圈加一道描边，让"当前是哪个"一眼可见
+            // 色板本体：整圆（这一个就是"按钮"）
             Row()
               .width(ACCENT_DOT_SIZE_VP)
               .height(ACCENT_DOT_SIZE_VP)
               .backgroundColor(option.light)
               .borderRadius(ACCENT_DOT_SIZE_VP / 2)
-              .border({
-                width: this.themeStore.accentIndex === index ? ACCENT_DOT_RING_VP : 0,
-                color: $r('sys.color.ohos_id_color_text_primary'),
-                radius: ACCENT_DOT_SIZE_VP / 2
-              })
+
+            // 选中态：**一个略小于按钮的白圈**（2026-10-19 作者要求）。
+            // 之前是给外圈加深色描边，跟色板本身的形状打架；
+            // 现在在色板上叠一个居中的白色实心圆，色板只剩一道色环，
+            // 一眼能看出当前选的是哪一个，也不遮挡颜色本身。
+            if (this.themeStore.accentIndex === index) {
+              Row()
+                .width(ACCENT_DOT_SIZE_VP - ACCENT_SELECT_RING_VP * 2)
+                .height(ACCENT_DOT_SIZE_VP - ACCENT_SELECT_RING_VP * 2)
+                .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+                .borderRadius((ACCENT_DOT_SIZE_VP - ACCENT_SELECT_RING_VP * 2) / 2)
+                .transition(TransitionEffect.OPACITY.animation({ duration: 150 }))
+            }
           }
           .width(Theme.HIT_MIN)
           .height(Theme.HIT_MIN)
@@ -434,7 +423,8 @@ export struct A_Settings {
         Column() {
           this.accentDots()
           this.rowDivider()
-          this.navRow('卡片密度', this.densityLabel(this.themeStore.density), SHEET_DENSITY)
+          // 卡片密度：**二档滑动控件**（2026-10-19 作者要求，不再弹选择器）
+          this.densityRow()
         }
         .width('100%')
         .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
@@ -448,7 +438,14 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
-          this.navRow('提醒提前量', this.remindLeadLabel(this.remindLead), SHEET_REMIND_LEAD)
+          // 用组件而不是 `@Builder`：Builder 的值参数不刷新，选完值那行不会更新（2026-10-19 bug）
+          SettingsNavRow({
+            label: '提醒提前量',
+            value: this.remindLeadLabel(this.remindLead),
+            onTap: () => {
+              this.openSheet(SHEET_REMIND_LEAD);
+            }
+          })
         }
         .width('100%')
         .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
@@ -480,7 +477,13 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
-          this.navRow('解析方式', this.parseModeLabel(this.parseMode), SHEET_PARSE_MODE)
+          SettingsNavRow({
+            label: '解析方式',
+            value: this.parseModeLabel(this.parseMode),
+            onTap: () => {
+              this.openSheet(SHEET_PARSE_MODE);
+            }
+          })
         }
         .width('100%')
         .backgroundColor($r('sys.color.ohos_id_color_card_bg'))

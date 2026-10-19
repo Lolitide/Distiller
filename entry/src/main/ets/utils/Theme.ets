@@ -46,12 +46,25 @@ export class Theme {
    * 卡片尺寸（vp）：密度档位不同取值不同，见 `cardHeight()`。
    * 2026-10-19 第五次调整：整体压矮（标准 76→68、紧凑 64→58），
    * 让上下留白变少、一屏能多看一条。
+   * 2026-10-19 第八次：「紧凑再紧凑些」→ 紧凑 58 → 52（标准保持 68 不动）。
    */
   static readonly CARD_HEIGHT_STANDARD: number = 68;
-  static readonly CARD_HEIGHT_COMPACT: number = 58;
+  static readonly CARD_HEIGHT_COMPACT: number = 52;
+
+  /* 卡片内两行文字的行高（vp）：紧凑档跟着卡一起收 */
+  static readonly LINE_TITLE_STANDARD: number = 20;
+  static readonly LINE_TITLE_COMPACT: number = 18;
+  static readonly LINE_SECOND_STANDARD: number = 18;
+  static readonly LINE_SECOND_COMPACT: number = 15;
+
+  /* 副卡片（子任务条）高度（vp） */
+  static readonly SUB_CARD_HEIGHT_STANDARD: number = 36;
+  static readonly SUB_CARD_HEIGHT_COMPACT: number = 28;
 
   /* 列表项间距（vp）：2026-10-19 第五次调整 8→12，卡片之间适当留白 */
   static readonly LIST_ITEM_SPACE: number = 12;
+  /* 紧凑档的卡片间距（vp）：矮卡配小间距才连贯 */
+  static readonly LIST_ITEM_SPACE_COMPACT: number = 8;
 
   /* 分组标题相对卡片的左内缩（vp） */
   static readonly SECTION_TITLE_INSET: number = 4;
@@ -148,5 +161,39 @@ export class ThemeStore {
     return this.density === DENSITY_COMPACT
       ? Theme.CARD_HEIGHT_COMPACT
       : Theme.CARD_HEIGHT_STANDARD;
+  }
+
+  /**
+   * 以下四个 getter 让「紧凑」不只是一个更矮的卡片框，而是**整套尺寸都收**。
+   *
+   * 2026-10-19 作者：「标准就现在这样，紧凑再紧凑些，某些控件可适当缩小调整」——
+   * 只改 `cardHeight` 的话，卡变小了但里面的文字行高、副卡片、间距还是标准档的，
+   * 会挤成一坨。所以把这些也按密度分档。
+   */
+
+  /** 标题行行高（vp） */
+  get lineHeight(): number {
+    return this.density === DENSITY_COMPACT ? Theme.LINE_TITLE_COMPACT : Theme.LINE_TITLE_STANDARD;
+  }
+
+  /** 卡片第二行行高（vp） */
+  get secondLineHeight(): number {
+    return this.density === DENSITY_COMPACT
+      ? Theme.LINE_SECOND_COMPACT
+      : Theme.LINE_SECOND_STANDARD;
+  }
+
+  /** 副卡片（子任务条）高度（vp） */
+  get subCardHeight(): number {
+    return this.density === DENSITY_COMPACT
+      ? Theme.SUB_CARD_HEIGHT_COMPACT
+      : Theme.SUB_CARD_HEIGHT_STANDARD;
+  }
+
+  /** 卡片之间的间距（vp）：紧凑档也收紧，否则矮卡+大间距会显得更松 */
+  get listItemSpace(): number {
+    return this.density === DENSITY_COMPACT
+      ? Theme.LIST_ITEM_SPACE_COMPACT
+      : Theme.LIST_ITEM_SPACE;
   }
 }
