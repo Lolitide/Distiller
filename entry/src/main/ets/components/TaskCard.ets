@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 卡片本体用官方 HdsListItemCard（@kit.UIDesignKit），未自造控件。
  * 三处例外说明：
  *   1. 圆圈：HdsListItemCard 的 PrefixIcon 没有 onClick（PrefixIconOptions 只有 iconSize / iconValue），
@@ -47,7 +47,10 @@ const SECOND_LINE_GAP_VP: number = 6;
  * 定宽 + 右对齐 → 所有卡片的截止文案右边缘落在同一条竖线上，
  * 不会因为「明天截止」和「10 天后截止」长短不同而左右跳动。
  */
-const DUE_TEXT_WIDTH_VP: number = 72;
+/** 截止胶囊左右内边距（vp） */
+const DUE_CHIP_SIDE_PADDING_VP: number = 6;
+/** 截止胶囊描边宽度（vp） */
+const DUE_CHIP_BORDER_VP: number = 1;
 /** 重复标识图标字号（vp）：第二行最后那个小图标 */
 const REPEAT_ICON_SIZE_VP: number = 16;
 /** 铃铛图标字号（vp） */
@@ -289,26 +292,31 @@ export struct TaskCard {
           this.priorityBadge()
         }
 
-        // 弹性空白：把「截止」推到右侧定宽列
-        Blank()
-
-        // ③ 截止信息：**定宽 + 右对齐**（2026-10-19 定 72vp）。
-        //    定宽是为了让所有卡片的截止文案右边缘对齐、不因文字长短左右跳动；
-        //    `textAlign(End)` 保证"明天截止"和"10 天后截止"都贴右。
+        // ③ 截止信息：**带边框的胶囊**，紧跟标签与重要性标识之后（2026-10-19 第二版草图）。
+        //
+        // 与上一版的区别：上一版用 `Blank()` 把截止推到最右、定宽右对齐；
+        // 草图里截止外面画了一圈圆角边框、且**紧挨着红圈**，右边大片留白给铃铛。
+        // 所以这里去掉弹性空白与定宽，改成自适应宽度的描边胶囊。
         if (this.dueLabel !== '') {
           Text(this.dueLabel)
-            .fontSize($r('sys.float.ohos_id_text_size_body2'))
+            .fontSize($r('sys.float.ohos_id_text_size_caption'))
             .fontColor(this.textColor)
-            .lineHeight(`${SECOND_LINE_HEIGHT_VP}vp`)
-            .width(DUE_TEXT_WIDTH_VP)
             .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .textAlign(TextAlign.End)
+            .padding({
+              left: DUE_CHIP_SIDE_PADDING_VP,
+              right: DUE_CHIP_SIDE_PADDING_VP,
+              top: TAG_CHIP_VERTICAL_PADDING_VP,
+              bottom: TAG_CHIP_VERTICAL_PADDING_VP
+            })
+            .border({
+              width: DUE_CHIP_BORDER_VP,
+              color: $r('sys.color.comp_divider')
+            })
+            .borderRadius(TAG_CHIP_RADIUS_VP)
             .flexShrink(0)
         }
 
-        // ④ 重复性标识：**最后一个小图标**（2026-10-19：「重复任务仅在最后添加一个重复标识」）。
-        //    完整规则文字（每周一、二、四）在详情页看，卡片上只留一个能看懂的符号。
+        // ④ 重复性标识：最后一个小图标
         if (this.repeatLabel !== '') {
           SymbolGlyph($r('sys.symbol.repeat'))
             .fontSize(REPEAT_ICON_SIZE_VP)
@@ -316,6 +324,9 @@ export struct TaskCard {
             .accessibilityText(this.repeatLabel)
             .flexShrink(0)
         }
+
+        // 右侧弹性空白：把剩下的空间都留在内容之后（草图里截止块与铃铛之间是大片留白）
+        Blank()
       }
       .width('100%')
       .height(`${SECOND_LINE_HEIGHT_VP}vp`)
