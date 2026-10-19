@@ -51,6 +51,14 @@ const LONG_PRESS_MS: number = 500;
 const EXPAND_ANIM_MS: number = 220;
 /** 分组展开时卡片淡入的时长（毫秒）：比副卡片略短，避免整组一起动显得拖沓 */
 const GROUP_EXPAND_ANIM_MS: number = 180;
+/**
+ * 副卡片「冒出来」的起始纵向偏移（vp）：取它的高度，正好整个藏进主卡片底下。
+ * 必须配 `translate({y})` —— 相对**自身位置**；用 `move(TransitionEdge.TOP)` 是相对
+ * **窗口边缘**算的，实测会让卡片从屏幕最顶端飞下来。
+ */
+const SUB_CARD_EMERGE_VP: number = 36;
+/** 分组展开时每张卡片的起始纵向偏移（vp）：一小段落差即可，同样用 translate */
+const CARD_ENTER_OFFSET_VP: number = 16;
 
 @ComponentV2
 export struct A_TaskList {
@@ -264,10 +272,12 @@ export struct A_TaskList {
                       Column() {
                         if (this.isStepsExpanded(task.id)) {
                           // 展开态：完整副卡片。**宽度与收起态一致**，切换时宽度不跳。
-                          // 动画（2026-10-19 第五次）：从**主卡片底下冒出来** ——
-                          //   · `move(TransitionEdge.TOP)` 让起点贴着主卡片下沿，向上展开；
-                          //     配合 `RESPONSE` 曲线做出"顶出来"的观感；
-                          //   · 加阴影，与主卡片形成层次。
+                          // 动画（2026-10-19 第六次修正）：从**主卡片底下冒出来** ——
+                          //   ⚠️ 之前用的是 `move(TransitionEdge.TOP)`，那是**相对窗口边缘**算偏移的，
+                          //   实测卡片会从**屏幕最顶端**飞下来。官方原文：move「通过 TransitionEdge
+                          //   自动根据窗口边缘位置计算偏移量」；要"相对自己原来的位置"平移必须用
+                          //   `translate({y})`（「插入时起点和删除时终点的值」）。
+                          //   起点取 -副卡高度 → 正好整个藏进主卡片底下，再滑出来。
                           Column() {
                             TaskSubCard({
                               task: task,
@@ -285,7 +295,7 @@ export struct A_TaskList {
                           })
                           .transition(
                             TransitionEffect.OPACITY
-                              .combine(TransitionEffect.move(TransitionEdge.TOP))
+                              .combine(TransitionEffect.translate({ y: -SUB_CARD_EMERGE_VP }))
                               .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
                           )
                         } else {
@@ -308,7 +318,7 @@ export struct A_TaskList {
                             .accessibilityText($r('app.string.subcard_stacked_hint'))
                             .transition(
                               TransitionEffect.OPACITY
-                                .combine(TransitionEffect.move(TransitionEdge.TOP))
+                                .combine(TransitionEffect.translate({ y: -SUB_CARD_EMERGE_VP }))
                                 .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
                             )
                         }
@@ -328,9 +338,11 @@ export struct A_TaskList {
                   // 分组展开/收起时，这一组里的**每张卡片**也做淡入（2026-10-19 第五次：
                   // 「为所有任务卡片展开时增加展开项的动画」）——
                   // `transition` 在 ListItem 内容被创建/销毁时自动播放，组收起来就是反向。
+                  // ⚠️ 同样不能用 `move(TransitionEdge.TOP)`：那是相对**窗口边缘**的，
+                  //    实测所有卡片从**屏幕最顶端**飞下来。这里用 `translate({y})` 只下移一小段。
                   .transition(
                     TransitionEffect.OPACITY
-                      .combine(TransitionEffect.move(TransitionEdge.TOP))
+                      .combine(TransitionEffect.translate({ y: -CARD_ENTER_OFFSET_VP }))
                       .animation({ duration: GROUP_EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
                   )
                 }
