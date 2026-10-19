@@ -56,7 +56,13 @@ const GROUP_EXPAND_ANIM_MS: number = 180;
  * 必须配 `translate({y})` —— 相对**自身位置**；用 `move(TransitionEdge.TOP)` 是相对
  * **窗口边缘**算的，实测会让卡片从屏幕最顶端飞下来。
  */
+/**
+ * 副卡片「冒出来」的起始纵向偏移（vp）——**已废弃**，改用容器高度裁切（见下方 `STACK_LAYER_EDGE_VP`）。
+ * 保留注释说明为什么不再用平移：位移做不出"卡一直在底下被压着"的图层关系。
+ */
 const SUB_CARD_EMERGE_VP: number = 36;
+/** 副卡片展开后的完整高度（vp）：与 `TaskSubCard` 里的 `SUB_CARD_HEIGHT_VP` 保持一致 */
+const SUB_CARD_FULL_HEIGHT_VP: number = 36;
 /** 分组展开时每张卡片的起始纵向偏移（vp）：一小段落差即可，同样用 translate */
 const CARD_ENTER_OFFSET_VP: number = 16;
 
@@ -266,67 +272,39 @@ export struct A_TaskList {
                     )
 
                     if (this.hasSteps(task)) {
-                      // ⚠️ 百分比是相对**父容器**算的：直接给副卡片写 `92%` 会按整屏宽度（1320px）算，
-                      // 结果比主卡片（1208px）还宽（实测 1214px）。所以这里先把左右各缩进 16vp
-                      //（与主卡片自身的左右留白一致），再在内部取 92%，才是"主卡片的 92%"。
+                      // 副卡片：**始终是同一张卡**，不再用"细边线 ↔ 完整卡"两个组件互换
+                      // （作者 2026-10-19：「半展开的和真正的其实是两个东西」）。
+                      //
+                      // 做法：外层容器裁剪 + 高度动画，副卡**贴容器底部**摆放。
+                      //   · 收起：容器高 6vp → 只露出副卡**最下面那一条**，像从主卡底下探出来；
+                      //   · 展开：容器涨到副卡自身高度 → 整张卡滑出来；
+                      //   · 因为副卡始终贴底、容器从主卡下沿开始长高，看上去就是
+                      //     **副卡一直在主卡底下，被主卡压着慢慢滑出来**。
+                      // 阴影按作者反馈去掉（「莫名其妙地边框阴影」）。
+                      //
+                      // ⚠️ 宽度：百分比是相对**父容器**（整屏 1320px）算的，直接写 92% 会比主卡还宽
+                      //   （实测 1214px vs 1208px）。所以先左右各缩进 16vp（与主卡留白一致）再取 92%。
                       Column() {
-                        if (this.isStepsExpanded(task.id)) {
-                          // 展开态：完整副卡片。**宽度与收起态一致**，切换时宽度不跳。
-                          // 动画（2026-10-19 第六次修正）：从**主卡片底下冒出来** ——
-                          //   ⚠️ 之前用的是 `move(TransitionEdge.TOP)`，那是**相对窗口边缘**算偏移的，
-                          //   实测卡片会从**屏幕最顶端**飞下来。官方原文：move「通过 TransitionEdge
-                          //   自动根据窗口边缘位置计算偏移量」；要"相对自己原来的位置"平移必须用
-                          //   `translate({y})`（「插入时起点和删除时终点的值」）。
-                          //   起点取 -副卡高度 → 正好整个藏进主卡片底下，再滑出来。
-                          Column() {
-                            TaskSubCard({
-                              task: task,
-                              onToggleStep: (index: number) => {
-                                this.store.toggleStepDone(task, index);
-                              }
-                            })
-                          }
-                          .width(STACK_LAYER_WIDTH)
-                          .shadow({
-                            radius: Theme.SHADOW_RADIUS,
-                            color: Theme.SHADOW_COLOR,
-                            offsetX: 0,
-                            offsetY: Theme.SHADOW_OFFSET_Y
+                        Column() {
+                          TaskSubCard({
+                            task: task,
+                            onToggleStep: (index: number) => {
+                              this.store.toggleStepDone(task, index);
+                            }
                           })
-                          .transition(
-                            TransitionEffect.OPACITY
-                              .combine(TransitionEffect.translate({ y: -SUB_CARD_EMERGE_VP }))
-                              .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
-                          )
-                        } else {
-                          // 收起态：只露一条**很细**的下边缘线，读作「底下压着一张小卡」。
-                          // 加阴影 → 与主卡片区分出层次（作者：「给隐藏在底下的副卡片增加阴影」）。
-                          Row()
-                            .width(STACK_LAYER_WIDTH)
-                            .height(STACK_LAYER_EDGE_VP)
-                            .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
-                            .borderRadius({
-                              bottomLeft: Theme.RADIUS_CARD,
-                              bottomRight: Theme.RADIUS_CARD
-                            })
-                            .shadow({
-                              radius: Theme.SHADOW_RADIUS,
-                              color: Theme.SHADOW_COLOR,
-                              offsetX: 0,
-                              offsetY: Theme.SHADOW_OFFSET_Y
-                            })
-                            .accessibilityText($r('app.string.subcard_stacked_hint'))
-                            .transition(
-                              TransitionEffect.OPACITY
-                                .combine(TransitionEffect.translate({ y: -SUB_CARD_EMERGE_VP }))
-                                .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
-                            )
                         }
+                        .width(STACK_LAYER_WIDTH)
+                        // 贴底：容器变矮时留下的是副卡的**下边缘**
+                        .justifyContent(FlexAlign.End)
                       }
                       .width('100%')
                       .padding({ left: CARD_SIDE_MARGIN_VP, right: CARD_SIDE_MARGIN_VP })
-                      .margin({ top: STACK_LAYER_OFFSET_VP })
+                      .height(this.isStepsExpanded(task.id) ? SUB_CARD_FULL_HEIGHT_VP : STACK_LAYER_EDGE_VP)
+                      .clip(true)
                       .alignItems(HorizontalAlign.Center)
+                      // 高度变化即"滑出来/收回去"的动画
+                      .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
+                      .accessibilityText($r('app.string.subcard_stacked_hint'))
                     }
                   }
                   .width('100%')
