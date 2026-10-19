@@ -84,6 +84,13 @@ export struct A_Settings {
   /** 任务 store：清空任务 + 提醒提前量同步 */
   @Require @Param store: TaskListStore;
 
+  /**
+   * 滚动控制器：由 `A_Main` 创建、经 `MainTabBar` 传进来，
+   * `HdsNavigation.bindToScrollable` 要绑同一个对象 —— 不绑的话导航栏大标题
+   * 在设置页滚动时不会收缩，会**静默压在内容上**（实测过）。
+   */
+  @Require @Param scroller: Scroller;
+
   /** 视觉个性化状态（跨页共享，见 utils/Theme.ets） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
 
