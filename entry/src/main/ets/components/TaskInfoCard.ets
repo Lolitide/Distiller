@@ -8,8 +8,7 @@
  * 左列固定文案、右列值，空值统一显示「未设置」，比一堆形状相近的 Symbol 更好读。
  *
  * 哪些能改：
- *   · `level` / `category` —— 走 `OptionPickerBody`（单列选择器），与元信息卡的「重要程度/来源」同一套；
- *   · `place`             —— 走 `TagInputBody`（单行文本输入），与「添加标签」同一套；
+ *   · `level` / `category` / `place` —— **全部行内直改**（三档分段 / 预设胶囊 / 输入框），
  *   · `certainty` / `createdAt` / `finishedAt` —— **只读**：置信度来自解析、两个时间戳由系统写
  *     （字段表：`createdAt` 非用户填；`finishedAt` 只有系统能写）。
  *   · `urls` —— 只读展示（多条用换行拼接）；手动增删链接留到下一轮。
@@ -21,8 +20,6 @@
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Task, TaskLevel, TASK_CATEGORY_PRESETS } from '../model';
-import { OptionPickerBody } from './OptionPickerBody';
-import { TagInputBody } from './TagInputBody';
 import { Theme } from '../utils/Theme';
 
 const DOMAIN: number = 0x0000;
@@ -38,10 +35,6 @@ const LABEL_WIDTH_VP: number = 88;
 const DIVIDER_WIDTH_VP: number = 0.5;
 
 /** 打开的是哪个面板 */
-const SHEET_NONE: number = 0;
-const SHEET_LEVEL: number = 1;
-const SHEET_CATEGORY: number = 2;
-const SHEET_PLACE: number = 3;
 
 /** 难易程度选项（下标即 `TaskLevel` 的值：0 简单 / 1 中等 / 2 困难） */
 const LEVEL_OPTIONS: string[] = ['简单', '中等', '困难'];
@@ -49,19 +42,19 @@ const LEVEL_OPTIONS: string[] = ['简单', '中等', '困难'];
 const SEGMENT_GAP_VP: number = 8;
 /** 分段按钮高度（vp） */
 const SEGMENT_HEIGHT_VP: number = 32;
+/** 类型胶囊高度（vp） */
+const CHIP_HEIGHT_VP: number = 28;
+/** 类型胶囊间距（vp） */
+const CHIP_GAP_VP: number = 6;
 
 @ComponentV2
 export struct TaskInfoCard {
   @Require @Param task: Task;
 
   /** 当前打开的面板 */
-  @Local sheetKind: number = SHEET_NONE;
   /** 难易程度面板草稿 */
-  @Local levelDraft: number = 0;
   /** 类型面板草稿 */
-  @Local categoryDraft: number = 0;
   /** 地点 / 对象面板草稿 */
-  @Local textDraft: string = '';
 
   /* ── 文案 ── */
 
@@ -179,57 +172,7 @@ export struct TaskInfoCard {
     return `${date.getFullYear()}.${month}.${day} ${hour}:${minute}`;
   }
 
-  /* ── 面板草稿种子与写回 ── */
 
-  private openLevelSheet(): void {
-    const level: TaskLevel | undefined = this.task.level;
-    this.levelDraft = level === undefined ? TaskLevel.MEDIUM : level;
-    this.sheetKind = SHEET_LEVEL;
-  }
-
-  private openCategorySheet(): void {
-    const current: string | undefined = this.task.category;
-    const index: number = current === undefined ? 0 : TASK_CATEGORY_PRESETS.indexOf(current);
-    this.categoryDraft = index < 0 ? 0 : index;
-    this.sheetKind = SHEET_CATEGORY;
-  }
-
-  private openPlaceSheet(): void {
-    this.textDraft = this.task.place === undefined ? '' : this.task.place;
-    this.sheetKind = SHEET_PLACE;
-  }
-
-  private closeSheet(): void {
-    this.sheetKind = SHEET_NONE;
-  }
-
-  private confirmSheet(): void {
-    if (this.sheetKind === SHEET_LEVEL) {
-      this.task.level = this.levelDraft === 0
-        ? TaskLevel.EASY
-        : (this.levelDraft === 2 ? TaskLevel.HARD : TaskLevel.MEDIUM);
-    } else if (this.sheetKind === SHEET_CATEGORY) {
-      this.task.category = TASK_CATEGORY_PRESETS[this.categoryDraft];
-    } else if (this.sheetKind === SHEET_PLACE) {
-      const next: string = this.textDraft.trim();
-      // 空串存 `undefined`：「没填」与「填了空白」在契约里不是一回事
-      this.task.place = next === '' ? undefined : next;
-    }
-    this.sheetKind = SHEET_NONE;
-  }
-
-  @Computed
-  get sheetTitle(): Resource {
-    if (this.sheetKind === SHEET_CATEGORY) {
-      return $r('app.string.picker_title_category');
-    }
-    return $r('app.string.picker_title_place');
-  }
-
-  /**
-   * 难易程度在**三档分段按钮**里的选中下标（0 简单 / 1 中等 / 2 困难）。
-   * 显式换算，不把枚举当数组下标用。
-   */
   @Computed
   get levelIndex(): number {
     const level: TaskLevel | undefined = this.task.level;
@@ -288,53 +231,6 @@ export struct TaskInfoCard {
       .margin({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
   }
 
-  @Builder
-  sheetBody() {
-    if (this.sheetKind === SHEET_LEVEL) {
-      OptionPickerBody({
-        options: LEVEL_OPTIONS,
-        selectedIndex: this.levelDraft,
-        onSelectedIndexChange: (index: number) => {
-          this.levelDraft = index;
-        },
-        onCancel: () => {
-          this.closeSheet();
-        },
-        onConfirm: () => {
-          this.confirmSheet();
-        }
-      })
-    } else if (this.sheetKind === SHEET_CATEGORY) {
-      OptionPickerBody({
-        options: TASK_CATEGORY_PRESETS,
-        selectedIndex: this.categoryDraft,
-        onSelectedIndexChange: (index: number) => {
-          this.categoryDraft = index;
-        },
-        onCancel: () => {
-          this.closeSheet();
-        },
-        onConfirm: () => {
-          this.confirmSheet();
-        }
-      })
-    } else {
-      TagInputBody({
-        text: this.textDraft,
-        placeholder: $r('app.string.info_unset'),
-        onTextChange: (text: string) => {
-          this.textDraft = text;
-        },
-        onCancel: () => {
-          this.closeSheet();
-        },
-        onConfirm: () => {
-          this.confirmSheet();
-        }
-      })
-    }
-  }
-
   build() {
     Column() {
       // ① 难易程度（可改）
@@ -378,77 +274,81 @@ export struct TaskInfoCard {
 
       this.rowDivider()
 
-      // ② 类型（可改）
-      Row() {
-        this.rowLabel($r('app.string.info_category'))
-        Scroll() {
+      // ② 类型：**行内胶囊直选**（2026-10-19：「编辑处多数字段可直接点击文本进行编辑」）。
+      //    五个预设一排放得下，没有必要开半模态。
+      Column() {
+        Row() {
+          this.rowLabel($r('app.string.info_category'))
           Text(this.categoryLabel)
             .fontSize($r('sys.float.ohos_id_text_size_body1'))
             .fontColor(this.categorySet
               ? $r('sys.color.ohos_id_color_text_primary')
               : $r('sys.color.ohos_id_color_text_secondary'))
+            .layoutWeight(1)
             .maxLines(1)
-            .textAlign(TextAlign.Start)
+            .textAlign(TextAlign.End)
         }
-        .scrollable(ScrollDirection.Horizontal)
-        .scrollBar(BarState.Off)
-        .layoutWeight(1)
-        .align(Alignment.Start)
+        .width('100%')
+        .height(ROW_HEIGHT_VP)
+        .alignItems(VerticalAlign.Center)
+
+        Row({ space: CHIP_GAP_VP }) {
+          ForEach(TASK_CATEGORY_PRESETS, (preset: string) => {
+            Text(preset)
+              .fontSize(Theme.FONT_BODY)
+              .fontColor(this.task.category === preset
+                ? $r('sys.color.ohos_id_color_text_primary_contrary')
+                : $r('sys.color.ohos_id_color_text_primary'))
+              .height(CHIP_HEIGHT_VP)
+              .padding({ left: Theme.GAP_S, right: Theme.GAP_S })
+              .backgroundColor(this.task.category === preset
+                ? $r('sys.color.ohos_id_color_emphasize')
+                : $r('sys.color.comp_background_secondary'))
+              .borderRadius(CHIP_HEIGHT_VP / 2)
+              .textAlign(TextAlign.Center)
+              .onClick(() => {
+                // 再点一次同一个＝清空（用户可能想改回"未设置"）
+                this.task.category = this.task.category === preset ? undefined : preset;
+              })
+              .accessibilityText(preset)
+          }, (preset: string) => preset)
+        }
+        .width('100%')
+        .justifyContent(FlexAlign.Start)
+        .padding({ bottom: Theme.GAP_M })
       }
       .width('100%')
-      .height(ROW_HEIGHT_VP)
       .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-      .alignItems(VerticalAlign.Center)
-      .onClick(() => {
-        this.openCategorySheet();
-      })
-      .bindSheet(this.sheetKind === SHEET_CATEGORY, this.sheetBody(), {
-        title: { title: this.sheetTitle },
-        preferType: SheetType.CENTER,
-        height: SheetSize.FIT_CONTENT,
-        showClose: false,
-        dragBar: false,
-        onDisappear: () => {
-          this.sheetKind = SHEET_NONE;
-        }
-      })
+      .alignItems(HorizontalAlign.Start)
 
       this.rowDivider()
 
       // ③ 地点（可改）
       Row() {
         this.rowLabel($r('app.string.info_place'))
-        Scroll() {
-          Text(this.placeLabel)
-            .fontSize($r('sys.float.ohos_id_text_size_body1'))
-            .fontColor(this.placeSet
-              ? $r('sys.color.ohos_id_color_text_primary')
-              : $r('sys.color.ohos_id_color_text_secondary'))
-            .maxLines(1)
-            .textAlign(TextAlign.Start)
-        }
-        .scrollable(ScrollDirection.Horizontal)
-        .scrollBar(BarState.Off)
-        .layoutWeight(1)
-        .align(Alignment.Start)
+        // 地点：**行内输入框**（2026-10-19：「多数字段可直接点击文本进行编辑」）。
+        // 原来点一行开半模态再输入，两步变一步。
+        TextInput({ text: this.task.place === undefined ? '' : this.task.place, placeholder: this.unsetText })
+          .id('placeInput')
+          .fontSize($r('sys.float.ohos_id_text_size_body1'))
+          .fontColor($r('sys.color.ohos_id_color_text_primary'))
+          .placeholderColor($r('sys.color.ohos_id_color_text_secondary'))
+          .backgroundColor(Color.Transparent)
+          .borderRadius(0)
+          .layoutWeight(1)
+          .height(ROW_HEIGHT_VP)
+          .maxLines(1)
+          .enterKeyType(EnterKeyType.Done)
+          .onChange((value: string) => {
+            // 边打边写回：空串存 undefined（「没填」与「填了空白」在契约里不是一回事）
+            const next: string = value.trim();
+            this.task.place = next === '' ? undefined : next;
+          })
       }
       .width('100%')
       .height(ROW_HEIGHT_VP)
       .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
       .alignItems(VerticalAlign.Center)
-      .onClick(() => {
-        this.openPlaceSheet();
-      })
-      .bindSheet(this.sheetKind === SHEET_PLACE, this.sheetBody(), {
-        title: { title: this.sheetTitle },
-        preferType: SheetType.CENTER,
-        height: SheetSize.FIT_CONTENT,
-        showClose: false,
-        dragBar: false,
-        onDisappear: () => {
-          this.sheetKind = SHEET_NONE;
-        }
-      })
 
       this.rowDivider()
 
