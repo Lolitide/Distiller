@@ -19,10 +19,6 @@ const STEP_CIRCLE_SIZE_VP: number = 18;
 const STEP_ICON_GAP_VP: number = 12;
 /** 副卡片左右内边距（vp）：比主卡片小一档，做出"挂在主卡片下"的层次 */
 const SUB_SIDE_PADDING_VP: number = 24;
-/** 折叠箭头命中区（vp）：官方最小可点 40 */
-const TOGGLE_HIT_SIZE_VP: number = 40;
-/** 折叠箭头字号（vp） */
-const TOGGLE_ICON_SIZE_VP: number = 16;
 
 @ComponentV2
 export struct TaskSubCard {
@@ -30,8 +26,6 @@ export struct TaskSubCard {
   /** 点某一步的圆圈 → 由页面交给 store 改 `steps[i].done`（组件不碰数据） */
   @Event onToggleStep: (index: number) => void = () => {};
 
-  /** 是否展开。默认展开，与设计稿一致 */
-  @Local expanded: boolean = true;
 
   @Computed
   get steps(): TaskStep[] {
@@ -59,11 +53,6 @@ export struct TaskSubCard {
   @Computed
   get summaryLabel(): string {
     return `已完成 ${this.doneCount} / ${this.stepCount} 步`;
-  }
-
-  @Computed
-  get toggleSymbol(): Resource {
-    return this.expanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down');
   }
 
   /** 已完成步骤的文字变灰（与主卡片完成态同一套语义色） */
@@ -106,43 +95,31 @@ export struct TaskSubCard {
 
   build() {
     Column() {
+      // 标题行：步骤数摘要（「已完成 1 / 3 步」）。
+      // **不再自带折叠箭头**（2026-10-19）：展开/收起改由列表统一控制 ——
+      // 卡片默认是「堆叠露边」形态，长按才把这张副卡片展开；箭头留在卡里会出现两个入口。
       Row() {
-        if (this.expanded) {
-          Text($r('app.string.subcard_steps_title'))
-            .fontSize($r('sys.float.ohos_id_text_size_body2'))
-            .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-            .layoutWeight(1)
-            .maxLines(1)
-            .textAlign(TextAlign.Start)
-        } else {
-          Text(this.summaryLabel)
-            .fontSize($r('sys.float.ohos_id_text_size_body2'))
-            .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-            .layoutWeight(1)
-            .maxLines(1)
-            .textAlign(TextAlign.Start)
-        }
+        Text($r('app.string.subcard_steps_title'))
+          .fontSize($r('sys.float.ohos_id_text_size_body2'))
+          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+          .maxLines(1)
+          .textAlign(TextAlign.Start)
 
-        // 折叠箭头：命中区 40vp，图标 16vp
-        SymbolGlyph(this.toggleSymbol)
-          .fontSize(TOGGLE_ICON_SIZE_VP)
-          .fontColor([$r('sys.color.icon_secondary')])
-          .width(TOGGLE_HIT_SIZE_VP)
-          .height(TOGGLE_HIT_SIZE_VP)
-          .onClick(() => {
-            this.expanded = !this.expanded;
-          })
-          .accessibilityText($r('app.string.subcard_toggle'))
+        Blank()
+
+        Text(this.summaryLabel)
+          .fontSize($r('sys.float.ohos_id_text_size_body2'))
+          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+          .maxLines(1)
+          .textAlign(TextAlign.End)
       }
       .width('100%')
       .height(STEP_ROW_HEIGHT_VP)
       .alignItems(VerticalAlign.Center)
 
-      if (this.expanded) {
-        ForEach(this.steps, (step: TaskStep, index: number) => {
-          this.stepRow(index, step)
-        }, (step: TaskStep) => `${step.content}-${step.done}`)
-      }
+      ForEach(this.steps, (step: TaskStep, index: number) => {
+        this.stepRow(index, step)
+      }, (step: TaskStep) => `${step.content}-${step.done}`)
     }
     .width('100%')
     .padding({
