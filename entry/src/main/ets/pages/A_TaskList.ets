@@ -63,6 +63,15 @@ const GROUP_EXPAND_ANIM_MS: number = 180;
 const SUB_CARD_EMERGE_VP: number = 36;
 /** 副卡片展开后的完整高度（vp）：与 `TaskSubCard` 里的 `SUB_CARD_HEIGHT_VP` 保持一致 */
 const SUB_CARD_FULL_HEIGHT_VP: number = 36;
+/**
+ * 副卡片**折叠态**的不透明度：低于 1 就显得「沉在暗处」，与主卡片形成层次。
+ *
+ * 为什么用不透明度而不是 `shadow()`：`shadow()` 是给**组件外框**加投影，
+ * 而这里的裁切容器是满宽（100%）的，投影会摊成一大片光晕、并不贴副卡自己的轮廓
+ * （作者截图里那种"左右都糊"的效果就是这么来的）。直接压低副卡自身的透明度，
+ * 露出来的那条边自然就变暗了。
+ */
+const SUB_CARD_DIM_OPACITY: number = 0.55;
 /** 分组展开时每张卡片的起始纵向偏移（vp）：一小段落差即可，同样用 translate */
 const CARD_ENTER_OFFSET_VP: number = 16;
 
@@ -300,6 +309,13 @@ export struct A_TaskList {
                             ? 0
                             : -(SUB_CARD_FULL_HEIGHT_VP - STACK_LAYER_EDGE_VP)
                         })
+                        // **折叠时整张副卡变暗**（作者 2026-10-19：「调整子卡片填充色与其透明度参数，
+                        // 让整个子卡片变暗也可以」）。
+                        // 为什么不用 `shadow`：`shadow()` 是给组件外框加投影，容器是满宽(100%)的，
+                        // 投影会摊成一大片光晕、不贴副卡本身的轮廓（实测就是作者截图里那种效果）。
+                        // 直接降副卡自身的不透明度，露出来的那条边就"沉"在暗处，
+                        // 展开过程中逐渐恢复到 1.0，读作"从底下亮起来"。
+                        .opacity(this.isStepsExpanded(task.id) ? 1 : SUB_CARD_DIM_OPACITY)
                         .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
                       }
                       .width('100%')
@@ -307,16 +323,6 @@ export struct A_TaskList {
                       .height(this.isStepsExpanded(task.id) ? SUB_CARD_FULL_HEIGHT_VP : STACK_LAYER_EDGE_VP)
                       .clip(true)
                       .alignItems(HorizontalAlign.Center)
-                      // **折叠时加一层阴影**（作者 2026-10-19：「折叠起来的时候增加一层阴影」）：
-                      // 收起时靠 projection 把"底下还压着一张卡"的层次做出来；
-                      // 展开后阴影收到 0（展开时它就是一张正常卡片，不需要投影）。
-                      // 半径/偏移都随状态切，配合下面的 `.animation()` 平滑过渡。
-                      .shadow({
-                        radius: this.isStepsExpanded(task.id) ? 0 : Theme.SHADOW_RADIUS,
-                        color: Theme.SHADOW_COLOR,
-                        offsetX: 0,
-                        offsetY: this.isStepsExpanded(task.id) ? 0 : Theme.SHADOW_OFFSET_Y
-                      })
                       .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
                       .accessibilityText($r('app.string.subcard_stacked_hint'))
                     }
