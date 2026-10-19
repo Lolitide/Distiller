@@ -15,6 +15,7 @@ import { RepeatFrequency, RepeatRule, Task, TaskAlarm } from '../model';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 import { DateTimePickerBody } from './DateTimePickerBody';
+import { CenterDialogFrame, DialogTitle } from './CenterDialogFrame';
 import { OptionPickerBody } from './OptionPickerBody';
 import { RepeatRuleEditor } from './RepeatRuleEditor';
 
@@ -65,8 +66,12 @@ export struct TaskAttributeCard {
    * `Date` 不可变，所以日期/时间是「整根换新」：`mergeDate` / `mergeTime` 造新对象赋给 `@Local`。
    */
   @Local remindSheetOpen: boolean = false;
+  /** 提醒弹窗的 dialogId（openCustomDialog 返回，-1 表示未打开） */
+  @Local remindDialogId: number = -1;
   @Local remindDraft: Date = new Date();
   @Local dueSheetOpen: boolean = false;
+  /** 到期弹窗的 dialogId */
+  @Local dueDialogId: number = -1;
   @Local dueDraft: Date = new Date();
   @Local repeatSheetOpen: boolean = false;
   /** 重复面板的草稿档位（`REPEAT_OPTIONS` 的下标） */
@@ -170,18 +175,38 @@ export struct TaskAttributeCard {
    */
   private openRemindSheet(): void {
     this.remindDraft = this.remindSeed();
-    this.remindSheetOpen = true;
+    // 2026-10-19 作者要求：日期时间改成**系统日历那样的居中弹窗**（不是底部面板）。
+    // `bindSheet` 的 `preferType: CENTER` 只在宽度 ≥600vp（平板/2in1）生效，
+    // 手机上仍是底部面板，所以这里直接换 `openCustomDialog` + 居中。
+    this.remindDialogId = -1;
+    this.getUIContext().getPromptAction().openCustomDialog({
+      builder: () => {
+        this.remindDialog();
+      },
+      alignment: DialogAlignment.Center,
+      isModal: true
+    }).then((id: number) => {
+      this.remindDialogId = id;
+    });
   }
 
-  /** 关掉提醒面板（点「取消」/ 点遮罩 / 返回键）：草稿丢弃，下次打开按任务现状重填 */
+  /** 关掉提醒面板（点「取消」）：草稿丢弃，下次打开按任务现状重填 */
   private closeRemindSheet(): void {
-    this.remindSheetOpen = false;
+    this.dismissDialog(this.remindDialogId);
+    this.remindDialogId = -1;
   }
 
   /** 提醒面板「确定」 */
   private confirmRemind(): void {
     this.applyRemind(this.remindDraft.getTime());
-    this.remindSheetOpen = false;
+    this.closeRemindSheet();
+  }
+
+  /** 关掉一个弹出的自定义对话框（`dialogId` 无效时什么也不做） */
+  private dismissDialog(id: number): void {
+    if (id >= 0) {
+      this.getUIContext().getPromptAction().closeCustomDialog(id);
+    }
   }
 
   /**
@@ -235,18 +260,29 @@ export struct TaskAttributeCard {
    */
   private openDueSheet(): void {
     this.dueDraft = this.dueSeed();
-    this.dueSheetOpen = true;
+    // 同上：改成居中弹窗（作者 2026-10-19 要求，与系统日历创建日程一致）
+    this.dueDialogId = -1;
+    this.getUIContext().getPromptAction().openCustomDialog({
+      builder: () => {
+        this.dueDialog();
+      },
+      alignment: DialogAlignment.Center,
+      isModal: true
+    }).then((id: number) => {
+      this.dueDialogId = id;
+    });
   }
 
   /** 关掉到期面板（草稿丢弃） */
   private closeDueSheet(): void {
-    this.dueSheetOpen = false;
+    this.dismissDialog(this.dueDialogId);
+    this.dueDialogId = -1;
   }
 
   /** 到期面板「确定」 */
   private confirmDue(): void {
     this.applyDue(this.dueDraft.getTime());
-    this.dueSheetOpen = false;
+    this.closeDueSheet();
   }
 
   /**
@@ -414,36 +450,42 @@ export struct TaskAttributeCard {
    * 「添加任务」那边的面板也用它，按 `references/02-编码规约.md` §10 规则 3 收成同一个组件。
    */
   @Builder
-  remindSheet() {
-    DateTimePickerBody({
-      selected: this.remindDraft,
-      onSelectedChange: (date: Date) => {
-        this.remindDraft = date;
-      },
-      onCancel: () => {
-        this.closeRemindSheet();
-      },
-      onConfirm: () => {
-        this.confirmRemind();
-      }
-    })
+  remindDialog() {
+    CenterDialogFrame() {
+      DialogTitle({ text: '设置提醒时间' })
+      DateTimePickerBody({
+        selected: this.remindDraft,
+        onSelectedChange: (date: Date) => {
+          this.remindDraft = date;
+        },
+        onCancel: () => {
+          this.closeRemindSheet();
+        },
+        onConfirm: () => {
+          this.confirmRemind();
+        }
+      })
+    }
   }
 
-  /** 到期面板内容 —— 同一个 `DateTimePickerBody`，读的是到期草稿 */
+  /** 到期面板内容 —— 同一个 `DateTimePickerBody`，读的是到期草稿；同样放在 M3 居中弹窗里 */
   @Builder
-  dueSheet() {
-    DateTimePickerBody({
-      selected: this.dueDraft,
-      onSelectedChange: (date: Date) => {
-        this.dueDraft = date;
-      },
-      onCancel: () => {
-        this.closeDueSheet();
-      },
-      onConfirm: () => {
-        this.confirmDue();
-      }
-    })
+  dueDialog() {
+    CenterDialogFrame() {
+      DialogTitle({ text: '设置到期时间' })
+      DateTimePickerBody({
+        selected: this.dueDraft,
+        onSelectedChange: (date: Date) => {
+          this.dueDraft = date;
+        },
+        onCancel: () => {
+          this.closeDueSheet();
+        },
+        onConfirm: () => {
+          this.confirmDue();
+        }
+      })
+    }
   }
 
   /**
@@ -509,19 +551,8 @@ export struct TaskAttributeCard {
       .height(ROW_HEIGHT_VP)
       .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
       .alignItems(VerticalAlign.Center)
-      // 面板绑在这一行上：抬头用官方 `SheetOptions.title`；
-      // `preferType: CENTER` 只在宽度 ≥600vp（平板/2in1）生效，手机上是底部面板（官方限制，见 openRemindSheet）
-      .bindSheet(this.remindSheetOpen, this.remindSheet(), {
-        title: { title: $r('app.string.picker_title_remind') },
-        preferType: SheetType.CENTER,
-        height: SheetSize.FIT_CONTENT,
-        showClose: false,
-        dragBar: false,
-        onDisappear: () => {
-          // 点遮罩 / 返回键关掉面板时把开关同步回来，否则下次点行打不开
-          this.remindSheetOpen = false;
-        }
-      })
+      // 2026-10-19：面板已改成 `openCustomDialog` 的**居中弹窗**，不再用 `bindSheet`。
+      // 原因：`preferType: CENTER` 只在宽度 ≥600vp（平板/2in1）生效，手机上仍是底部面板。
 
       this.rowDivider()
 
@@ -560,16 +591,7 @@ export struct TaskAttributeCard {
       .height(ROW_HEIGHT_VP)
       .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
       .alignItems(VerticalAlign.Center)
-      .bindSheet(this.dueSheetOpen, this.dueSheet(), {
-        title: { title: $r('app.string.picker_title_due') },
-        preferType: SheetType.CENTER,
-        height: SheetSize.FIT_CONTENT,
-        showClose: false,
-        dragBar: false,
-        onDisappear: () => {
-          this.dueSheetOpen = false;
-        }
-      })
+      // 到期也已改成居中弹窗（2026-10-19），不再 bindSheet
 
       this.rowDivider()
 
