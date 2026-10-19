@@ -32,6 +32,7 @@
  */
 import { hdsMaterial, HdsBarStyle, HdsTabs } from '@kit.UIDesignKit';
 import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI';
+import { ThemeStore } from '../utils/Theme';
 import { A_TaskList } from '../pages/A_TaskList';
 import { A_Settings } from '../pages/A_Settings';
 import { TaskListStore } from '../viewmodel/TaskListStore';
@@ -53,15 +54,16 @@ const BAR_BOTTOM_MARGIN: number = 16;
  */
 const ADD_BUTTON_SIZE: number = 56;
 
-const TASK_LIST_TAB: BottomTabBarStyle = new BottomTabBarStyle(
-  { normal: new SymbolGlyphModifier($r('sys.symbol.list_checkmark')) },
-  $r('app.string.tab_task_list')
-);
-
-const SETTINGS_TAB: BottomTabBarStyle = new BottomTabBarStyle(
-  { normal: new SymbolGlyphModifier($r('sys.symbol.gearshape')) },
-  $r('app.string.tab_settings')
-);
+/*
+ * 页签图标：**未选中用官方次级图标色、选中用 M3 primary**（2026-10-19）。
+ *
+ * 之前这两个 BottomTabBarStyle 是模块级常量、选中态用系统默认蓝，
+ * 换主题色时导航栏高亮不会跟着变。改成 @Computed getter 后，
+ * ccentIndex 一变就重新生成样式 —— 作者要求的「导航栏高亮着色」就是这一处。
+ *
+ * 注意 on-* 规则：图标色直接取 primary（不做底色搭配），没有跨角色混用问题。
+ * 未选中态用官方 sys.color.icon_secondary（中性色仍走官方 token，见已确认的混合方案）。
+ */
 
 @ComponentV2
 export struct MainTabBar {
@@ -80,6 +82,37 @@ export struct MainTabBar {
   @Event onAdd: () => void = () => {};
   /** 编辑态删完一批之后通知外层（带上删掉的条数，外层给 toast 反馈） */
   @Event onDeleteDone: (count: number) => void = () => {};
+
+  /** 视觉个性化：M3 色系（导航栏高亮 = `primary`） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
+
+  /** 任务列表页签样式：未选中用官方次级图标色、**选中用 M3 `primary`** */
+  @Computed
+  get taskListTab(): BottomTabBarStyle {
+    return new BottomTabBarStyle(
+      {
+        normal: new SymbolGlyphModifier($r('sys.symbol.list_checkmark'))
+          .fontColor([$r('sys.color.icon_secondary')]),
+        selected: new SymbolGlyphModifier($r('sys.symbol.list_checkmark'))
+          .fontColor([this.themeStore.scheme.primary])
+      },
+      $r('app.string.tab_task_list')
+    );
+  }
+
+  /** 设置页签样式（同上） */
+  @Computed
+  get settingsTab(): BottomTabBarStyle {
+    return new BottomTabBarStyle(
+      {
+        normal: new SymbolGlyphModifier($r('sys.symbol.gearshape'))
+          .fontColor([$r('sys.color.icon_secondary')]),
+        selected: new SymbolGlyphModifier($r('sys.symbol.gearshape'))
+          .fontColor([this.themeStore.scheme.primary])
+      },
+      $r('app.string.tab_settings')
+    );
+  }
 
   /**
    * 右侧那颗圆钮当前的**图标**（袁正锟 2026-10-16：「Tabbar 里面的添加按钮变成删除按钮」）：
@@ -221,13 +254,13 @@ export struct MainTabBar {
         TabContent() {
           A_TaskList({ scroller: this.scroller, store: this.store })
         }
-        .tabBar(TASK_LIST_TAB)
+        .tabBar(this.taskListTab)
 
         TabContent() {
           // 设置页要 store 只为一件事：「清空全部任务」。其余设置项与本机任务数据无关
           A_Settings({ store: this.store, scroller: this.settingsScroller })
         }
-        .tabBar(SETTINGS_TAB)
+        .tabBar(this.settingsTab)
       }
       .vertical(false)
       .scrollable(false)
