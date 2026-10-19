@@ -23,7 +23,7 @@ import { HdsListItemCard, PrefixCustomBuilder, SuffixCustomBuilder } from '@kit.
 import { Task, TaskAlarm, TaskPriority, TaskStatus } from '../model';
 import { TaskStatusIcon } from './TaskStatusIcon';
 import { TaskListStore } from '../viewmodel/TaskListStore';
-import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
+import { DueParts, TaskListViewModel } from '../viewmodel/TaskListViewModel';
 import { ThemeStore } from '../utils/Theme';
 
 /**
@@ -47,10 +47,16 @@ const SECOND_LINE_GAP_VP: number = 6;
  * 定宽 + 右对齐 → 所有卡片的截止文案右边缘落在同一条竖线上，
  * 不会因为「明天截止」和「10 天后截止」长短不同而左右跳动。
  */
+/** 标签槽宽度（vp）：按 4 个汉字宽算，文字居中；没标签也占住这个宽度（2026-10-19 效果图） */
+const TAG_CHIP_WIDTH_VP: number = 60;
+/** 「XXX」槽宽度（vp）：定宽居中，14h / 3 天 / 已过期 都放得下 */
+const DUE_VALUE_WIDTH_VP: number = 48;
 /** 截止胶囊左右内边距（vp） */
 const DUE_CHIP_SIDE_PADDING_VP: number = 6;
 /** 截止胶囊描边宽度（vp） */
 const DUE_CHIP_BORDER_VP: number = 1;
+/** 「XXX」与「后截止」之间的间距（vp） */
+const DUE_SUFFIX_GAP_VP: number = 2;
 /** 重复标识图标字号（vp）：第二行最后那个小图标 */
 const REPEAT_ICON_SIZE_VP: number = 16;
 /** 铃铛图标字号（vp） */
@@ -185,6 +191,15 @@ export struct TaskCard {
     return TaskListViewModel.dueLabel(this.task);
   }
 
+  /**
+   * 截止文案拆两段：`value` 进定宽居中槽、`suffix` 是固定的「后截止」。
+   * 拆开是为了让「后截止」三个字**永远落在同一横向位置**（2026-10-19 效果图）。
+   */
+  @Computed
+  get dueParts(): DueParts {
+    return TaskListViewModel.dueParts(this.task);
+  }
+
   /** 卡片第二行：重复性标识（`每周一、二、四`）。非周期任务为空 */
   @Computed
   get repeatLabel(): string {
@@ -270,62 +285,85 @@ export struct TaskCard {
         .textAlign(TextAlign.Start)
 
       Row({ space: SECOND_LINE_GAP_VP }) {
-        // 左组：标签胶囊 + 重要性标识（2026-10-19：「视觉上留出首标签和重要性标识的位置」）
-        if (this.tagChipList.length > 0) {
-          Text(this.tagChipList[0])
-            .fontSize($r('sys.float.ohos_id_text_size_caption'))
-            .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-            .maxLines(1)
-            .padding({
-              left: TAG_CHIP_SIDE_PADDING_VP,
-              right: TAG_CHIP_SIDE_PADDING_VP,
-              top: TAG_CHIP_VERTICAL_PADDING_VP,
-              bottom: TAG_CHIP_VERTICAL_PADDING_VP
-            })
-            .backgroundColor($r('sys.color.comp_background_secondary'))
-            .borderRadius(TAG_CHIP_RADIUS_VP)
-            .flexShrink(0)
-        }
+        // ===== 固定槽位对齐（2026-10-19 作者效果图）=====
+        // 第二行从左到右是**五个固定宽度的槽**，内容居中：
+        //   ① tag（按 4 个字定宽） ② 重要性 ③ 「XXX」 ④ 「后截止」 ⑤ 重复图标
+        // 每个槽**没有内容也占住宽度**，所以所有卡片纵向严格对齐，不会因为
+        // 「有/没有标签」「14h/3天/已过期」而左右错位。
 
-        // ② 重要性标识（图形）：0 不占位 / 1 红圈红叹 / 2 红实心圆白叹
-        if (this.showPriorityBadge) {
-          this.priorityBadge()
-        }
+        // ① 标签：定宽 4 字、文字居中；没有标签也画一个透明占位
+        Text(this.tagChipList.length > 0 ? this.tagChipList[0] : '')
+          .fontSize($r('sys.float.ohos_id_text_size_caption'))
+          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+          .maxLines(1)
+          .textAlign(TextAlign.Center)
+          .width(TAG_CHIP_WIDTH_VP)
+          .backgroundColor(this.tagChipList.length > 0
+            ? $r('sys.color.comp_background_secondary')
+            : Color.Transparent)
+          .borderRadius(TAG_CHIP_RADIUS_VP)
+          .padding({ top: TAG_CHIP_VERTICAL_PADDING_VP, bottom: TAG_CHIP_VERTICAL_PADDING_VP })
+          .flexShrink(0)
 
-        // ③ 截止信息：**带边框的胶囊**，紧跟标签与重要性标识之后（2026-10-19 第二版草图）。
-        //
-        // 与上一版的区别：上一版用 `Blank()` 把截止推到最右、定宽右对齐；
-        // 草图里截止外面画了一圈圆角边框、且**紧挨着红圈**，右边大片留白给铃铛。
-        // 所以这里去掉弹性空白与定宽，改成自适应宽度的描边胶囊。
-        if (this.dueLabel !== '') {
-          Text(this.dueLabel)
+        // ② 重要性标识：**固定槽**（没有也占位）。0 档画透明占位，1/2 档画红圈
+        Stack() {
+          if (this.showPriorityBadge) {
+            this.priorityBadge()
+          }
+        }
+        .width(PRIORITY_BADGE_SIZE_VP)
+        .height(PRIORITY_BADGE_SIZE_VP)
+        .flexShrink(0)
+
+        // ③④ 截止：**一个定宽描边框**，里面左槽居中放「XXX」、右接固定的「后截止」。
+        // 框宽固定（XXX 槽 48vp + 固定文本），所以所有卡片的框右边缘对齐、文字位置也不跳。
+        Row({ space: DUE_SUFFIX_GAP_VP }) {
+          // ③「XXX」定宽居中（今天 / 明天 / 后天 / 3 天 / 14h / 已过期）
+          Text(this.dueParts.value)
             .fontSize($r('sys.float.ohos_id_text_size_caption'))
             .fontColor(this.textColor)
             .maxLines(1)
-            .padding({
-              left: DUE_CHIP_SIDE_PADDING_VP,
-              right: DUE_CHIP_SIDE_PADDING_VP,
-              top: TAG_CHIP_VERTICAL_PADDING_VP,
-              bottom: TAG_CHIP_VERTICAL_PADDING_VP
-            })
-            .border({
-              width: DUE_CHIP_BORDER_VP,
-              color: $r('sys.color.comp_divider')
-            })
-            .borderRadius(TAG_CHIP_RADIUS_VP)
+            .textAlign(TextAlign.Center)
+            .width(DUE_VALUE_WIDTH_VP)
+            .flexShrink(0)
+
+          // ④「后截止」固定文本；已过期/未定时间时为空，但框仍在（保持对齐）
+          Text(this.dueParts.suffix)
+            .fontSize($r('sys.float.ohos_id_text_size_caption'))
+            .fontColor(this.textColor)
+            .maxLines(1)
+            .textAlign(TextAlign.Start)
             .flexShrink(0)
         }
+        .padding({
+          left: DUE_CHIP_SIDE_PADDING_VP,
+          right: DUE_CHIP_SIDE_PADDING_VP,
+          top: TAG_CHIP_VERTICAL_PADDING_VP,
+          bottom: TAG_CHIP_VERTICAL_PADDING_VP
+        })
+        .border({
+          width: DUE_CHIP_BORDER_VP,
+          color: $r('sys.color.comp_divider')
+        })
+        .borderRadius(TAG_CHIP_RADIUS_VP)
+        .flexShrink(0)
+        // 完全没有截止信息时把框隐藏（但 `Visibility.Hidden` 仍占位，不影响后续槽位对齐）
+        .visibility(this.dueParts.value === '' ? Visibility.Hidden : Visibility.Visible)
 
-        // ④ 重复性标识：最后一个小图标
-        if (this.repeatLabel !== '') {
-          SymbolGlyph($r('sys.symbol.repeat'))
-            .fontSize(REPEAT_ICON_SIZE_VP)
-            .fontColor([$r('sys.color.icon_secondary')])
-            .accessibilityText(this.repeatLabel)
-            .flexShrink(0)
+        // ⑤ 重复性标识：最后一个小图标（没有也占位）
+        Stack() {
+          if (this.repeatLabel !== '') {
+            SymbolGlyph($r('sys.symbol.repeat'))
+              .fontSize(REPEAT_ICON_SIZE_VP)
+              .fontColor([$r('sys.color.icon_secondary')])
+              .accessibilityText(this.repeatLabel)
+          }
         }
+        .width(REPEAT_ICON_SIZE_VP)
+        .height(REPEAT_ICON_SIZE_VP)
+        .flexShrink(0)
 
-        // 右侧弹性空白：把剩下的空间都留在内容之后（草图里截止块与铃铛之间是大片留白）
+        // 右侧弹性空白：把剩下的空间都留给铃铛
         Blank()
       }
       .width('100%')

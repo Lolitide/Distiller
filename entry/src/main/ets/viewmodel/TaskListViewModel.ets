@@ -33,6 +33,22 @@ const DUE_IN_DAYS_SUFFIX: string = ' 天后截止';
 const DUE_IN_HOURS_SUFFIX: string = 'h 后截止';
 const DUE_OVERDUE: string = '已过期';
 const DUE_NO_TIME: string = '未定时间';
+/** 「后截止」这三个字：卡片上要单独成段，位置固定，不随前面的数字长短左右跳 */
+const DUE_AFTER_SUFFIX: string = '后截止';
+
+/**
+ * 截止文案的两段（见 `TaskListViewModel.dueParts`）。
+ * `value` 放定宽居中的槽，`suffix` 是固定文本（`后截止` / `截止` / 空）。
+ */
+export class DueParts {
+  readonly value: string;
+  readonly suffix: string;
+
+  constructor(value: string, suffix: string) {
+    this.value = value;
+    this.suffix = suffix;
+  }
+}
 const TIME_SEPARATOR: string = ':';
 
 /** 重要程度的中文（直接显示原词，袁正锟 2026-10-14 定） */
@@ -204,6 +220,42 @@ export class TaskListViewModel {
       return DUE_DAY_AFTER;
     }
     return `${offset}${DUE_IN_DAYS_SUFFIX}`;
+  }
+
+  /**
+   * 截止文案**拆成两段**，供卡片第二行做「固定槽位对齐」（2026-10-19 作者效果图）。
+   *
+   * 为什么要拆：`3 天后截止` / `14h 后截止` / `已过期` 的**可变部分**长度不同，
+   * 整串渲染时「后截止」三个字的位置会跟着左右跳。拆开后：
+   *   · `value` 放进**定宽居中**的槽（`14h` / `3 天` / `今天` / `已过期`）；
+   *   · `suffix`（`后截止` / `截止`）单独一个固定文本，永远落在同一横向位置。
+   *
+   * 「已过期」按作者裁定：**value 直接是「已过期」，suffix 为空**。
+   */
+  static dueParts(task: Task, now: Date = new Date()): DueParts {
+    const label: string = TaskListViewModel.dueLabel(task, now);
+    if (label === '') {
+      return new DueParts('', '');
+    }
+    if (label === DUE_OVERDUE || label === DUE_NO_TIME) {
+      return new DueParts(label, '');
+    }
+    if (label === DUE_TODAY) {
+      return new DueParts('今天', '截止');
+    }
+    if (label === DUE_TOMORROW) {
+      return new DueParts('明天', '截止');
+    }
+    if (label === DUE_DAY_AFTER) {
+      return new DueParts('后天', '截止');
+    }
+    // `N 天后截止` / `Nh 后截止`：把「后截止」剥出来，前面就是可变段
+    const suffix: string = DUE_AFTER_SUFFIX;
+    if (label.endsWith(suffix)) {
+      return new DueParts(label.substring(0, label.length - suffix.length).trim(), suffix);
+    }
+    // 后端给的 `dueText` 原话（如「本周五截止」）：整体当可变段，不硬拆
+    return new DueParts(label, '');
   }
 
   /** 两个时刻相差几个整日（按**自然日**算，不是按 24h 除）；due 早于 now 时为负 */
