@@ -127,11 +127,14 @@ export struct TaskCard {
    *   完成   → `gray_03`（`#d1d1d6`，官方浅灰阶第三档）
    */
   @Computed
-  get cardBackground(): Resource {
+  get cardBackground(): ResourceColor {
     if (this.completed) {
       return $r('sys.color.gray_03');
     }
-    return $r('sys.color.ohos_id_color_card_bg');
+    // 2026-10-19 M3 化：卡片底色 = `surface-container-low`。
+    // 作者要求「卡片色略深于背景色」—— 页面底色是 `surface`（tone 98），
+    // 卡片是 `surface-container-low`（tone 96），正好差一档，层次靠色调而不是阴影表达。
+    return this.themeStore.scheme.surfaceContainerLow;
   }
 
   /** 三行文字共用的颜色：完成态一起变灰（官方次级文字色），否则官方一级文字色 */
@@ -205,7 +208,9 @@ export struct TaskCard {
     SymbolGlyph(this.remindOn ? $r('sys.symbol.bell') : $r('sys.symbol.bell_slash'))
       .fontSize(BELL_ICON_SIZE_VP)
       .fontColor([this.remindOn
-        ? this.themeStore.accent.light
+        // 2026-10-19 M3 化：铃铛开启态用 **primary**（不是种子色原值），
+        // 这样它和其它 M3 元素处在同一套 tonal palette 上，不会比其他高亮偏艳。
+        ? this.themeStore.scheme.primary
         : $r('sys.color.icon_tertiary')])
       .width(BELL_HIT_SIZE_VP)
       .height(BELL_HIT_SIZE_VP)
@@ -341,7 +346,7 @@ export struct TaskCard {
                 top: TAG_CHIP_VERTICAL_PADDING_VP,
                 bottom: TAG_CHIP_VERTICAL_PADDING_VP
               })
-              .backgroundColor($r('sys.color.comp_background_secondary'))
+              .backgroundColor(this.themeStore.scheme.secondaryContainer)
               .borderRadius(TAG_CHIP_RADIUS_VP)
           }
         }

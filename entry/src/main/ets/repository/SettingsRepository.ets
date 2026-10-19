@@ -24,6 +24,10 @@ const STORE_NAME: string = 'distiller_settings';
 const KEY_REMIND_LEAD: string = 'remind_lead_minutes';
 /** 解析方式：见 `ParseMode` */
 const KEY_PARSE_MODE: string = 'parse_mode';
+/** 主题色档位（`ACCENT_OPTIONS` 的下标）：2026-10-19 起持久化 */
+const KEY_THEME_ACCENT: string = 'theme_accent_index';
+/** 卡片密度（`DENSITY_STANDARD` / `DENSITY_COMPACT`）：2026-10-19 起持久化 */
+const KEY_DENSITY: string = 'card_density';
 
 /** 默认提醒提前量：0 分钟（到点提醒） */
 export const DEFAULT_REMIND_LEAD: number = 0;
@@ -124,6 +128,76 @@ export class SettingsRepository {
     } catch (error) {
       const err = error as BusinessError;
       hilog.error(DOMAIN, TAG, 'setParseMode failed: %{public}s', err.message);
+      return false;
+    }
+  }
+
+  /* ── 视觉个性化：主题色与卡片密度（2026-10-19 起持久化）── */
+
+  /**
+   * 读主题色档位。读不到返回 `fallback`（调用方传当前值，避免一上来就被重置成 0）。
+   */
+  static async getThemeAccent(context: common.Context, fallback: number): Promise<number> {
+    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
+    if (store === undefined) {
+      return fallback;
+    }
+    try {
+      const value: preferences.ValueType = await store.get(KEY_THEME_ACCENT, fallback);
+      return typeof value === 'number' ? value : fallback;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'getThemeAccent failed: %{public}s', err.message);
+      return fallback;
+    }
+  }
+
+  /** 写主题色档位 */
+  static async setThemeAccent(context: common.Context, index: number): Promise<boolean> {
+    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
+    if (store === undefined) {
+      return false;
+    }
+    try {
+      await store.put(KEY_THEME_ACCENT, index);
+      await store.flush();
+      return true;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'setThemeAccent failed: %{public}s', err.message);
+      return false;
+    }
+  }
+
+  /** 读卡片密度 */
+  static async getDensity(context: common.Context, fallback: number): Promise<number> {
+    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
+    if (store === undefined) {
+      return fallback;
+    }
+    try {
+      const value: preferences.ValueType = await store.get(KEY_DENSITY, fallback);
+      return typeof value === 'number' ? value : fallback;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'getDensity failed: %{public}s', err.message);
+      return fallback;
+    }
+  }
+
+  /** 写卡片密度 */
+  static async setDensity(context: common.Context, density: number): Promise<boolean> {
+    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
+    if (store === undefined) {
+      return false;
+    }
+    try {
+      await store.put(KEY_DENSITY, density);
+      await store.flush();
+      return true;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'setDensity failed: %{public}s', err.message);
       return false;
     }
   }

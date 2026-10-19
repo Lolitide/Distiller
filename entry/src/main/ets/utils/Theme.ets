@@ -15,6 +15,7 @@
  * ⚠️ 本文件只负责**视觉取值**，不碰数据、不碰业务。
  */
 import { AppStorageV2 } from '@kit.ArkUI';
+import { M3Scheme } from './M3Palette';
 
 /* ─────────────────────────── 一、设计令牌 ─────────────────────────── */
 
@@ -148,6 +149,23 @@ export class ThemeStore {
     const store: ThemeStore | undefined =
       AppStorageV2.connect(ThemeStore, THEME_KEY, () => new ThemeStore());
     return store!;
+  }
+
+  /**
+   * 当前主题色对应的 **M3 整套语义色**（2026-10-19）。
+   *
+   * 颜色体系走的是已确认的**混合方案**：
+   *   · 主题色系（primary / secondary / tertiary / surface / surface-container-* …）
+   *     由 `M3Scheme` 从**种子色**按 tone 派生，所以整套颜色天生协调；
+   *   · 中性文字、图标、分隔线仍用官方 `sys.color.*`（它们自带深色变体、也符合 HDS 规范）。
+   *
+   * `@Computed` → `accentIndex` 一变，所有读它的组件自动重算重绘。
+   */
+  @Computed
+  get scheme(): M3Scheme {
+    const index: number = this.accentIndex < 0 || this.accentIndex >= ACCENT_OPTIONS.length
+      ? 0 : this.accentIndex;
+    return new M3Scheme(ACCENT_OPTIONS[index].light);
   }
 
   /** 当前档位对应的强调色（浅色/深色两套字面量由官方主题解析，这里给出资源无关的取值） */
