@@ -18,9 +18,9 @@
  *   · 月中 → `daysOfMonth: [15]`（规则能表达）
  *   · 月末 → **只能用 `dates` 存未来若干个月的"当月最后一天"具体时间戳**（本机扩展字段）
  *
- * ⚠️ 月初 = 1 号、月中 = 15 号、月末 = 当月最后一天、以及"预生成 12 个月"这三条
- * 是**按自然语义取的默认值，尚未经作者确认**（2026-10-19 提问后未回复）。确认后如有出入，
- * 只需改 `MONTH_START_DAY` / `MONTH_MID_DAY` / `MONTH_END_MONTHS` 三个常量。
+ * **2026-10-19 作者已确认**：月初 = 1 号、月中 = 15 号、月末 = 当月最后一天。
+ * 预生成 **12 个月**（一个学期够用）；**第 13 个月起该月末规则不再触发** —— 这是 `dates`
+ * 方案的固有限制，不是 bug。要延长只需改 `MONTH_END_MONTHS` 一个常量。
  */
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
