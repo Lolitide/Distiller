@@ -310,19 +310,8 @@ export struct B_TaskDetail {
               top: CONTENT_GAP_VP
             })
 
-            // 第五块：更多信息卡（难易程度 / 类型 / 地点 / 对象 / 链接 / 置信度 / 创建于 / 完成于）
-            // 字段表 v1 里这些项都标了「详情 ✅」，但此前详情页没有任何渲染点（见 _shots/差异清单.md）
-            Column() {
-              TaskInfoCard({ task: this.param.task })
-            }
-            .width('100%')
-            .padding({
-              left: CONTENT_SIDE_PADDING_VP,
-              right: CONTENT_SIDE_PADDING_VP,
-              top: CONTENT_GAP_VP
-            })
-
-            // 第六块：标签卡（每条标签一行 + 固定「＋ 添加标签」，需求方 2026-10-17 的设计图）
+            // 第五块：标签卡（每条标签一行 + 固定「＋ 添加标签」）
+            // —— 与第四块的「重要程度 / 来源」同属**分类与标记**，紧挨着放，不再被更多信息卡隔开
             Column() {
               TaskTagsCard({ task: this.param.task })
             }
@@ -333,9 +322,23 @@ export struct B_TaskDetail {
               top: CONTENT_GAP_VP
             })
 
-            // 第六块：备注卡（多行、自动换行、卡片随内容变长，需求方 2026-10-17 的设计图）
+            // 第六块：备注卡（多行、自动换行、卡片随内容变长）
             Column() {
               TaskNoteCard({ task: this.param.task })
+            }
+            .width('100%')
+            .padding({
+              left: CONTENT_SIDE_PADDING_VP,
+              right: CONTENT_SIDE_PADDING_VP,
+              top: CONTENT_GAP_VP
+            })
+
+            // 第七块：更多信息卡（难易程度 / 类型 / 地点 / 链接 / 置信度 / 创建于 / 完成于）
+            // **挪到最后**（2026-10-19「详情部分的显示优先级、分组可做优化调整」）：
+            // 这张卡里一半是只读读数（置信度、两个时间戳），属于"平时不看"，压到页面底部；
+            // 上面几块才是用户每天要动的：属性 → 分类标记 → 备注。
+            Column() {
+              TaskInfoCard({ task: this.param.task })
             }
             .width('100%')
             .padding({
