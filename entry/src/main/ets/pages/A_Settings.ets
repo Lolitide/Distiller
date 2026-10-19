@@ -56,7 +56,7 @@ const PAGE_SIDE_PADDING_VP: number = 16;
  * 让开浮层标题栏的高度（vp）：与任务列表同一个来历 —— 把这一段做成**内容首项**，
  * 标题才会跟着滚动收缩；用固定 `padding-top` 的话，滚起来大字会压在内容上（上一版就是这么坏的）。
  */
-const TITLE_CLEARANCE_VP: number = 112;
+const TITLE_CLEARANCE_VP: number = 64;
 /** 让开悬浮页签栏（vp）：与 `A_TaskList.LIST_BOTTOM_CLEARANCE_VP` 同值 */
 const BOTTOM_CLEARANCE_VP: number = 80;
 /** 分隔线宽（vp） */

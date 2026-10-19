@@ -1,3 +1,4 @@
+import { ThemeStore } from '../utils/Theme';
 /*
  * 「添加任务」的**来源选择**（截图 / 录音 / 文本）—— 胶囊型单选按钮组，**图标与文字同一行**。
  *
@@ -63,6 +64,9 @@ export enum AddTaskSource {
 
 @ComponentV2
 export struct AddTaskSourceTabs {
+  /** 视觉个性化：M3 primary（全局 MD3 化） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
+
   /** 当前选中项下标 —— **单向**从父组件来（选中态的唯一真源在 `AddTaskSheet`） */
   @Require @Param selectedIndex: number;
   /** 用户点了哪一项 —— 父组件据此改自己的状态；本组件不持有选中态 */
@@ -80,8 +84,8 @@ export struct AddTaskSourceTabs {
   }
 
   /** 选项文字/图标色：官方 `CapsuleSegmentButtonV2` 的默认值（选中反色、未选中次级） */
-  private contentColor(index: number): Resource {
-    return this.isSelected(index) ? $r('sys.color.font_on_primary') : $r('sys.color.font_secondary');
+  private contentColor(index: number): ResourceColor {
+    return this.isSelected(index) ? this.themeStore.scheme.onPrimary : $r('sys.color.font_secondary');
   }
 
   /**
@@ -119,7 +123,8 @@ export struct AddTaskSourceTabs {
     // ⚠️ 必须用 **capsule** 那一档的底色：`..._tab_selected_item_background` 是「页签型」的白色底，
     // 配 `font_on_primary`(白字) 就成了白底白字（实测踩到过：`.cache/inline-1-default.png` 第一项是空白白块）。
     .backgroundColor(this.isSelected(index)
-      ? $r('sys.color.segment_button_v2_capsule_selected_item_background')
+      // 2026-10-19 全局 MD3：选中块用 M3 primary（原来是官方胶囊蓝）
+      ? this.themeStore.scheme.primary
       : Color.Transparent)
     .onClick(() => {
       this.onSelect(index);
