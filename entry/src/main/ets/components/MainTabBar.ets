@@ -54,6 +54,17 @@ const BAR_BOTTOM_MARGIN: number = 16;
  */
 const ADD_BUTTON_SIZE: number = 56;
 
+/** M3 Navigation Bar 高度（vp）：规范 80 */
+const NAV_BAR_HEIGHT_VP: number = 80;
+/** 单个导航项宽（vp） */
+const NAV_ITEM_WIDTH_VP: number = 88;
+/** 导航项内容高（vp）：图标 + 文字 */
+const NAV_ITEM_HEIGHT_VP: number = 64;
+/** 导航图标尺寸（vp） */
+const NAV_ICON_SIZE_VP: number = 24;
+/** FAB 内图标尺寸（vp） */
+const ADD_ICON_SIZE_VP: number = 24;
+
 /*
  * 页签图标：**未选中用官方次级图标色、选中用 M3 primary**（2026-10-19）。
  *
@@ -85,6 +96,8 @@ export struct MainTabBar {
 
   /** 视觉个性化：M3 色系（导航栏高亮 = `primary`） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
+  /** 当前页签（0 任务列表 / 1 设置）：自绘导航栏自己管，并通过 onIndexChange 上报 */
+  @Local current: number = 0;
 
   /**
    * 页签栏的渐变遮罩色（40% 透明）：**从 M3 `surfaceContainer` 派生**，不再写死。
@@ -201,29 +214,50 @@ export struct MainTabBar {
    */
   @Builder
   addHitArea() {
-    Column()
-      .width(ADD_BUTTON_SIZE)
-      .height(ADD_BUTTON_SIZE)
-      // 给个稳定 id：UI 自动化（`devecocli ui click --id`）与走查都要用它定位这颗按钮
-      .id('addTaskButton')
-      // 横向走本地化重载（`start`/`end`）：`right` 那一支只吃 `Length`、吃不了 `LengthMetrics`
-      .margin({
-        end: LengthMetrics.resource($r('sys.float.padding_level8')),
-        bottom: LengthMetrics.vp(BAR_BOTTOM_MARGIN)
-      })
-      // 图标按钮没有文字，无障碍文本必须给（读屏要播报）；编辑态要说「删除」
-      .accessibilityText(this.store.editing ? $r('app.string.action_delete') : $r('app.string.action_add_task'))
-      .onClick(() => {
-        // 普通态＝添加；编辑态＝删除（**一条没勾时点它不做事**，图标那一刻也是灰的）。
-        // 编辑态**不直接删**，先弹官方警告弹窗让人确认（见 confirmDelete）。
-        if (this.store.editing) {
-          if (this.store.canDelete) {
-            this.confirmDelete();
-          }
-          return;
+    // 2026-10-19：自绘导航栏后这颗钮也得自己画（原来由 HDS 的 miniBar 槽位渲染）。
+    // 造型按 **M3 FAB**：56vp、圆角 16vp（shape large）、`primary-container` 底 +
+    // `on-primary-container` 图标；行为完全不变（编辑态变垃圾桶、无勾选时压灰、删除前确认）。
+    Stack({ alignContent: Alignment.Center }) {
+      SymbolGlyph(this.slotSymbol)
+        .fontSize(ADD_ICON_SIZE_VP)
+        .fontColor([this.slotColor])
+    }
+    .width(ADD_BUTTON_SIZE)
+    .height(ADD_BUTTON_SIZE)
+    .backgroundColor(this.slotBackground)
+    .borderRadius(16)
+    // 给个稳定 id：UI 自动化（`devecocli ui click --id`）与走查都要用它定位这颗按钮
+    .id('addTaskButton')
+    .margin({
+      end: LengthMetrics.resource($r('sys.float.padding_level8')),
+      bottom: LengthMetrics.vp(NAV_BAR_HEIGHT_VP / 2)
+    })
+    .accessibilityText(this.store.editing ? $r('app.string.action_delete') : $r('app.string.action_add_task'))
+    .onClick(() => {
+      // 普通态＝添加；编辑态＝删除（**一条没勾时点它不做事**，图标那一刻也是灰的）。
+      // 编辑态**不直接删**，先弹官方警告弹窗让人确认（见 confirmDelete）。
+      if (this.store.editing) {
+        if (this.store.canDelete) {
+          this.confirmDelete();
         }
-        this.onAdd();
-      })
+        return;
+      }
+      this.onAdd();
+    })
+  }
+
+  /**
+   * FAB 底色（M3）：普通态 `primary-container`；编辑态可删除时 `error-container`
+   * （破坏性动作用错误色系），不可删除时降到 `surfaceVariant`。
+   */
+  @Computed
+  get slotBackground(): ResourceColor {
+    if (!this.store.editing) {
+      return this.themeStore.scheme.primaryContainer;
+    }
+    return this.store.canDelete
+      ? this.themeStore.scheme.errorContainer
+      : this.themeStore.scheme.surfaceVariant;
   }
 
   /**
@@ -261,65 +295,71 @@ export struct MainTabBar {
       });
   }
 
-  build() {
-    // 页签栏在下、点击区在上（同处 BottomEnd）：点击区按默认命中测试规则会挡住它下面的迷你栏槽位 → 槽位收不到点击
-    Stack({ alignContent: Alignment.BottomEnd }) {
-      HdsTabs({ barPosition: BarPosition.End }) {
-        TabContent() {
-          A_TaskList({ scroller: this.scroller, store: this.store })
-        }
-        .tabBar(this.taskListTab)
+  /**
+   * M3 导航栏的一项（2026-10-19 自绘，替代 `HdsTabs`）。
+   *
+   * M3 Navigation Bar 规范：图标在上、文字在下（`labelMedium`）、选中用 `primary`、
+   * 未选中用 `onSurfaceVariant`、最小触摸目标 48×48、栏高 80vp。
+   */
+  @Builder
+  navItem(index: number, symbol: Resource, label: Resource) {
+    Column() {
+      SymbolGlyph(symbol)
+        .fontSize(NAV_ICON_SIZE_VP)
+        .fontColor([this.current === index
+          ? this.themeStore.scheme.primary
+          : this.themeStore.scheme.onSurfaceVariant])
 
-        TabContent() {
-          // 设置页要 store 只为一件事：「清空全部任务」。其余设置项与本机任务数据无关
+      Text(label)
+        .fontSize(12)
+        .fontWeight(this.current === index ? FontWeight.Medium : FontWeight.Normal)
+        .fontColor(this.current === index
+          ? this.themeStore.scheme.primary
+          : this.themeStore.scheme.onSurfaceVariant)
+        .maxLines(1)
+        .margin({ top: 2 })
+    }
+    .width(NAV_ITEM_WIDTH_VP)
+    .height(NAV_ITEM_HEIGHT_VP)
+    .justifyContent(FlexAlign.Center)
+    .onClick(() => {
+      this.current = index;
+      this.onIndexChange(index);
+    })
+    .accessibilityText(label)
+  }
+
+  build() {
+    Stack({ alignContent: Alignment.BottomEnd }) {
+      Column() {
+        // 内容区：两个页面**都常驻**（用 `Visibility.None` 切显隐），
+        // 这样切页签不会丢滚动位置、也不会重建页面状态（`HdsTabs` 原来就是常驻的）。
+        Stack() {
+          A_TaskList({ scroller: this.scroller, store: this.store })
+            .visibility(this.current === 0 ? Visibility.Visible : Visibility.None)
           A_Settings({ store: this.store, scroller: this.settingsScroller })
+            .visibility(this.current === 1 ? Visibility.Visible : Visibility.None)
         }
-        .tabBar(this.settingsTab)
+        .width('100%')
+        .layoutWeight(1)
+
+        // M3 Navigation Bar：`surface-container` 底、铺到屏幕最底（含导航条区域）
+        Row() {
+          this.navItem(0, $r('sys.symbol.list_checkmark'), $r('app.string.tab_task_list'))
+          this.navItem(1, $r('sys.symbol.gearshape'), $r('app.string.tab_settings'))
+          Blank()
+          // 给右侧圆形「＋」留出位置（它由外层 `addHitArea` 叠在上面）
+          Row().width(ADD_BUTTON_SIZE + 16)
+        }
+        .width('100%')
+        .height(NAV_BAR_HEIGHT_VP)
+        .backgroundColor(this.themeStore.scheme.surfaceContainer)
+        .alignItems(VerticalAlign.Center)
+        // **全屏沉浸**：让导航栏底色铺到系统导航条底下（手势条区域）
+        .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
       }
-      .vertical(false)
-      .scrollable(false)
       .width('100%')
       .height('100%')
-      .backgroundColor(this.themeStore.scheme.surfaceContainer)
-      // —— 悬浮页签栏，逐项照官方示例 ——
-      // barOverlap：TabBar 背后变模糊并叠加在 TabContent 之上（API 22 就能用）
-      .barOverlap(true)
-      .barFloatingStyle({
-        barWidth: { smallWidth: 200, mediumWidth: 300, largeWidth: 400 },
-        barBottomMargin: BAR_BOTTOM_MARGIN,
-        // **2026-10-19 全局 MD3 + 全屏沉浸**：这里原来有两样东西，都与"跟主题色走"互斥，
-        // 已一并关掉：
-        //
-        // ① `gradientMask`（`maskHeight: 92`）—— 在屏幕底部铺 40% 的半透明遮罩。
-        //    它就是作者箭头指的那条**浅色带**：遮罩色与页面 `surface` 不同色，
-        //    叠出来的条带在整个暖色页面上非常明显。M3 不用渐变遮罩表达层次，
-        //    所以直接去掉，让页面底色一路铺到屏幕底。
-        //
-        // ② `systemMaterialEffect: IMMERSIVE` —— 系统毛玻璃材质。
-        //    材质是系统定色，会**盖掉**我们按主题算的底色，暖色主题下页签栏永远偏冷。
-        //    M3 用"色调表面"表达层级，不用系统材质，所以也去掉；
-        //    页签栏底色改由下面 `.backgroundColor(scheme.surfaceContainer)` 显式给。
-        //    （代价：失去官方毛玻璃质感 —— 这是"全局 MD3"必然的取舍，作者已确认要做 M3。）
-        // 右侧借它占位并**由它渲染那颗圆钮**（见文件头 ②③）：
-        // · miniBarStyle 用 COLLAPSE —— 与页签栏互补，页签栏才是「图标 + 文字」的完整药丸；
-        // · miniBarWidth 三档都钉成 56vp —— 万一状态被系统改掉（如旋转），也还是同样大小的圆钮、不会突然拉长；
-        // · enableMiniBarBackground: true（官方默认）—— 圆钮那层半透明材质与左侧药丸同源。
-        miniBar: {
-          miniBarBuilder: () => {
-            this.rightSlotContent();
-          },
-          miniBarStyle: HdsBarStyle.COLLAPSE,
-          miniBarWidth: {
-            smallWidth: ADD_BUTTON_SIZE,
-            mediumWidth: ADD_BUTTON_SIZE,
-            largeWidth: ADD_BUTTON_SIZE
-          },
-          enableMiniBarBackground: true
-        }
-      })
-      .onChange((index: number) => {
-        this.onIndexChange(index);
-      })
 
       this.addHitArea()
     }

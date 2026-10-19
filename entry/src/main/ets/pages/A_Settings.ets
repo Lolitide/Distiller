@@ -578,11 +578,13 @@ export struct A_Settings {
     }
     .width('100%')
     .height('100%')
-    // M3：设置页底色同样是 `surface`（与任务列表一致）
+    // M3：设置页底色 = `surface`（与任务列表一致）。
+    // ⚠️ 这里原来**后面还有一句** `.backgroundColor($r('sys.color.ohos_id_color_sub_background'))`
+    // —— 后写者生效，把 surface 覆盖成了系统浅蓝，导致设置页底色与暖色主题不搭
+    //（作者 2026-10-19 截图箭头指的就是这块）。已删掉那一句。
     .backgroundColor(this.themeStore.scheme.surface)
     .scrollBar(BarState.Off)
     .align(Alignment.Top)
-    .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
     .bindSheet(this.sheetKind !== SHEET_NONE, this.sheetBody(), {
       title: { title: this.sheetTitle },
       preferType: SheetType.CENTER,
