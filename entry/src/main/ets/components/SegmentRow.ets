@@ -26,7 +26,7 @@
  * ⚠️ `selectedIndex` 要传**状态值**（`@Computed` 或直接读 `@Local`），
  * 不要传一次性算死的常量，否则依旧不会更新。
  */
-import { Theme } from '../utils/Theme';
+import { Theme, ThemeStore } from '../utils/Theme';
 
 /** 分段按钮高度（vp） */
 const SEGMENT_HEIGHT_VP: number = 32;
@@ -43,6 +43,8 @@ export struct SegmentRow {
   @Param selectedIndex: number = -1;
   /** 点了某一档 */
   @Event onSelect: (index: number) => void = () => {};
+  /** 视觉个性化：选中态用 M3 primary / onPrimary（2026-10-19） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
 
   build() {
     Row({ space: SEGMENT_GAP_VP }) {
@@ -50,12 +52,12 @@ export struct SegmentRow {
         Text(label)
           .fontSize(Theme.FONT_BODY)
           .fontColor(this.selectedIndex === index
-            ? $r('sys.color.ohos_id_color_text_primary_contrary')
+            ? this.themeStore.scheme.onSecondaryContainer
             : $r('sys.color.ohos_id_color_text_primary'))
           .height(SEGMENT_HEIGHT_VP)
           .padding({ left: SEGMENT_SIDE_PADDING_VP, right: SEGMENT_SIDE_PADDING_VP })
           .backgroundColor(this.selectedIndex === index
-            ? $r('sys.color.ohos_id_color_emphasize')
+            ? this.themeStore.scheme.secondaryContainer
             : $r('sys.color.comp_background_secondary'))
           .borderRadius(SEGMENT_HEIGHT_VP / 2)
           .textAlign(TextAlign.Center)
