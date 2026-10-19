@@ -307,6 +307,16 @@ export struct A_TaskList {
                       .height(this.isStepsExpanded(task.id) ? SUB_CARD_FULL_HEIGHT_VP : STACK_LAYER_EDGE_VP)
                       .clip(true)
                       .alignItems(HorizontalAlign.Center)
+                      // **折叠时加一层阴影**（作者 2026-10-19：「折叠起来的时候增加一层阴影」）：
+                      // 收起时靠 projection 把"底下还压着一张卡"的层次做出来；
+                      // 展开后阴影收到 0（展开时它就是一张正常卡片，不需要投影）。
+                      // 半径/偏移都随状态切，配合下面的 `.animation()` 平滑过渡。
+                      .shadow({
+                        radius: this.isStepsExpanded(task.id) ? 0 : Theme.SHADOW_RADIUS,
+                        color: Theme.SHADOW_COLOR,
+                        offsetX: 0,
+                        offsetY: this.isStepsExpanded(task.id) ? 0 : Theme.SHADOW_OFFSET_Y
+                      })
                       .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
                       .accessibilityText($r('app.string.subcard_stacked_hint'))
                     }
