@@ -3,6 +3,8 @@ import { Task } from '../model';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { TaskCard } from '../components/TaskCard';
 import { TaskSubCard } from '../components/TaskSubCard';
+import { TaskStep } from '../model';
+import { Theme } from '../utils/Theme';
 import { GROUP_HEADER_LIST_PULL_UP_VP, TaskGroupHeader } from '../components/TaskGroupHeader';
 import { EmptyHint } from '../components/EmptyHint';
 import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
@@ -20,6 +22,17 @@ import { TaskListStore } from '../viewmodel/TaskListStore';
  */
 const LIST_BOTTOM_CLEARANCE_VP: number = 80;
 
+/* ── 副卡片「堆叠」形态（2026-10-19 实验性 UI）── */
+
+/** 收起时露出的下边缘高度（vp）：只为示意底下还压着一张卡，不承载内容 */
+const STACK_LAYER_EDGE_VP: number = 12;
+/** 堆叠层宽度：比主卡片窄一点，才读得出是压在底下 */
+const STACK_LAYER_WIDTH: string = '92%';
+/** 堆叠层与主卡片之间的缝隙（vp） */
+const STACK_LAYER_OFFSET_VP: number = 4;
+/** 长按判定时长（毫秒） */
+const LONG_PRESS_MS: number = 500;
+
 @ComponentV2
 export struct A_TaskList {
   /**
@@ -32,6 +45,36 @@ export struct A_TaskList {
    * 编辑态再传给每张卡片（圆圈 ↔ 方框勾选框）。
    */
   @Require @Param store: TaskListStore;
+
+  /**
+   * 哪些任务的副卡片被**长按展开**了（存 task.id）。
+   *
+   * 放在页面这一层而不是 `TaskSubCard` 里：收起态根本不会创建副卡片组件
+   * （只画一条露出的下边缘），状态必须活在它外面。
+   */
+  @Local expandedStepIds: number[] = [];
+
+  /** 该任务有没有步骤（决定要不要画堆叠层） */
+  private hasSteps(task: Task): boolean {
+    const steps: TaskStep[] | undefined = task.steps;
+    return steps !== undefined && steps.length > 0;
+  }
+
+  private isStepsExpanded(taskId: number): boolean {
+    return this.expandedStepIds.indexOf(taskId) >= 0;
+  }
+
+  /** 长按：展开/收起该任务的副卡片 */
+  private toggleSteps(taskId: number): void {
+    const next: number[] = this.expandedStepIds.slice();
+    const index: number = next.indexOf(taskId);
+    if (index >= 0) {
+      next.splice(index, 1);
+    } else {
+      next.push(taskId);
+    }
+    this.expandedStepIds = next;
+  }
 
   // 说明：点圆圈（完成/退回）与拨「响铃提醒」开关这两个动作**已搬到 `TaskListStore`**
   // （`toggleComplete` / `setRemind`）—— 搜索页复用同一个 `TaskCard`，行为也必须是同一套。
@@ -145,38 +188,75 @@ export struct A_TaskList {
             if (group.expanded) {
               ForEach(this.store.visibleTasks(group), (task: Task) => {
                 ListItem() {
-                  // 主卡片 + （有步骤时）副卡片，竖着贴在同一个列表项里 —— 设计稿 `任务子卡片.jpg`
-                  Column({ space: $r('sys.float.padding_level2') }) {
-                    TaskCard({
-                      task: task,
-                      store: this.store,
-                      onToggleComplete: () => {
-                        this.store.toggleComplete(task);
-                      },
-                      onRemindChange: (isOn: boolean) => {
-                        this.store.setRemind(task, isOn);
-                      },
-                      // 点整卡 → 压入任务详情页（编辑态下不跳，避免和多选冲突）
-                      onOpen: () => {
-                        if (this.store.editing) {
-                          return;
-                        }
-                        AppStorage.get<NavPathStack>(NAV_STACK_KEY)
-                          ?.pushPathByName(ROUTE_TASK_DETAIL, new TaskDetailParam(task, this.store));
-                      }
-                    })
-
-                    // 副卡片：有步骤才出现（设计稿里主卡片下方的步骤区）
-                    if (task.steps !== undefined && task.steps.length > 0) {
-                      TaskSubCard({
+                  // 主卡片 + （有步骤时）副卡片的**堆叠形态**（2026-10-19 实验性 UI）：
+                  //   · 收起态：主卡片下方只**露出小副卡片的下边缘**（一条略窄的圆角条），
+                  //     让"这张卡底下还有东西"一眼可见，又不多占高度；
+                  //   · 长按主卡片：把整张副卡片展开，列出步骤（每步可点圆圈勾选）。
+                  // 展开状态放在页面这一层（`expandedStepIds`），因为副卡片自己已经不带开关了。
+                  Column({ space: 0 }) {
+                    Column() {
+                      TaskCard({
                         task: task,
-                        onToggleStep: (index: number) => {
-                          this.store.toggleStepDone(task, index);
+                        store: this.store,
+                        onToggleComplete: () => {
+                          this.store.toggleComplete(task);
+                        },
+                        onRemindChange: (isOn: boolean) => {
+                          this.store.setRemind(task, isOn);
+                        },
+                        // 点整卡 → 压入任务详情页（编辑态下不跳，避免和多选冲突）
+                        onOpen: () => {
+                          if (this.store.editing) {
+                            return;
+                          }
+                          AppStorage.get<NavPathStack>(NAV_STACK_KEY)
+                            ?.pushPathByName(ROUTE_TASK_DETAIL, new TaskDetailParam(task, this.store));
                         }
                       })
                     }
+                    .width('100%')
+                    // 有步骤且处于收起态时，长按展开；再长按收起。
+                    // 编辑态不响应（长按在多选模式下容易误触）
+                    .gesture(
+                      LongPressGesture({ repeat: false, duration: LONG_PRESS_MS })
+                        .onAction(() => {
+                          if (this.store.editing || !this.hasSteps(task)) {
+                            return;
+                          }
+                          this.toggleSteps(task.id);
+                        })
+                    )
+
+                    if (this.hasSteps(task)) {
+                      if (this.isStepsExpanded(task.id)) {
+                        // 展开态：完整副卡片
+                        Column() {
+                          TaskSubCard({
+                            task: task,
+                            onToggleStep: (index: number) => {
+                              this.store.toggleStepDone(task, index);
+                            }
+                          })
+                        }
+                        .width('100%')
+                        .margin({ top: STACK_LAYER_OFFSET_VP })
+                      } else {
+                        // 收起态：只露一条下边缘，宽度略窄 → 读作"底下压着一张小卡"
+                        Row()
+                          .width(STACK_LAYER_WIDTH)
+                          .height(STACK_LAYER_EDGE_VP)
+                          .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+                          .borderRadius({
+                            bottomLeft: Theme.RADIUS_CARD,
+                            bottomRight: Theme.RADIUS_CARD
+                          })
+                          .margin({ top: STACK_LAYER_OFFSET_VP })
+                          .accessibilityText($r('app.string.subcard_stacked_hint'))
+                      }
+                    }
                   }
                   .width('100%')
+                  .alignItems(HorizontalAlign.Center)
                 }
               }, (task: Task) => `${task.id}`)
             }

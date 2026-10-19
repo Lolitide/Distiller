@@ -533,6 +533,10 @@
       "value": "提醒已关闭，点击开启"
     },
     {
+      "name": "subcard_stacked_hint",
+      "value": "长按展开步骤"
+    },
+    {
       "name": "settings_section_remind",
       "value": "提醒"
     },
