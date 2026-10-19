@@ -36,6 +36,7 @@ import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
 import { DateTimePickerBody } from './DateTimePickerBody';
 import { OptionPickerBody } from './OptionPickerBody';
 import { RepeatRuleEditor } from './RepeatRuleEditor';
+import { CenterDialogFrame, DialogTitle } from './CenterDialogFrame';
 import { RepeatRule } from '../model';
 import { TagInputBody } from './TagInputBody';
 
@@ -105,6 +106,8 @@ export struct AddTaskAttributeChips {
   @Local tagDraft: string = '';
   /** 打开的是哪个面板：`PICKER_NONE` / `PICKER_DUE` / `PICKER_REMIND` / `PICKER_REPEAT` / `PICKER_PRIORITY` / `PICKER_SOURCE` */
   @Local pickerKind: number = PICKER_NONE;
+  /** 弹窗 id（openCustomDialog 返回；-1 表示未打开） */
+  @Local pickerDialogId: number = -1;
   /** 截止面板草稿（点「确定」才落到 `dueAt`） */
   @Local dueDraft: Date = new Date();
   /** 提醒面板草稿（点「确定」才落到 `remindAt`） */
@@ -694,6 +697,46 @@ export struct AddTaskAttributeChips {
     }, (tag: string) => tag)
   }
 
+  /**
+   * 面板显隐改成 **M3 居中弹窗**（2026-10-19，与任务详情页统一）。
+   *
+   * 为什么整体改：这个宿主同时服务「到期 / 提醒」（日期时间，作者第 1 条要求居中弹窗）
+   * 和「重复 / 重要程度 / 来源」（第 2 条要求浮窗）。到期/提醒必须居中，
+   * 而「重复」里是 `RepeatRuleEditor`（档位 + 星期多选 + 月初/月中/月末 + 间隔），
+   * 是一张**多行表单**，塞进贴着行的小浮窗会挤成一团 ——
+   * 按 M3「需求与规范冲突时先按规范实现、再说明偏离」的约定，
+   * 这里统一用 M3 对话框（28vp 圆角）承载，观感仍是 M3 的浮层。
+   *
+   * 用 `@Monitor('pickerKind')` 自动开关，不必逐个改 `openDuePicker` 等 6 个入口。
+   */
+  @Monitor('pickerKind')
+  onPickerKindChanged(): void {
+    if (this.pickerKind !== PICKER_NONE) {
+      this.pickerDialogId = -1;
+      this.getUIContext().getPromptAction().openCustomDialog({
+        builder: () => {
+          this.pickerDialog();
+        },
+        alignment: DialogAlignment.Center,
+        isModal: true
+      }).then((id: number) => {
+        this.pickerDialogId = id;
+      });
+    } else if (this.pickerDialogId >= 0) {
+      this.getUIContext().getPromptAction().closeCustomDialog(this.pickerDialogId);
+      this.pickerDialogId = -1;
+    }
+  }
+
+  /** 弹窗内容：M3 对话框外框 + 标题 + 原来的 body */
+  @Builder
+  pickerDialog() {
+    CenterDialogFrame() {
+      DialogTitle({ text: this.pickerTitle })
+      this.pickerBody()
+    }
+  }
+
   /** 面板内容：一个 body 按 `pickerKind` 切，日期/时间的草稿各自独立（与详情页同一套组件） */
   @Builder
   pickerBody() {    if (this.pickerKind === PICKER_REMIND) {
@@ -823,19 +866,7 @@ export struct AddTaskAttributeChips {
       })
     }
     .width('100%')
-    // 一个面板管两项：挂在 chip 行的根节点上（半模态必须挂在已上树的宿主上）；
-    // 造型与详情页那三个选择器面板一致（居中、FIT_CONTENT、无拖拽条、只要标题）。
-    .bindSheet(this.pickerOpen, this.pickerBody(), {
-      title: { title: this.pickerTitle },
-      preferType: SheetType.CENTER,
-      // 重复面板要装「档位轮 + 星期多选 + 间隔 + 底部条」，`FIT_CONTENT` 会在开面板时就把高度定死，
-      // 之后切换到「每周」时多出来的星期行会被裁掉 → 这一个面板给它固定高度。
-      height: this.pickerKind === PICKER_REPEAT ? REPEAT_SHEET_HEIGHT_VP : SheetSize.FIT_CONTENT,
-      showClose: false,
-      dragBar: false,
-      onDisappear: () => {
-        this.pickerKind = PICKER_NONE;
-      }
-    })
+    // 2026-10-19：面板已改成 `openCustomDialog` 的 **M3 居中弹窗**（见 `onPickerKindChanged`），
+    // 不再用 `bindSheet` —— 后者在手机上只能是底部面板，做不出参考图那种居中浮层。
   }
 }
