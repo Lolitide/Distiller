@@ -18,12 +18,15 @@ import { ChipGroup, ChipGroupItemOptions, ChipSize } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { TaskFilterChip, TaskListStore } from '../viewmodel/TaskListStore';
+import { ThemeStore } from '../utils/Theme';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'TaskFilterChips';
 
 @ComponentV2
 export struct TaskFilterChips {
+  /** 视觉个性化：M3 色系 */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
   /**
    * 任务列表 store：芯片列表（固定项 + 标签项及其排序）与「当前筛选键」都从它读，
    * 点选后再写回去（`applyFilter`，顺便给标签项记一次点击次数用于自动排序）。
@@ -79,10 +82,11 @@ export struct TaskFilterChips {
         items: this.chipItems,
         itemStyle: {
           size: ChipSize.SMALL,
-          backgroundColor: $r('sys.color.ohos_id_color_button_normal'),
+          backgroundColor: this.themeStore.scheme.surfaceContainerHighest,
           fontColor: $r('sys.color.ohos_id_color_text_primary'),
-          selectedBackgroundColor: $r('sys.color.ohos_id_color_emphasize'),
-          selectedFontColor: $r('sys.color.ohos_id_color_text_primary_contrary')
+          // M3 filter chip 规范：选中态 = secondaryContainer 底 + onSecondaryContainer 字
+        selectedBackgroundColor: this.themeStore.scheme.secondaryContainer,
+          selectedFontColor: this.themeStore.scheme.onSecondaryContainer
         },
         selectedIndexes: this.selectedIndexes,
         multiple: false,

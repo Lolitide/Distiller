@@ -86,6 +86,20 @@ export struct MainTabBar {
   /** 视觉个性化：M3 色系（导航栏高亮 = `primary`） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
 
+  /**
+   * 页签栏的渐变遮罩色（40% 透明）：**从 M3 `surfaceContainer` 派生**，不再写死。
+   *
+   * 之前这里是硬编码的 `'#66F1F3F5'`（官方示例里的冷灰蓝），所以不管主题色怎么换，
+   * 页签栏永远是冷蓝灰 —— 与暖色主题拼在一起就是一道色块（作者 2026-10-19 截图标注）。
+   * 官方 token 只有不透明 `ohos_id_color_sub_background` 和全透明两档、没有 40% 那档，
+   * 所以从主题色算：`#66` ＋ `surfaceContainer` 的 RGB。
+   */
+  @Computed
+  get barMaskColor(): string {
+    const hex: string = this.themeStore.scheme.surfaceContainer;
+    return `#66${hex.substring(1)}`;
+  }
+
   /** 任务列表页签样式：未选中用官方次级图标色、**选中用 M3 `primary`** */
   @Computed
   get taskListTab(): BottomTabBarStyle {
@@ -266,7 +280,7 @@ export struct MainTabBar {
       .scrollable(false)
       .width('100%')
       .height('100%')
-      .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
+      .backgroundColor(this.themeStore.scheme.surfaceContainer)
       // —— 悬浮页签栏，逐项照官方示例 ——
       // barOverlap：TabBar 背后变模糊并叠加在 TabContent 之上（API 22 就能用）
       .barOverlap(true)
@@ -277,7 +291,7 @@ export struct MainTabBar {
         // `ohos_id_color_sub_background`(#fff1f3f5) 和全透明的 `..._transparent`(#00ffffff)，
         // 没有 40% 那一档。为了「质感和官方一致」这里保留示例的字面值（已知偏离「不许裸色值」的约定）。
         gradientMask: {
-          maskColor: '#66F1F3F5',
+          maskColor: this.barMaskColor,
           maskHeight: 92
         },
         systemMaterialEffect: {
