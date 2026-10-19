@@ -417,7 +417,7 @@ export struct TaskCard {
         .fontSize(PRIORITY_BADGE_FONT_SIZE)
         .fontWeight(FontWeight.Bold)
         .fontColor(this.prioritySolid
-          ? $r('sys.color.ohos_id_color_text_primary_contrary')
+          ? this.themeStore.scheme.onPrimary
           : $r('sys.color.warning'))
     }
     .width(PRIORITY_BADGE_SIZE_VP)

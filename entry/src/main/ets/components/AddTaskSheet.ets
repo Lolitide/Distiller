@@ -1,3 +1,4 @@
+import { ThemeStore } from '../utils/Theme';
 /*
  * 「添加任务」半模态（`bindSheet`）—— **内容区 ＋ 选项**都在这个文件里。
  *
@@ -49,6 +50,9 @@ const SAVE_SIDE_PADDING_VP: number = 8;
 
 @ComponentV2
 export struct AddTaskSheet {
+  /** 视觉个性化：M3 色系（全局 MD3 化，2026-10-19） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
+
   /**
    * 任务列表 store：保存时把新任务落进去（`addTask`），列表会自己重分组刷新。
    * 由页面 `A_Main` 传进来 —— 半模态是页面的一部分，store 也归页面持有。
@@ -94,7 +98,7 @@ export struct AddTaskSheet {
       Text($r('app.string.action_save'))
         .fontSize($r('sys.float.ohos_id_text_size_button1'))
         .fontColor(this.draft.canSave
-          ? $r('sys.color.font_emphasize')
+          ? this.themeStore.scheme.primary
           : $r('sys.color.ohos_id_color_text_tertiary'))
         .padding({
           left: SAVE_SIDE_PADDING_VP,

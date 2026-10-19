@@ -501,7 +501,7 @@ export struct AddTaskAttributeChips {
     Row({ space: CHIP_TEXT_MARGIN_VP }) {
       SymbolGlyph($r('sys.symbol.calendar'))
         .fontSize($r('sys.float.chip_small_icon_size'))
-        .fontColor([$r('sys.color.icon_emphasize')])
+        .fontColor([this.themeStore.scheme.primary])
 
       Text(this.dueChipLabel)
         .fontSize($r('sys.float.chip_small_font_size'))
@@ -543,7 +543,7 @@ export struct AddTaskAttributeChips {
     Row({ space: CHIP_TEXT_MARGIN_VP }) {
       SymbolGlyph($r('sys.symbol.bell'))
         .fontSize($r('sys.float.chip_small_icon_size'))
-        .fontColor([$r('sys.color.icon_emphasize')])
+        .fontColor([this.themeStore.scheme.primary])
 
       Text(this.remindChipLabel)
         .fontSize($r('sys.float.chip_small_font_size'))
@@ -579,7 +579,7 @@ export struct AddTaskAttributeChips {
     Row({ space: CHIP_TEXT_MARGIN_VP }) {
       SymbolGlyph($r('sys.symbol.repeat'))
         .fontSize($r('sys.float.chip_small_icon_size'))
-        .fontColor([$r('sys.color.icon_emphasize')])
+        .fontColor([this.themeStore.scheme.primary])
 
       Text(this.repeatChipLabel)
         .fontSize($r('sys.float.chip_small_font_size'))
@@ -618,7 +618,7 @@ export struct AddTaskAttributeChips {
     Row({ space: CHIP_TEXT_MARGIN_VP }) {
       SymbolGlyph($r('sys.symbol.star'))
         .fontSize($r('sys.float.chip_small_icon_size'))
-        .fontColor([$r('sys.color.icon_emphasize')])
+        .fontColor([this.themeStore.scheme.primary])
 
       Text(this.priorityChipLabel)
         .fontSize($r('sys.float.chip_small_font_size'))
@@ -662,7 +662,7 @@ export struct AddTaskAttributeChips {
     Row({ space: CHIP_TEXT_MARGIN_VP }) {
       SymbolGlyph($r('sys.symbol.link'))
         .fontSize($r('sys.float.chip_small_icon_size'))
-        .fontColor([$r('sys.color.icon_emphasize')])
+        .fontColor([this.themeStore.scheme.primary])
 
       Text(this.sourceChipLabel)
         .fontSize($r('sys.float.chip_small_font_size'))
@@ -787,7 +787,7 @@ export struct AddTaskAttributeChips {
       Row({ space: CHIP_TEXT_MARGIN_VP }) {
         SymbolGlyph($r('sys.symbol.label'))
           .fontSize($r('sys.float.chip_small_icon_size'))
-          .fontColor([$r('sys.color.icon_emphasize')])
+          .fontColor([this.themeStore.scheme.primary])
 
         Text(tag)
           .fontSize($r('sys.float.chip_small_font_size'))
@@ -965,14 +965,14 @@ export struct AddTaskAttributeChips {
       Chip({
         label: {
           text: this.labelText($r('app.string.chip_add_tag')),
-          fontColor: $r('sys.color.font_emphasize')
+          fontColor: this.themeStore.scheme.primary
         },
         prefixSymbol: {
-          normal: new SymbolGlyphModifier($r('sys.symbol.plus')).fontColor([$r('sys.color.icon_emphasize')])
+          normal: new SymbolGlyphModifier($r('sys.symbol.plus')).fontColor([this.themeStore.scheme.primary])
         },
         size: ChipSize.SMALL,
         allowClose: false,
-        backgroundColor: $r('sys.color.comp_emphasize_secondary'),
+        backgroundColor: this.themeStore.scheme.primaryContainer,
         onClicked: () => {
           this.openTagPicker();
         }

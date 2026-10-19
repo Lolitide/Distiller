@@ -1,3 +1,4 @@
+import { ThemeStore } from '../utils/Theme';
 /*
  * 选择器面板底部那一条「取消 / 确定」—— 日期时间面板、单列文本面板共用。
  *
@@ -16,6 +17,9 @@ const FOOTER_DIVIDER_VP: number = 20;
 
 @ComponentV2
 export struct PickerFooter {
+  /** 视觉个性化：M3 色系（全局 MD3 化，2026-10-19） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
+
   /** 点「取消」 */
   @Event onCancel: () => void = () => {};
   /** 点「确定」 */
@@ -28,7 +32,7 @@ export struct PickerFooter {
         .height(FOOTER_HEIGHT_VP)
         .textAlign(TextAlign.Center)
         .fontSize($r('sys.float.ohos_id_text_size_button1'))
-        .fontColor($r('sys.color.font_emphasize'))
+        .fontColor(this.themeStore.scheme.primary)
         .onClick(() => {
           this.onCancel();
         })
@@ -43,7 +47,7 @@ export struct PickerFooter {
         .height(FOOTER_HEIGHT_VP)
         .textAlign(TextAlign.Center)
         .fontSize($r('sys.float.ohos_id_text_size_button1'))
-        .fontColor($r('sys.color.font_emphasize'))
+        .fontColor(this.themeStore.scheme.primary)
         .onClick(() => {
           this.onConfirm();
         })

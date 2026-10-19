@@ -1,3 +1,4 @@
+import { ThemeStore } from '../utils/Theme';
 /*
  * 「添加任务 · 录音」内容区 —— 一个圆形录音按钮 ＋ 计时。
  *
@@ -53,6 +54,9 @@ enum RecordState {
 
 @ComponentV2
 export struct AddTaskRecorder {
+  /** 视觉个性化：M3 色系（全局 MD3 化，2026-10-19） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
+
   /** 表单草稿：录音时长记到 `draft.recordSeconds`（保存时作为这一项的痕迹） */
   @Require @Param draft: AddTaskDraft;
   @Local state: RecordState = RecordState.IDLE;
@@ -148,7 +152,7 @@ export struct AddTaskRecorder {
       // 录音中用警示红（结束是"中断"动作），其余走按钮默认主题色
       .backgroundColor(this.state === RecordState.RECORDING
         ? $r('sys.color.ohos_id_color_warning')
-        : $r('sys.color.ohos_id_color_emphasize'))
+        : this.themeStore.scheme.primary)
       .onClick(() => {
         if (this.state === RecordState.RECORDING) {
           this.finish();

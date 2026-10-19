@@ -1,3 +1,4 @@
+import { ThemeStore } from '../utils/Theme';
 /*
  * 任务状态图标（独立组件，卡片与详情页共用）。
  *
@@ -14,6 +15,9 @@ import { Task, TaskPriority, TaskStatus } from '../model';
 
 @ComponentV2
 export struct TaskStatusIcon {
+  /** 视觉个性化：M3 色系（全局 MD3 化，2026-10-19） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
+
   /** 该图标代表的任务 */
   @Require @Param task: Task;
   /** 是否选择态（多选模式）。默认普通态 */
@@ -39,7 +43,7 @@ export struct TaskStatusIcon {
   @Computed
   get color(): ResourceColor {
     if (this.selectionMode) {
-      return this.selected ? $r('sys.color.ohos_id_color_emphasize') : $r('sys.color.icon_primary');
+      return this.selected ? this.themeStore.scheme.primary : $r('sys.color.icon_primary');
     }
     return this.completed ? $r('sys.color.icon_secondary') : $r('sys.color.icon_primary');
   }

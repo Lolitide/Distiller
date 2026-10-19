@@ -1,3 +1,4 @@
+import { ThemeStore } from '../utils/Theme';
 /*
  * 任务详情里的「步骤」块（需求方 2026-10-16 给的 4 张交互图）。
  *
@@ -32,6 +33,9 @@ const STEP_EDIT_ID: string = 'taskStepEditInput';
 
 @ComponentV2
 export struct TaskStepsSection {
+  /** 视觉个性化：M3 色系（全局 MD3 化，2026-10-19） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
+
   /** 步骤属于这个任务；直接改 `task.steps`（`@Trace`，卡片/详情都会跟着刷新） */
   @Require @Param task: Task;
 
@@ -167,7 +171,7 @@ export struct TaskStepsSection {
   stepCircle(done: number, index: number) {
     SymbolGlyph(done === 1 ? $r('sys.symbol.checkmark_circle_fill') : $r('sys.symbol.circle'))
       .fontSize(ICON_SIZE_TEMPLATE)
-      .fontColor([done === 1 ? $r('sys.color.icon_emphasize') : $r('sys.color.icon_secondary')])
+      .fontColor([done === 1 ? this.themeStore.scheme.primary : $r('sys.color.icon_secondary')])
       .accessibilityText(done === 1
         ? $r('app.string.action_uncomplete_task')
         : $r('app.string.action_complete_task'))
@@ -326,11 +330,11 @@ export struct TaskStepsSection {
     Row() {
       SymbolGlyph($r('sys.symbol.plus'))
         .fontSize(ICON_SIZE_TEMPLATE)
-        .fontColor([$r('sys.color.icon_emphasize')])
+        .fontColor([this.themeStore.scheme.primary])
 
       Text(this.addLabel)
         .fontSize($r('sys.float.ohos_id_text_size_body1'))
-        .fontColor($r('sys.color.font_emphasize'))
+        .fontColor(this.themeStore.scheme.primary)
         .margin({ left: ICON_TEXT_GAP_VP })
     }
     .width('100%')
