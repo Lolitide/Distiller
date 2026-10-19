@@ -19,7 +19,9 @@
  */
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { Task, TaskLevel, TASK_CATEGORY_PRESETS } from '../model';
+import { Task, TaskLevel, TaskPriority, TASK_CATEGORY_PRESETS } from '../model';
+import { SegmentRow } from './SegmentRow';
+import { OptionPickerBody } from './OptionPickerBody';
 import { Theme } from '../utils/Theme';
 
 const DOMAIN: number = 0x0000;
@@ -38,6 +40,8 @@ const DIVIDER_WIDTH_VP: number = 0.5;
 
 /** 难易程度选项（下标即 `TaskLevel` 的值：0 简单 / 1 中等 / 2 困难） */
 const LEVEL_OPTIONS: string[] = ['简单', '中等', '困难'];
+/** 重要性选项（下标即 TaskPriority 的值：0 普通 / 1 重要 / 2 紧急） */
+const PRIORITY_OPTIONS: string[] = ['普通', '重要', '紧急'];
 /** 三档分段按钮之间的间距（vp） */
 const SEGMENT_GAP_VP: number = 8;
 /** 分段按钮高度（vp） */
@@ -51,10 +55,10 @@ const CHIP_GAP_VP: number = 6;
 export struct TaskInfoCard {
   @Require @Param task: Task;
 
-  /** 当前打开的面板 */
-  /** 难易程度面板草稿 */
-  /** 类型面板草稿 */
-  /** 地点 / 对象面板草稿 */
+  /** 类型选择器是否打开 */
+  @Local categorySheetOpen: boolean = false;
+  /** 类型选择器的草稿下标（-1 ＝ 未设置） */
+  @Local categoryDraft: number = -1;
 
   /* ── 文案 ── */
 
@@ -192,23 +196,55 @@ export struct TaskInfoCard {
       : (index === 2 ? TaskLevel.HARD : TaskLevel.MEDIUM);
   }
 
-  /** 一颗三档分段按钮（`selected` 由调用点读 `@Computed` 求值，避免 @Builder 值参数不刷新的坑） */
+  /** 重要性在分段按钮里的选中下标（0 普通 / 1 重要 / 2 紧急），显式换算不拿枚举当数组下标 */
+  @Computed
+  get priorityIndex(): number {
+    if (this.task.priority === TaskPriority.URGENT) {
+      return 2;
+    }
+    if (this.task.priority === TaskPriority.IMPORTANT) {
+      return 1;
+    }
+    return 0;
+  }
+
+  private applyPriority(index: number): void {
+    if (index === 2) {
+      this.task.priority = TaskPriority.URGENT;
+    } else if (index === 1) {
+      this.task.priority = TaskPriority.IMPORTANT;
+    } else {
+      this.task.priority = TaskPriority.NORMAL;
+    }
+  }
+
+  /* ── 类型选择器（5 档一行放不下，按作者裁定改用弹窗）── */
+
+  private openCategorySheet(): void {
+    const current: string | undefined = this.task.category;
+    const index: number = current === undefined ? -1 : TASK_CATEGORY_PRESETS.indexOf(current);
+    this.categoryDraft = index;
+    this.categorySheetOpen = true;
+  }
+
   @Builder
-  segment(text: string, selected: boolean, onTap: () => void) {
-    Text(text)
-      .fontSize(Theme.FONT_BODY)
-      .fontColor(selected
-        ? $r('sys.color.ohos_id_color_text_primary_contrary')
-        : $r('sys.color.ohos_id_color_text_primary'))
-      .height(SEGMENT_HEIGHT_VP)
-      .padding({ left: Theme.GAP_M, right: Theme.GAP_M })
-      .backgroundColor(selected
-        ? $r('sys.color.ohos_id_color_emphasize')
-        : $r('sys.color.comp_background_secondary'))
-      .borderRadius(SEGMENT_HEIGHT_VP / 2)
-      .textAlign(TextAlign.Center)
-      .onClick(onTap)
-      .accessibilityText(text)
+  categorySheet() {
+    OptionPickerBody({
+      options: TASK_CATEGORY_PRESETS,
+      selectedIndex: this.categoryDraft,
+      onSelectedIndexChange: (index: number) => {
+        this.categoryDraft = index;
+      },
+      onCancel: () => {
+        this.categorySheetOpen = false;
+      },
+      onConfirm: () => {
+        if (this.categoryDraft >= 0 && this.categoryDraft < TASK_CATEGORY_PRESETS.length) {
+          this.task.category = TASK_CATEGORY_PRESETS[this.categoryDraft];
+        }
+        this.categorySheetOpen = false;
+      }
+    })
   }
 
   /* ── 行（**值一律在 build 里直接读 `@Computed`**）── */
@@ -233,93 +269,68 @@ export struct TaskInfoCard {
 
   build() {
     Column() {
-      // ① 难易程度（可改）
-      Row() {
-        this.rowLabel($r('app.string.info_level'))
-        Scroll() {
-          Text(this.levelLabel)
-            .fontSize($r('sys.float.ohos_id_text_size_body1'))
-            .fontColor(this.levelSet
-              ? $r('sys.color.ohos_id_color_text_primary')
-              : $r('sys.color.ohos_id_color_text_secondary'))
-            .maxLines(1)
-            .textAlign(TextAlign.Start)
-        }
-        .scrollable(ScrollDirection.Horizontal)
-        .scrollBar(BarState.Off)
-        .layoutWeight(1)
-        .align(Alignment.Start)
+      // ① 重要性（可改）—— 与难易程度**同一张卡、同一行式**（2026-10-19 作者要求：
+      //    「任务重要性、难易程度这俩放一块」，并且**不要**再与"来源"混在一张卡里）。
+      //    标题 + 三档按钮**并排一行**，不再"上面显示当前值、下面再来一排按钮"。
+      Row({ space: Theme.GAP_M }) {
+        this.rowLabel($r('app.string.info_priority'))
+        SegmentRow({
+          options: PRIORITY_OPTIONS,
+          selectedIndex: this.priorityIndex,
+          onSelect: (index: number) => {
+            this.applyPriority(index);
+          }
+        })
+        Blank()
       }
       .width('100%')
       .height(ROW_HEIGHT_VP)
       .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
       .alignItems(VerticalAlign.Center)
 
-      // ①-b 难易程度：**三档内联分段按钮**（2026-10-19：「任务难易程度可用三档按钮直接设置」）。
-      // 原来是点整行开半模态选轮，三档的东西开弹窗属于模态滥用。
-      Row({ space: SEGMENT_GAP_VP }) {
-        ForEach(LEVEL_OPTIONS, (label: string, index: number) => {
-          this.segment(label, this.levelIndex === index, () => {
+      this.rowDivider()
+
+      // ② 难易程度（可改）：同样"标题 + 三档按钮"一行
+      Row({ space: Theme.GAP_M }) {
+        this.rowLabel($r('app.string.info_level'))
+        SegmentRow({
+          options: LEVEL_OPTIONS,
+          selectedIndex: this.levelIndex,
+          onSelect: (index: number) => {
             this.applyLevel(index);
-          })
-        }, (label: string, index: number) => `${label}-${index}`)
+          }
+        })
+        Blank()
       }
       .width('100%')
-      .padding({
-        left: ROW_SIDE_PADDING_VP,
-        right: ROW_SIDE_PADDING_VP,
-        bottom: Theme.GAP_M
-      })
-      .justifyContent(FlexAlign.Start)
+      .height(ROW_HEIGHT_VP)
+      .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+      .alignItems(VerticalAlign.Center)
 
       this.rowDivider()
 
-      // ② 类型：**行内胶囊直选**（2026-10-19：「编辑处多数字段可直接点击文本进行编辑」）。
-      //    五个预设一排放得下，没有必要开半模态。
-      Column() {
-        Row() {
-          this.rowLabel($r('app.string.info_category'))
-          Text(this.categoryLabel)
-            .fontSize($r('sys.float.ohos_id_text_size_body1'))
-            .fontColor(this.categorySet
-              ? $r('sys.color.ohos_id_color_text_primary')
-              : $r('sys.color.ohos_id_color_text_secondary'))
-            .layoutWeight(1)
-            .maxLines(1)
-            .textAlign(TextAlign.End)
-        }
-        .width('100%')
-        .height(ROW_HEIGHT_VP)
-        .alignItems(VerticalAlign.Center)
-
-        Row({ space: CHIP_GAP_VP }) {
-          ForEach(TASK_CATEGORY_PRESETS, (preset: string) => {
-            Text(preset)
-              .fontSize(Theme.FONT_BODY)
-              .fontColor(this.task.category === preset
-                ? $r('sys.color.ohos_id_color_text_primary_contrary')
-                : $r('sys.color.ohos_id_color_text_primary'))
-              .height(CHIP_HEIGHT_VP)
-              .padding({ left: Theme.GAP_S, right: Theme.GAP_S })
-              .backgroundColor(this.task.category === preset
-                ? $r('sys.color.ohos_id_color_emphasize')
-                : $r('sys.color.comp_background_secondary'))
-              .borderRadius(CHIP_HEIGHT_VP / 2)
-              .textAlign(TextAlign.Center)
-              .onClick(() => {
-                // 再点一次同一个＝清空（用户可能想改回"未设置"）
-                this.task.category = this.task.category === preset ? undefined : preset;
-              })
-              .accessibilityText(preset)
-          }, (preset: string) => preset)
-        }
-        .width('100%')
-        .justifyContent(FlexAlign.Start)
-        .padding({ bottom: Theme.GAP_M })
+      // ③ 类型：**点一行弹选择器**（2026-10-19 作者裁定：
+      //    「类型」5 档一行放不下，改成弹窗选择；并且不再重复显示当前值 + 胶囊两遍）
+      Row() {
+        this.rowLabel($r('app.string.info_category'))
+        Text(this.categoryLabel)
+          .fontSize($r('sys.float.ohos_id_text_size_body2'))
+          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+          .layoutWeight(1)
+          .maxLines(1)
+          .textAlign(TextAlign.End)
+        SymbolGlyph($r('sys.symbol.chevron_right'))
+          .fontSize(Theme.FONT_CAPTION)
+          .fontColor([$r('sys.color.icon_tertiary')])
+          .margin({ left: Theme.GAP_S })
       }
       .width('100%')
+      .height(ROW_HEIGHT_VP)
       .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-      .alignItems(HorizontalAlign.Start)
+      .alignItems(VerticalAlign.Center)
+      .onClick(() => {
+        this.openCategorySheet();
+      })
 
       this.rowDivider()
 
@@ -447,5 +458,16 @@ export struct TaskInfoCard {
     .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
     .borderRadius($r('sys.float.ohos_id_corner_radius_card'))
     .clip(true)
+    // 类型选择器：5 档一行放不下，按作者裁定改用弹窗
+    .bindSheet(this.categorySheetOpen, this.categorySheet(), {
+      title: { title: $r('app.string.info_category') },
+      preferType: SheetType.CENTER,
+      height: SheetSize.FIT_CONTENT,
+      showClose: false,
+      dragBar: false,
+      onDisappear: () => {
+        this.categorySheetOpen = false;
+      }
+    })
   }
 }
