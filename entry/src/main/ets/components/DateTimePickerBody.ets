@@ -20,10 +20,6 @@
 import { PickerFooter } from './PickerFooter';
 import { Theme } from '../utils/Theme';
 
-/** 模式切换按钮高度（vp） */
-const MODE_HEIGHT_VP: number = 32;
-/** 模式切换按钮间距（vp） */
-const MODE_GAP_VP: number = 8;
 
 /** 日期取 `date`、时分保留 `time` 的时分 */
 function mergeDatePart(date: Date, time: Date): Date {
@@ -92,104 +88,64 @@ export struct DateTimePickerBody {
   /** 点「确定」 */
   @Event onConfirm: () => void = () => {};
 
-  /** 展示模式：`false` ＝ 滚轮（默认），`true` ＝ 手动输入 */
-  @Local inputMode: boolean = false;
   /** 输入框里的文本（切到输入模式时由当前选择回填） */
   @Local inputText: string = '';
 
   build() {
     Column() {
-      // ① 模式切换：滚轮 / 手动输入（2026-10-19：「设置截止日期、时间也要给用户输入的方式」）。
-      //    滚轮适合"改几分钟"，键盘输入适合"直接敲 11月3日 09:00"这种明确目标 —— 两种都要有。
-      Row({ space: MODE_GAP_VP }) {
-        Text('滚轮')
+      // ① 手动输入框：**和滚轮同屏**（2026-10-19 作者要求：
+      //    「手动输入文本框和滚轮放一块，同时更新，用户指哪改哪」）。
+      //    上一版做成「滚轮 / 手动输入」二选一的模式按钮，属于多此一举，已删掉。
+      Column() {
+        TextInput({ text: this.inputText, placeholder: '例如 2026-10-19 14:30' })
+          .id('dateTimeInput')
+          .width('100%')
+          .height(Theme.HIT_MIN + Theme.GAP_S)
           .fontSize(Theme.FONT_BODY)
-          .fontColor(this.inputMode
-            ? $r('sys.color.ohos_id_color_text_primary')
-            : $r('sys.color.ohos_id_color_text_primary_contrary'))
-          .height(MODE_HEIGHT_VP)
+          .fontColor($r('sys.color.ohos_id_color_text_primary'))
+          .placeholderColor($r('sys.color.ohos_id_color_text_tertiary'))
+          .backgroundColor($r('sys.color.comp_background_secondary'))
+          .borderRadius(Theme.RADIUS_CHIP)
           .padding({ left: Theme.GAP_M, right: Theme.GAP_M })
-          .backgroundColor(this.inputMode
-            ? $r('sys.color.comp_background_secondary')
-            : $r('sys.color.ohos_id_color_emphasize'))
-          .borderRadius(MODE_HEIGHT_VP / 2)
-          .textAlign(TextAlign.Center)
-          .onClick(() => {
-            this.inputMode = false;
+          .maxLines(1)
+          .enterKeyType(EnterKeyType.Done)
+          .onChange((value: string) => {
+            this.inputText = value;
+            // 打得出合法时间就立刻同步给滚轮（滚轮跟着走）
+            const parsed: Date | undefined = parseStamp(value);
+            if (parsed !== undefined) {
+              this.onSelectedChange(parsed);
+            }
           })
-        Text('手动输入')
-          .fontSize(Theme.FONT_BODY)
-          .fontColor(this.inputMode
-            ? $r('sys.color.ohos_id_color_text_primary_contrary')
-            : $r('sys.color.ohos_id_color_text_primary'))
-          .height(MODE_HEIGHT_VP)
-          .padding({ left: Theme.GAP_M, right: Theme.GAP_M })
-          .backgroundColor(this.inputMode
-            ? $r('sys.color.ohos_id_color_emphasize')
-            : $r('sys.color.comp_background_secondary'))
-          .borderRadius(MODE_HEIGHT_VP / 2)
-          .textAlign(TextAlign.Center)
-          .onClick(() => {
-            // 切到输入模式时把当前选择**回填成文本**，用户改的是同一个值而不是从空开始
-            this.inputText = formatStamp(this.selected);
-            this.inputMode = true;
-          })
+
+        if (this.inputInvalid) {
+          Text('格式不认识，请用「2026-10-19 14:30」这样的写法')
+            .fontSize(Theme.FONT_CAPTION)
+            .fontColor($r('sys.color.ohos_id_color_warning'))
+            .width('100%')
+            .padding({ top: Theme.GAP_S })
+            .textAlign(TextAlign.Start)
+        }
       }
       .width('100%')
       .padding({ left: Theme.GAP_L, right: Theme.GAP_L, top: Theme.GAP_M })
-      .justifyContent(FlexAlign.Start)
 
-      if (this.inputMode) {
-        // ② 手动输入：一个文本框，格式提示写在 placeholder 里
-        Column() {
-          TextInput({ text: this.inputText, placeholder: '例如 2026-10-19 14:30' })
-            .id('dateTimeInput')
-            .width('100%')
-            .height(Theme.HIT_MIN + Theme.GAP_S)
-            .fontSize(Theme.FONT_BODY)
-            .fontColor($r('sys.color.ohos_id_color_text_primary'))
-            .placeholderColor($r('sys.color.ohos_id_color_text_tertiary'))
-            .backgroundColor($r('sys.color.comp_background_secondary'))
-            .borderRadius(Theme.RADIUS_CHIP)
-            .padding({ left: Theme.GAP_M, right: Theme.GAP_M })
-            .maxLines(1)
-            .enterKeyType(EnterKeyType.Done)
-            .onChange((value: string) => {
-              this.inputText = value;
-              // 边打边解析：解析得出来就即时更新草稿，解析不出来就保持上一次的有效值
-              const parsed: Date | undefined = parseStamp(value);
-              if (parsed !== undefined) {
-                this.onSelectedChange(parsed);
-              }
-            })
-
-          if (this.inputInvalid) {
-            Text('格式不认识，请用「2026-10-19 14:30」这样的写法')
-              .fontSize(Theme.FONT_CAPTION)
-              .fontColor($r('sys.color.ohos_id_color_warning'))
-              .width('100%')
-              .padding({ top: Theme.GAP_S })
-              .textAlign(TextAlign.Start)
-          }
-        }
+      // ② 滚轮：官方 DatePicker + TimePicker（改它 → `syncInputText` 把输入框也刷成新值）
+      DatePicker({ selected: this.selected })
         .width('100%')
-        .padding({ left: Theme.GAP_L, right: Theme.GAP_L, top: Theme.GAP_M })
-      } else {
-        // ③ 滚轮：官方 DatePicker + TimePicker
-        DatePicker({ selected: this.selected })
-          .width('100%')
-          .onDateChange((value: Date) => {
-            // 只取日期部分，时分保留草稿里的（DatePicker 回来的 Date 带的是系统时分）
-            this.onSelectedChange(mergeDatePart(value, this.selected));
-          })
+        .onDateChange((value: Date) => {
+          // 只取日期部分，时分保留草稿里的（DatePicker 回来的 Date 带的是系统时分）
+          this.onSelectedChange(mergeDatePart(value, this.selected));
+          this.syncInputText();
+        })
 
-        TimePicker({ selected: this.selected })
-          .useMilitaryTime(true)
-          .width('100%')
-          .onChange((value: TimePickerResult) => {
-            this.onSelectedChange(mergeTimePart(this.selected, value.hour, value.minute));
-          })
-      }
+      TimePicker({ selected: this.selected })
+        .useMilitaryTime(true)
+        .width('100%')
+        .onChange((value: TimePickerResult) => {
+          this.onSelectedChange(mergeTimePart(this.selected, value.hour, value.minute));
+          this.syncInputText();
+        })
 
       // 底部「取消 / 确定」与单列文本面板共用同一个组件（不各写一份）
       PickerFooter({
@@ -202,6 +158,18 @@ export struct DateTimePickerBody {
       })
     }
     .width('100%')
+    .onAppear(() => {
+      // 面板一打开就把当前选择回填进输入框，两处从同一个值起步
+      this.syncInputText();
+    })
+  }
+
+  /** 把当前草稿同步成输入框文本（滚轮改动后调用，实现双向「指哪改哪」） */
+  private syncInputText(): void {
+    const next: string = formatStamp(this.selected);
+    if (this.inputText !== next) {
+      this.inputText = next;
+    }
   }
 
   /** 输入框里的内容解析不出来时给红字提示（空串不算错，用户可能正在清空重打） */
