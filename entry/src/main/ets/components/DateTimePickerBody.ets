@@ -148,20 +148,41 @@ export struct DateTimePickerBody {
       .width('100%')
       .padding({ left: Theme.GAP_L, right: Theme.GAP_L, top: Theme.GAP_M })
 
-      // ② 滚轮：官方 DatePicker + TimePicker（改它 → `syncInputText` 把输入框也刷成新值）
-      DatePicker({ selected: this.selected })
+      // ② 汇总标题：一行大字把当前选中的日期念出来（2026-10-19 对齐系统日历参考）
+      Text(this.summaryLabel)
+        .fontSize($r('sys.float.ohos_id_text_size_body1'))
+        .fontWeight(FontWeight.Medium)
+        .fontColor($r('sys.color.ohos_id_color_text_primary'))
         .width('100%')
-        .onDateChange((value: Date) => {
-          // 只取日期部分，时分保留草稿里的（DatePicker 回来的 Date 带的是系统时分）
-          this.onSelectedChange(mergeDatePart(value, this.selected));
-        })
+        .textAlign(TextAlign.Center)
+        .padding({ top: Theme.GAP_M, bottom: Theme.GAP_S })
 
-      TimePicker({ selected: this.selected })
-        .useMilitaryTime(true)
-        .width('100%')
-        .onChange((value: TimePickerResult) => {
-          this.onSelectedChange(mergeTimePart(this.selected, value.hour, value.minute));
-        })
+      // ③ 滚轮：**年月日 + 时分在同一行**（2026-10-19 作者参考系统日历）。
+      //
+      // ⚠️ 官方有个一步到位的 `DatePickerComponent` + `DisplayMode.DATE_TIME`，
+      //    但它的**起始版本是 API 26**（HarmonyOS 7）；本工程 target API 22、
+      //    模拟器 API 24，运行时会直接抛
+      //    `does not provide an export name 'DatePickerComponent'` 并闪退
+      //    （已实测踩过）。所以退回经典组件，用 `Row` + `layoutWeight` 把
+      //    「年月日」和「时分」摆到**同一行**：日 3 份宽、时间 2 份宽。
+      //    `useMilitaryTime(true)` 保持 24 小时制（作者：「保持 24 小时制」）。
+      Row() {
+        DatePicker({ selected: this.selected })
+          .layoutWeight(3)
+          .onDateChange((value: Date) => {
+            // 只取日期部分，时分保留草稿里的（DatePicker 回来的 Date 带系统时分）
+            this.onSelectedChange(mergeDatePart(value, this.selected));
+          })
+
+        TimePicker({ selected: this.selected })
+          .useMilitaryTime(true)
+          .layoutWeight(2)
+          .onChange((value: TimePickerResult) => {
+            this.onSelectedChange(mergeTimePart(this.selected, value.hour, value.minute));
+          })
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
 
       // 底部「取消 / 确定」与单列文本面板共用同一个组件（不各写一份）
       PickerFooter({
@@ -183,6 +204,17 @@ export struct DateTimePickerBody {
     if (this.inputText !== next) {
       this.inputText = next;
     }
+  }
+
+  /**
+   * 汇总标题：`2026年10月19日 周一`（对齐系统日历参考的第一行）。
+   * 现在就是同屏反馈「滚轮滚到哪了」，比只看输入框直观。
+   */
+  @Computed
+  get summaryLabel(): string {
+    const date: Date = this.selected;
+    const weekday: string[] = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${weekday[date.getDay()]}`;
   }
 
   /** 输入框里的内容解析不出来时给红字提示（空串不算错，用户可能正在清空重打） */

@@ -57,6 +57,32 @@ const MONTH_MODE_END: number = 2;
 /** 分段按钮尺寸（vp） */
 const SEGMENT_HEIGHT_VP: number = 32;
 const SEGMENT_GAP_VP: number = 8;
+
+/** 频率列表的行高（vp） */
+const FREQ_ROW_HEIGHT_VP: number = 44;
+
+/** 频率列表的一项 */
+class FrequencyOption {
+  readonly label: string;
+  readonly value: number;
+
+  constructor(label: string, value: number) {
+    this.label = label;
+    this.value = value;
+  }
+}
+
+/**
+ * 频率选项（顺序与系统日历的「重复」一致：不重复 → 每天 → 每周 → 每月 → 每年）。
+ * 作者 2026-10-19：不做「农历每年」（本机没有农历换算能力，也不在需求内）。
+ */
+const FREQ_OPTIONS: FrequencyOption[] = [
+  new FrequencyOption('不重复', FREQ_NONE),
+  new FrequencyOption('每天', FREQ_DAILY),
+  new FrequencyOption('每周', FREQ_WEEKLY),
+  new FrequencyOption('每月', FREQ_MONTHLY),
+  new FrequencyOption('每年', FREQ_YEARLY)
+];
 /** 底部操作条高度（vp） */
 const FOOTER_HEIGHT_VP: number = 56;
 /** 正文区高度上限（vp）：超出由 `Scroll` 承担 */
@@ -296,26 +322,42 @@ export struct RepeatRuleEditor {
     Column() {
       Scroll() {
         Column() {
-          // ① 频率
-          Row({ space: SEGMENT_GAP_VP }) {
-            this.segment('不重复', this.frequency === FREQ_NONE, () => {
-              this.frequency = FREQ_NONE;
-            })
-            this.segment('每天', this.frequency === FREQ_DAILY, () => {
-              this.frequency = FREQ_DAILY;
-            })
-            this.segment('每周', this.frequency === FREQ_WEEKLY, () => {
-              this.frequency = FREQ_WEEKLY;
-            })
-            this.segment('每月', this.frequency === FREQ_MONTHLY, () => {
-              this.frequency = FREQ_MONTHLY;
-            })
-            this.segment('每年', this.frequency === FREQ_YEARLY, () => {
-              this.frequency = FREQ_YEARLY;
-            })
+          // ① 频率：**竖排列表 + 当前项打勾**（2026-10-19 对齐系统日历参考）
+          //    之前是横向胶囊组，和系统日历的「重复」弹窗不一致；
+          //    竖排列表每项一行、右侧勾出当前值，跟系统设置类界面同构。
+          Column() {
+            ForEach(FREQ_OPTIONS, (option: FrequencyOption) => {
+              Row() {
+                Text(option.label)
+                  .fontSize(Theme.FONT_BODY)
+                  .fontColor($r('sys.color.ohos_id_color_text_primary'))
+                  .layoutWeight(1)
+                  .maxLines(1)
+                  .textAlign(TextAlign.Start)
+
+                if (this.frequency === option.value) {
+                  SymbolGlyph($r('sys.symbol.checkmark'))
+                    .fontSize(Theme.FONT_BODY)
+                    .fontColor([$r('sys.color.icon_emphasize')])
+                    .transition(TransitionEffect.OPACITY.animation({ duration: 120 }))
+                }
+              }
+              .width('100%')
+              .height(FREQ_ROW_HEIGHT_VP)
+              .onClick(() => {
+                this.frequency = option.value;
+              })
+              .accessibilityText(option.label)
+
+              // 分隔线（最后一项不画）
+              if (option.value !== FREQ_OPTIONS[FREQ_OPTIONS.length - 1].value) {
+                Divider()
+                  .strokeWidth(0.5)
+                  .color($r('sys.color.comp_divider'))
+              }
+            }, (option: FrequencyOption) => `${option.label}-${option.value}`)
           }
           .width('100%')
-          .justifyContent(FlexAlign.Start)
 
           // ② 每周：选星期
           if (this.frequency === FREQ_WEEKLY) {
