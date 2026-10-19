@@ -35,6 +35,13 @@ const SUB_SIDE_PADDING_VP: number = 24;
 @ComponentV2
 export struct TaskSubCard {
   @Require @Param task: Task;
+  /**
+   * 是否处于「折叠在被主卡底下」的状态（2026-10-19 第七次调整）。
+   *
+   * 为 true 时：底色换成更暗的一层 + 整体降不透明度 → 露出来的那条边读作
+   * 「一张沉在暗处的卡」，而不是靠 `shadow()`（后者按组件外框画，会摊成光晕）。
+   */
+  @Param dimmed: boolean = false;
   /** 点圆圈 → 由页面交给 store 切换该步的完成态（组件不碰数据） */
   @Event onToggleStep: (index: number) => void = () => {};
 
@@ -125,10 +132,24 @@ export struct TaskSubCard {
     .height(SUB_CARD_HEIGHT_VP)
     .padding({ left: SUB_SIDE_PADDING_VP, right: SUB_SIDE_PADDING_VP })
     .alignItems(VerticalAlign.Center)
-    // 与主卡片同一个卡片白 + 圆角，视觉上是一张"挂上去"的子卡
-    .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
-    .borderRadius($r('sys.float.ohos_id_corner_radius_card'))
+    // 与主卡片同一个卡片白；折叠态换成**更暗的一层底色**
+    .backgroundColor(this.dimmed
+      ? Theme.CARD_BG_DIM
+      : $r('sys.color.ohos_id_color_card_bg'))
+    // 折叠态再叠一层**整体降透明度**（作者：「同时更改 bg 颜色和 opacity」）
+    .opacity(this.dimmed ? Theme.OPACITY_CARD_DIM : 1)
+    // **上面两个圆角为 0**（2026-10-19）：
+    // 上面那半截是"缩在主卡片底下"的，做圆角反而会露出缝隙，
+    // 只保留下面两个圆角 → 看上去就是一张从主卡底下钻出来的卡。
+    .borderRadius({
+      topLeft: 0,
+      topRight: 0,
+      bottomLeft: Theme.RADIUS_CARD,
+      bottomRight: Theme.RADIUS_CARD
+    })
     .clip(true)
+    // 底色/透明度随折叠状态平滑过渡（与页面里的高度动画同一个时长/曲线）
+    .animation({ duration: Theme.ANIM_EXPAND_MS, curve: Curve.FastOutSlowIn })
     .accessibilityText(`${this.currentStep === undefined ? '' : this.currentStep.content} ${this.progressLabel}`)
   }
 }

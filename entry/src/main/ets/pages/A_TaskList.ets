@@ -64,14 +64,12 @@ const SUB_CARD_EMERGE_VP: number = 36;
 /** 副卡片展开后的完整高度（vp）：与 `TaskSubCard` 里的 `SUB_CARD_HEIGHT_VP` 保持一致 */
 const SUB_CARD_FULL_HEIGHT_VP: number = 36;
 /**
- * 副卡片**折叠态**的不透明度：低于 1 就显得「沉在暗处」，与主卡片形成层次。
+ * 副卡片折叠态的不透明度 —— **已移到 `Theme.OPACITY_CARD_DIM`**。
  *
- * 为什么用不透明度而不是 `shadow()`：`shadow()` 是给**组件外框**加投影，
- * 而这里的裁切容器是满宽（100%）的，投影会摊成一大片光晕、并不贴副卡自己的轮廓
- * （作者截图里那种"左右都糊"的效果就是这么来的）。直接压低副卡自身的透明度，
- * 露出来的那条边自然就变暗了。
+ * 移走原因：作者 2026-10-19 要求「同时更改 bg 颜色和 opacity」，
+ * 底色和透明度是一组参数，应该和 `Theme.CARD_BG_DIM` 放在一起由 `TaskSubCard` 自己用
+ * （页面只负责告诉它 `dimmed: true/false`）。
  */
-const SUB_CARD_DIM_OPACITY: number = 0.55;
 /** 分组展开时每张卡片的起始纵向偏移（vp）：一小段落差即可，同样用 translate */
 const CARD_ENTER_OFFSET_VP: number = 16;
 
@@ -297,6 +295,9 @@ export struct A_TaskList {
                         Column() {
                           TaskSubCard({
                             task: task,
+                            // 折叠时告诉副卡"你在主卡底下" → 它自己换暗底色 + 降透明度
+                            //（作者 2026-10-19：「同时更改 bg 颜色和 opacity」）
+                            dimmed: !this.isStepsExpanded(task.id),
                             onToggleStep: (index: number) => {
                               this.store.toggleStepDone(task, index);
                             }
@@ -309,13 +310,6 @@ export struct A_TaskList {
                             ? 0
                             : -(SUB_CARD_FULL_HEIGHT_VP - STACK_LAYER_EDGE_VP)
                         })
-                        // **折叠时整张副卡变暗**（作者 2026-10-19：「调整子卡片填充色与其透明度参数，
-                        // 让整个子卡片变暗也可以」）。
-                        // 为什么不用 `shadow`：`shadow()` 是给组件外框加投影，容器是满宽(100%)的，
-                        // 投影会摊成一大片光晕、不贴副卡本身的轮廓（实测就是作者截图里那种效果）。
-                        // 直接降副卡自身的不透明度，露出来的那条边就"沉"在暗处，
-                        // 展开过程中逐渐恢复到 1.0，读作"从底下亮起来"。
-                        .opacity(this.isStepsExpanded(task.id) ? 1 : SUB_CARD_DIM_OPACITY)
                         .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
                       }
                       .width('100%')
