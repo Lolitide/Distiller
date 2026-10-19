@@ -67,6 +67,20 @@ export class Theme {
   /** 副卡片阴影参数（vp） */
   static readonly SHADOW_RADIUS: number = 8;
   static readonly SHADOW_OFFSET_Y: number = 2;
+
+  /**
+   * 副卡片**折叠态**的底色：比卡片白暗一层（半透明黑叠在页面底色上）。
+   *
+   * 与 `OPACITY_CARD_DIM` 一起用 —— 作者 2026-10-19：「同时更改 bg 颜色和 opacity」。
+   * 只降 opacity 的话白色还是会偏亮；只换底色的话文字会太抢眼。
+   * 仍然放在本文件，因为这是 `backgroundColor` 需要的具体色值。
+   */
+  static readonly CARD_BG_DIM: string = 'rgba(0, 0, 0, 0.06)';
+  /** 副卡片折叠态的整体不透明度（与上面的底色叠加） */
+  static readonly OPACITY_CARD_DIM: number = 0.62;
+
+  /** 副卡片展开/收起动画时长（毫秒）：与页面里的高度动画保持一致 */
+  static readonly ANIM_EXPAND_MS: number = 220;
 }
 
 /* ─────────────────────────── 二、主题色档位 ─────────────────────────── */
