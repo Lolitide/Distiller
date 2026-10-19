@@ -460,6 +460,9 @@ export class TaskListStore {
    * 所以这里**只置 `alarm`**，句柄交给服务。
    * TODO(袁正锟): 真接 `service/system/ReminderService` 后，这里要改成调用「发布提醒 / 撤销提醒」，
    * 成功后再写 `reminderId`，失败（如超 30 条报 1700002）则把 `alarm` 回滚。
+   *
+   * **关闭时只清 `reminderId`（已发布句柄），不清 `remindAt`** ——
+   * 2026-10-19 作者确认：「不清理，保留给万一又打开时」。所以关掉再打开，提醒时刻还是原来那个。
    */
   setRemind(task: Task, isOn: boolean): void {
     task.alarm = isOn ? TaskAlarm.ON : TaskAlarm.OFF;
