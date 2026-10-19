@@ -17,7 +17,7 @@
 import { Task, TaskPriority, TaskSource } from '../model';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 import { OptionPickerBody } from './OptionPickerBody';
-import { Theme } from '../utils/Theme';
+import { Theme, ThemeStore } from '../utils/Theme';
 
 /** 圆形图标直径（vp） */
 const ICON_CIRCLE_SIZE_VP: number = 32;
@@ -58,6 +58,8 @@ export struct TaskMetaCard {
   @Local priorityDraftIndex: number = 0;
   @Local sourceSheetOpen: boolean = false;
   @Local sourceDraftIndex: number = 0;
+  /** 视觉个性化：M3 色系（卡片底色、浮窗底色、勾选色） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
 
   /*
    * 这张卡**不需要** `TaskListStore`：分组是按天分（`groupByDay` 里只按 `taskTime` 排），
@@ -246,10 +248,10 @@ export struct TaskMetaCard {
       Circle()
         .width(ICON_CIRCLE_SIZE_VP)
         .height(ICON_CIRCLE_SIZE_VP)
-        .fill($r('sys.color.ohos_id_color_emphasize'))
+        .fill(this.themeStore.scheme.primary)
       SymbolGlyph(icon)
         .fontSize(ICON_GLYPH_SIZE_VP)
-        .fontColor([$r('sys.color.ohos_id_color_text_primary_contrary')])
+        .fontColor([this.themeStore.scheme.onPrimary])
     }
   }
 
@@ -326,22 +328,47 @@ export struct TaskMetaCard {
     })
   }
 
-  /** 来源面板内容 —— 同一个 `OptionPickerBody`，选项换成五档通道 */
+  /**
+   * 来源浮窗内容（2026-10-19 作者：「来源…改成图二所示的浮窗组件」）。
+   *
+   * 之前是 `bindSheet` + `OptionPickerBody` 的**底部面板**；现在改成贴着这一行弹出的
+   * 竖排菜单，当前项打勾 —— 与设置页的 `PopupSelector` 同一副长相（M3 菜单：
+   * `surface-container-high` 底、16vp 圆角、每项 48vp 高、选中项用 `primary` 打勾）。
+   */
   @Builder
-  sourceSheet() {
-    OptionPickerBody({
-      options: SOURCE_OPTIONS,
-      selectedIndex: this.sourceDraftIndex,
-      onSelectedIndexChange: (index: number) => {
-        this.sourceDraftIndex = index;
-      },
-      onCancel: () => {
-        this.closeSourceSheet();
-      },
-      onConfirm: () => {
-        this.confirmSource();
-      }
-    })
+  sourceMenu() {
+    Column() {
+      ForEach(SOURCE_OPTIONS, (option: string, index: number) => {
+        Row() {
+          Text(option)
+            .fontSize($r('sys.float.ohos_id_text_size_body1'))
+            .fontColor($r('sys.color.ohos_id_color_text_primary'))
+            .layoutWeight(1)
+            .maxLines(1)
+            .textAlign(TextAlign.Start)
+
+          if (this.sourceDraftIndex === index) {
+            SymbolGlyph($r('sys.symbol.checkmark'))
+              .fontSize(Theme.FONT_BODY)
+              .fontColor([this.themeStore.scheme.primary])
+              .margin({ left: Theme.GAP_S })
+          }
+        }
+        .width('100%')
+        .height(48)
+        .padding({ left: Theme.GAP_M, right: Theme.GAP_M })
+        .alignItems(VerticalAlign.Center)
+        .onClick(() => {
+          this.sourceSheetOpen = false;
+          this.sourceDraftIndex = index;
+          this.confirmSource();
+        })
+        .accessibilityText(option)
+      }, (option: string, index: number) => `${option}-${index}`)
+    }
+    .width(200)
+    .padding(8)
+    .alignItems(HorizontalAlign.Start)
   }
 
   /*
@@ -385,20 +412,24 @@ export struct TaskMetaCard {
       .height(ROW_HEIGHT_VP)
       .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
       .alignItems(VerticalAlign.Center)
-      .bindSheet(this.sourceSheetOpen, this.sourceSheet(), {
-        title: { title: $r('app.string.picker_title_source') },
-        preferType: SheetType.CENTER,
-        height: SheetSize.FIT_CONTENT,
-        showClose: false,
-        dragBar: false,
-        onDisappear: () => {
-          this.sourceSheetOpen = false;
+      // 2026-10-19：`bindSheet` 底部面板 → **锚定浮窗**（图二样式）
+      .bindPopup(this.sourceSheetOpen, {
+        builder: this.sourceMenu(),
+        placement: Placement.Bottom,
+        popupColor: this.themeStore.scheme.surfaceContainerHigh,
+        radius: 16,
+        enableArrow: false,
+        focusable: true,
+        onStateChange: (event) => {
+          if (!event.isVisible) {
+            this.sourceSheetOpen = false;
+          }
         }
       })
     }
     .width('100%')
-    // 卡片白：与属性卡、列表卡片同一个官方 token
-    .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+    // 卡片底色 = M3 `surface-container-low`（与列表卡片同源，层次靠色调不靠阴影）
+    .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
     .borderRadius($r('sys.float.ohos_id_corner_radius_card'))
     .clip(true)
   }
