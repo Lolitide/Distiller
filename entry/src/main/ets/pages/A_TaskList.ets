@@ -32,6 +32,8 @@ const STACK_LAYER_WIDTH: string = '92%';
 const STACK_LAYER_OFFSET_VP: number = 4;
 /** 长按判定时长（毫秒） */
 const LONG_PRESS_MS: number = 500;
+/** 副卡片展开/收起动画时长（毫秒）：2026-10-19 与作者确认 220ms + EaseOut */
+const EXPAND_ANIM_MS: number = 220;
 
 @ComponentV2
 export struct A_TaskList {
@@ -64,16 +66,28 @@ export struct A_TaskList {
     return this.expandedStepIds.indexOf(taskId) >= 0;
   }
 
-  /** 长按：展开/收起该任务的副卡片 */
+  /**
+   * 长按：展开/收起该任务的副卡片。
+   *
+   * 状态变更包在 `animateTo` 里（2026-10-19 作者要求「给展开、收起加上 animation」）：
+   * V2 下的正确写法是 `this.getUIContext().animateTo({...}, () => { 改状态 })`
+   * —— 直接调全局 `animateTo` 在 V2 里不保证生效（官方《AnimateTo使用迁移》有说明）。
+   * 副卡片本身的进出场由 `TaskSubCard` 上的 `transition` 负责。
+   */
   private toggleSteps(taskId: number): void {
-    const next: number[] = this.expandedStepIds.slice();
-    const index: number = next.indexOf(taskId);
-    if (index >= 0) {
-      next.splice(index, 1);
-    } else {
-      next.push(taskId);
-    }
-    this.expandedStepIds = next;
+    this.getUIContext().animateTo({
+      duration: EXPAND_ANIM_MS,
+      curve: Curve.EaseOut
+    }, () => {
+      const next: number[] = this.expandedStepIds.slice();
+      const index: number = next.indexOf(taskId);
+      if (index >= 0) {
+        next.splice(index, 1);
+      } else {
+        next.push(taskId);
+      }
+      this.expandedStepIds = next;
+    });
   }
 
   // 说明：点圆圈（完成/退回）与拨「响铃提醒」开关这两个动作**已搬到 `TaskListStore`**
@@ -229,7 +243,8 @@ export struct A_TaskList {
 
                     if (this.hasSteps(task)) {
                       if (this.isStepsExpanded(task.id)) {
-                        // 展开态：完整副卡片
+                        // 展开态：完整副卡片。
+                        // 进场动画：从下方淡入 + 上移（`transition` 在组件创建/销毁时自动播放）
                         Column() {
                           TaskSubCard({
                             task: task,
@@ -240,8 +255,14 @@ export struct A_TaskList {
                         }
                         .width('100%')
                         .margin({ top: STACK_LAYER_OFFSET_VP })
+                        .transition(
+                          TransitionEffect.OPACITY
+                            .combine(TransitionEffect.move(TransitionEdge.BOTTOM))
+                            .animation({ duration: EXPAND_ANIM_MS, curve: Curve.EaseOut })
+                        )
                       } else {
-                        // 收起态：只露一条下边缘，宽度略窄 → 读作"底下压着一张小卡"
+                        // 收起态：只露一条下边缘，宽度略窄 → 读作「底下压着一张小卡」。
+                        // 同样带来回过渡，否则展开→收起时会"啪"地跳一下
                         Row()
                           .width(STACK_LAYER_WIDTH)
                           .height(STACK_LAYER_EDGE_VP)
@@ -252,6 +273,11 @@ export struct A_TaskList {
                           })
                           .margin({ top: STACK_LAYER_OFFSET_VP })
                           .accessibilityText($r('app.string.subcard_stacked_hint'))
+                          .transition(
+                            TransitionEffect.OPACITY
+                              .combine(TransitionEffect.move(TransitionEdge.BOTTOM))
+                              .animation({ duration: EXPAND_ANIM_MS, curve: Curve.EaseOut })
+                          )
                       }
                     }
                   }
