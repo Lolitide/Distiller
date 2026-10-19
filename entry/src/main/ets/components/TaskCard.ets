@@ -78,6 +78,8 @@ const TAG_CHIP_RADIUS_VP: number = 8;
 const PRIORITY_MARK: string = '!';
 /** 标识直径（vp）：与第二行行高同档，不撑高卡片 */
 const PRIORITY_BADGE_SIZE_VP: number = 14;
+/** 重要性占位圈的不透明度：够看出是个圈，又不至于抢眼（2026-10-19 第六次） */
+const PRIORITY_PLACEHOLDER_OPACITY: number = 0.28;
 /** 标识字号（vp）：圈内感叹号 */
 const PRIORITY_BADGE_FONT_SIZE: number = 10;
 /** 空心圈的描边宽度（vp） */
@@ -357,11 +359,20 @@ export struct TaskCard {
             .flexShrink(0)
         }
 
-        // ② 重要性标识：**固定槽，没有也占位**（作者：「如果没有预留空位」）
-        //    这样有无重要性都不影响后面截止文字的起点。
+        // ② 重要性标识：**固定槽，没有也占位**（作者：「如果没有预留空位」）。
+        //    2026-10-19 第六次：「尝试给任务重要性标识的占位使用一个半透明的灰色的圆圈」——
+        //    所以 0 档（普通）不再留白，画一个半透明灰圈，视觉上把"这一格是重要性"表达出来。
         Stack() {
           if (this.showPriorityBadge) {
             this.priorityBadge()
+          } else {
+            // 占位圈：灰底 + 低透明度，明显是"空位"而不是"没有内容"
+            Row()
+              .width(PRIORITY_BADGE_SIZE_VP)
+              .height(PRIORITY_BADGE_SIZE_VP)
+              .borderRadius(PRIORITY_BADGE_SIZE_VP / 2)
+              .backgroundColor($r('sys.color.icon_tertiary'))
+              .opacity(PRIORITY_PLACEHOLDER_OPACITY)
           }
         }
         .width(PRIORITY_BADGE_SIZE_VP)
