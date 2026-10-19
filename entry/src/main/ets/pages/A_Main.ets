@@ -6,6 +6,7 @@ import { MainTabBar } from '../components/MainTabBar';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { NAV_STACK_KEY, ROUTE_SEARCH } from '../viewmodel/TaskNavParams';
 import { TaskListStore } from '../viewmodel/TaskListStore';
+import { SettingsRepository } from '../repository/SettingsRepository';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'A_Main';
@@ -48,6 +49,23 @@ struct A_Main {
    */
   aboutToAppear(): void {
     AppStorage.setOrCreate<NavPathStack>(NAV_STACK_KEY, this.navPathStack);
+    this.syncRemindLead();
+  }
+
+  /**
+   * 把设置页的「提醒提前量」读进 store（2026-10-19）。
+   *
+   * 铃铛开关直接在列表卡片上改 `alarm`，而 `remindAt` 要按提前量算 —— 计算在
+   * `TaskListStore.setRemind` 里，它需要这个值。页签来回切会重新走 `aboutToAppear`，
+   * 所以用户改完设置回到列表时立刻生效。
+   */
+  private async syncRemindLead(): Promise<void> {
+    const context = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      return;
+    }
+    const minutes: number = await SettingsRepository.getRemindLead(context);
+    this.store.remindLeadMinutes = minutes;
   }
 
   @Computed

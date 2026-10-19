@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 设置页（一级页，底部页签第二个）。
  *
  * 分组依据（2026-10-19 重新排布）：
@@ -91,6 +91,8 @@ export struct A_Settings {
       return;
     }
     this.remindLead = await SettingsRepository.getRemindLead(context);
+    // 启动时把已存的提前量同步给 store，否则首次进列表时铃铛算不出 remindAt
+    this.store.remindLeadMinutes = this.remindLead;
     this.parseMode = await SettingsRepository.getParseMode(context);
   }
 
@@ -107,6 +109,9 @@ export struct A_Settings {
   /** 提醒提前量：先落内存（界面立刻变），再异步写盘 */
   private applyRemindLead(minutes: number): void {
     this.remindLead = minutes;
+    // 同步给 store：列表卡片的铃铛按它算 remindAt。
+    // （`A_Main.aboutToAppear` 只在启动时跑一次，页签切换不会重跑 → 不在这写就永远不生效）
+    this.store.remindLeadMinutes = minutes;
     const context: common.Context | undefined = this.hostContext();
     if (context !== undefined) {
       SettingsRepository.setRemindLead(context, minutes);
