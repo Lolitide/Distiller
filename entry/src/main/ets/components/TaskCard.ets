@@ -19,7 +19,7 @@
  */
 // ⚠️ 这里必须显式导入 HDS 的 `TextOptions`：ArkUI 在 `component/text.d.ts` 里也有一个**全局**同名接口，
 // 不导入就会解析到那个，赋给 HdsListItemCard 的 textItem 时报「no properties in common」。
-import { HdsListItemCard, PrefixCustomBuilder, SuffixSwitch } from '@kit.UIDesignKit';
+import { HdsListItemCard, PrefixCustomBuilder, SuffixCustomBuilder } from '@kit.UIDesignKit';
 import { Task, TaskAlarm, TaskPriority, TaskStatus } from '../model';
 import { TaskStatusIcon } from './TaskStatusIcon';
 import { TaskListStore } from '../viewmodel/TaskListStore';
@@ -42,13 +42,17 @@ const SECOND_LINE_HEIGHT_VP: number = 18;
 /** 第二行元素间距（vp） */
 const SECOND_LINE_GAP_VP: number = 6;
 /**
- * 标签胶囊最多显示几个，其余折成 `+n`。
- *
- * **取 1 而不是 2**：第二行要同时装「标签胶囊 + 重要性标识 + 截止信息 + 重复性标识」，
- * 而右侧还可能有「响铃提醒」开关（HDS 的 C 区，约占 126px）。实测显示 2 个胶囊时
- * 「已过期」「每周一、二、四」都会被截断（见 _shots 的对比截图），收敛到 1 个 + `+n` 后能完整显示。
+ * 卡片第二行「截止」列的**固定宽度**（vp）：2026-10-19 定。
+ * 定宽 + 右对齐 → 所有卡片的截止文案右边缘落在同一条竖线上，
+ * 不会因为「明天截止」和「10 天后截止」长短不同而左右跳动。
  */
-const TAG_CHIP_MAX: number = 1;
+const DUE_TEXT_WIDTH_VP: number = 72;
+/** 重复标识图标字号（vp）：第二行最后那个小图标 */
+const REPEAT_ICON_SIZE_VP: number = 16;
+/** 铃铛图标字号（vp） */
+const BELL_ICON_SIZE_VP: number = 20;
+/** 铃铛可点区域边长（vp）：官方最小可点 40 */
+const BELL_HIT_SIZE_VP: number = 40;
 /** 标签胶囊左右内边距（vp） */
 const TAG_CHIP_SIDE_PADDING_VP: number = 6;
 /** 标签胶囊上下内边距（vp） */
@@ -127,18 +131,42 @@ export struct TaskCard {
     return this.task.alarm === TaskAlarm.ON;
   }
 
-  /** 有提醒时间才给开关；没有就整个 C 区不显示 */
+  /**
+   * 右侧 C 区：**铃铛按钮**（2026-10-19 定：「每一项任务最右侧是是否启用提醒的铃铛按钮」）。
+   *
+   * 两处与旧实现的差别：
+   *  1. 旧的是 `SuffixSwitch` 开关，现在是**图标按钮**（点一下切 `alarm`）；
+   *  2. 旧的**只在 `remindAt` 有值时才显示**，现在**每一项都显示** ——
+   *     没设提醒时间的任务走「设置页的默认提醒通道」（提前量），所以铃铛永远有意义。
+   *
+   * 图标：开＝`bell`（强调色）、关＝`bell_slash`（次级色）。
+   * 用 `SuffixCustomBuilder` 自绘：官方 `SuffixIcon` 的选项里没有 `onClick`，点不动
+   * （与左侧圆圈同一个坑，左侧走的是 `PrefixCustomBuilder`）。
+   */
   @Computed
-  get remindSwitch(): SuffixSwitch | undefined {
-    if (this.task.remindAt === undefined) {
-      return undefined;
-    }
-    return new SuffixSwitch({
-      isCheck: this.remindOn,
-      onChange: (isOn: boolean) => {
-        this.onRemindChange(isOn);
-      }
+  get bellButton(): SuffixCustomBuilder {
+    return new SuffixCustomBuilder((): void => {
+      this.bellGlyph();
     });
+  }
+
+  /** 铃铛可点区域边长（vp）：官方最小可点 40，视觉 20、热区 40 */
+  @Builder
+  bellGlyph() {
+    SymbolGlyph(this.remindOn ? $r('sys.symbol.bell') : $r('sys.symbol.bell_slash'))
+      .fontSize(BELL_ICON_SIZE_VP)
+      .fontColor([this.remindOn
+        ? $r('sys.color.icon_emphasize')
+        : $r('sys.color.icon_tertiary')])
+      .width(BELL_HIT_SIZE_VP)
+      .height(BELL_HIT_SIZE_VP)
+      .onClick(() => {
+        // 点铃铛＝翻转用户意图（alarm 0/1）；真正的发布/撤销由 service/system 负责
+        this.onRemindChange(!this.remindOn);
+      })
+      .accessibilityText(this.remindOn
+        ? $r('app.string.card_bell_on')
+        : $r('app.string.card_bell_off'))
   }
 
   /** 卡片第二行：截止信息（`在 HH:mm 截止`）。没有到期时间就为空，不占位 */
@@ -154,8 +182,10 @@ export struct TaskCard {
   }
 
   /**
-   * 卡片第二行：标签胶囊的文本，**最多显示两个**，第三个起折成 `+n`。
-   * （字段表 §2：第二行依次是 标签胶囊 → 重要性标识 → 截止信息 → 重复性标识）
+   * 卡片第二行的标签胶囊：**只显示 1 个**（2026-10-19 定：「标签胶囊仅显示 1 个 tag，
+   * 不做多个的区分，所有的标签可以显示在详情页里」）。
+   * 因此**不再折出 `+n` 计数徽标** —— 那会看起来像"还有别的标签要区分"，与"只显示一个"的意图相反；
+   * 全部标签在详情页的 `TaskTagsCard` 里逐条列出。
    */
   @Computed
   get tagChipList(): string[] {
@@ -163,12 +193,7 @@ export struct TaskCard {
     if (tags === undefined || tags.length === 0) {
       return [];
     }
-    if (tags.length <= TAG_CHIP_MAX) {
-      return tags;
-    }
-    const head: string[] = tags.slice(0, TAG_CHIP_MAX);
-    head.push(`+${tags.length - TAG_CHIP_MAX}`);
-    return head;
+    return [tags[0]];
   }
 
   /** 重要性标识是否占位：**0（普通）不占位**，不是"显示一个普通样式" */
@@ -235,9 +260,9 @@ export struct TaskCard {
         .textAlign(TextAlign.Start)
 
       Row({ space: SECOND_LINE_GAP_VP }) {
-        // ① 标签胶囊
-        ForEach(this.tagChipList, (chip: string) => {
-          Text(chip)
+        // 左组：标签胶囊 + 重要性标识（2026-10-19：「视觉上留出首标签和重要性标识的位置」）
+        if (this.tagChipList.length > 0) {
+          Text(this.tagChipList[0])
             .fontSize($r('sys.float.ohos_id_text_size_caption'))
             .fontColor($r('sys.color.ohos_id_color_text_secondary'))
             .maxLines(1)
@@ -250,33 +275,39 @@ export struct TaskCard {
             .backgroundColor($r('sys.color.comp_background_secondary'))
             .borderRadius(TAG_CHIP_RADIUS_VP)
             .flexShrink(0)
-        }, (chip: string) => chip)
+        }
 
         // ② 重要性标识（图形）：0 不占位 / 1 红圈红叹 / 2 红实心圆白叹
         if (this.showPriorityBadge) {
           this.priorityBadge()
         }
 
-        // ③ 截止信息
+        // 弹性空白：把「截止」推到右侧定宽列
+        Blank()
+
+        // ③ 截止信息：**定宽 + 右对齐**（2026-10-19 定 72vp）。
+        //    定宽是为了让所有卡片的截止文案右边缘对齐、不因文字长短左右跳动；
+        //    `textAlign(End)` 保证"明天截止"和"10 天后截止"都贴右。
         if (this.dueLabel !== '') {
           Text(this.dueLabel)
             .fontSize($r('sys.float.ohos_id_text_size_body2'))
             .fontColor(this.textColor)
             .lineHeight(`${SECOND_LINE_HEIGHT_VP}vp`)
+            .width(DUE_TEXT_WIDTH_VP)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .flexShrink(1)
+            .textAlign(TextAlign.End)
+            .flexShrink(0)
         }
 
-        // ④ 重复性标识
+        // ④ 重复性标识：**最后一个小图标**（2026-10-19：「重复任务仅在最后添加一个重复标识」）。
+        //    完整规则文字（每周一、二、四）在详情页看，卡片上只留一个能看懂的符号。
         if (this.repeatLabel !== '') {
-          Text(this.repeatLabel)
-            .fontSize($r('sys.float.ohos_id_text_size_body2'))
-            .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-            .lineHeight(`${SECOND_LINE_HEIGHT_VP}vp`)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .flexShrink(1)
+          SymbolGlyph($r('sys.symbol.repeat'))
+            .fontSize(REPEAT_ICON_SIZE_VP)
+            .fontColor([$r('sys.color.icon_secondary')])
+            .accessibilityText(this.repeatLabel)
+            .flexShrink(0)
         }
       }
       .width('100%')
@@ -327,7 +358,8 @@ export struct TaskCard {
           this.textBlock();
         }
       },
-      suffixItem: this.remindSwitch,
+      // C 区：铃铛按钮（每一项都有，点它切 alarm）
+      suffixItem: this.bellButton,
       accessibilityOptions: {
         accessibilityText: this.accessibilityLabel
       }

@@ -525,6 +525,14 @@
       "value": "展开或收起步骤"
     },
     {
+      "name": "card_bell_on",
+      "value": "提醒已开启，点击关闭"
+    },
+    {
+      "name": "card_bell_off",
+      "value": "提醒已关闭，点击开启"
+    },
+    {
       "name": "settings_section_remind",
       "value": "提醒"
     },
