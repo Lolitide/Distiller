@@ -52,7 +52,12 @@ const SECOND_LINE_GAP_VP: number = 6;
  * tag 槽的固定宽度（vp）：约 4 个汉字 + 内边距。
  * 槽定宽是为了让后面的**重要性标识起点对齐**；胶囊本身仍按内容自适应。
  */
-const TAG_SLOT_WIDTH_VP: number = 64;
+/**
+ * 分隔点：第二行 tag 与后面内容之间的「·」（2026-10-19 第五次调整）。
+ * 用全角间隔号而不是空格，视觉上更明确地把「分类」和「时间」分开。
+ */
+const INTERPUNCT: string = '·';
+const TAG_SLOT_WIDTH_VP: number = 52;
 /** 重复标识图标字号（vp）：第二行最后那个小图标 */
 const REPEAT_ICON_SIZE_VP: number = 16;
 /** 重复图标槽宽度（vp）：**始终占位**，这样有无重复铃铛位置都不动 */
@@ -341,6 +346,16 @@ export struct TaskCard {
         .width(TAG_SLOT_WIDTH_VP)
         .justifyContent(FlexAlign.Start)
         .flexShrink(0)
+
+        // ①-b 分隔点「·」（2026-10-19 第五次调整：「尝试用 · 分隔」）。
+        //    放在 tag 槽之后；只有真的画了标签/类型才画点，否则整行会以孤零零一个点开头。
+        if (this.chipText !== '') {
+          Text(INTERPUNCT)
+            .fontSize($r('sys.float.ohos_id_text_size_caption'))
+            .fontColor($r('sys.color.ohos_id_color_text_tertiary'))
+            .maxLines(1)
+            .flexShrink(0)
+        }
 
         // ② 重要性标识：**固定槽，没有也占位**（作者：「如果没有预留空位」）
         //    这样有无重要性都不影响后面截止文字的起点。

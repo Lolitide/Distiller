@@ -49,6 +49,8 @@ const CARD_SIDE_MARGIN_VP: number = 16;
 const LONG_PRESS_MS: number = 500;
 /** 副卡片展开/收起动画时长（毫秒）：2026-10-19 与作者确认 220ms + EaseOut */
 const EXPAND_ANIM_MS: number = 220;
+/** 分组展开时卡片淡入的时长（毫秒）：比副卡片略短，避免整组一起动显得拖沓 */
+const GROUP_EXPAND_ANIM_MS: number = 180;
 
 @ComponentV2
 export struct A_TaskList {
@@ -212,7 +214,9 @@ export struct A_TaskList {
         if (this.store.visibleTasks(group).length > 0) {
           ListItemGroup({
             header: this.groupHeader(group),
-            spaceWidth: $r('sys.float.padding_level4')
+            // 卡片之间的间距（2026-10-19 第五次调整）：8vp → `Theme.LIST_ITEM_SPACE`(12vp)，
+            // 卡片压矮之后需要一点呼吸，否则会挤成一片
+            spaceWidth: Theme.LIST_ITEM_SPACE
           }) {
             if (group.expanded) {
               ForEach(this.store.visibleTasks(group), (task: Task) => {
@@ -263,7 +267,10 @@ export struct A_TaskList {
                       Column() {
                         if (this.isStepsExpanded(task.id)) {
                           // 展开态：完整副卡片。**宽度与收起态一致**，切换时宽度不跳。
-                          // 进场动画：从下方淡入 + 上移（`transition` 在组件创建/销毁时自动播放）
+                          // 动画（2026-10-19 第五次）：从**主卡片底下冒出来** ——
+                          //   · `move(TransitionEdge.TOP)` 让起点贴着主卡片下沿，向上展开；
+                          //     配合 `RESPONSE` 曲线做出"顶出来"的观感；
+                          //   · 加阴影，与主卡片形成层次。
                           Column() {
                             TaskSubCard({
                               task: task,
@@ -273,14 +280,20 @@ export struct A_TaskList {
                             })
                           }
                           .width(STACK_LAYER_WIDTH)
+                          .shadow({
+                            radius: Theme.SHADOW_RADIUS,
+                            color: Theme.SHADOW_COLOR,
+                            offsetX: 0,
+                            offsetY: Theme.SHADOW_OFFSET_Y
+                          })
                           .transition(
                             TransitionEffect.OPACITY
-                              .combine(TransitionEffect.move(TransitionEdge.BOTTOM))
-                              .animation({ duration: EXPAND_ANIM_MS, curve: Curve.EaseOut })
+                              .combine(TransitionEffect.move(TransitionEdge.TOP))
+                              .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
                           )
                         } else {
                           // 收起态：只露一条**很细**的下边缘线，读作「底下压着一张小卡」。
-                          // 同样带来回过渡，否则展开→收起时会"啪"地跳一下
+                          // 加阴影 → 与主卡片区分出层次（作者：「给隐藏在底下的副卡片增加阴影」）。
                           Row()
                             .width(STACK_LAYER_WIDTH)
                             .height(STACK_LAYER_EDGE_VP)
@@ -289,11 +302,17 @@ export struct A_TaskList {
                               bottomLeft: Theme.RADIUS_CARD,
                               bottomRight: Theme.RADIUS_CARD
                             })
+                            .shadow({
+                              radius: Theme.SHADOW_RADIUS,
+                              color: Theme.SHADOW_COLOR,
+                              offsetX: 0,
+                              offsetY: Theme.SHADOW_OFFSET_Y
+                            })
                             .accessibilityText($r('app.string.subcard_stacked_hint'))
                             .transition(
                               TransitionEffect.OPACITY
-                                .combine(TransitionEffect.move(TransitionEdge.BOTTOM))
-                                .animation({ duration: EXPAND_ANIM_MS, curve: Curve.EaseOut })
+                                .combine(TransitionEffect.move(TransitionEdge.TOP))
+                                .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
                             )
                         }
                       }
@@ -305,6 +324,14 @@ export struct A_TaskList {
                   }
                   .width('100%')
                   .alignItems(HorizontalAlign.Center)
+                  // 分组展开/收起时，这一组里的**每张卡片**也做淡入（2026-10-19 第五次：
+                  // 「为所有任务卡片展开时增加展开项的动画」）——
+                  // `transition` 在 ListItem 内容被创建/销毁时自动播放，组收起来就是反向。
+                  .transition(
+                    TransitionEffect.OPACITY
+                      .combine(TransitionEffect.move(TransitionEdge.TOP))
+                      .animation({ duration: GROUP_EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
+                  )
                 }
               }, (task: Task) => `${task.id}`)
             }

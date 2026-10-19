@@ -42,15 +42,31 @@ export class Theme {
   /* 可点热区（vp）：官方最小可点 40 */
   static readonly HIT_MIN: number = 40;
 
-  /* 卡片尺寸（vp）：密度档位不同取值不同，见 `cardHeight()` */
-  static readonly CARD_HEIGHT_STANDARD: number = 76;
-  static readonly CARD_HEIGHT_COMPACT: number = 64;
+  /*
+   * 卡片尺寸（vp）：密度档位不同取值不同，见 `cardHeight()`。
+   * 2026-10-19 第五次调整：整体压矮（标准 76→68、紧凑 64→58），
+   * 让上下留白变少、一屏能多看一条。
+   */
+  static readonly CARD_HEIGHT_STANDARD: number = 68;
+  static readonly CARD_HEIGHT_COMPACT: number = 58;
 
-  /* 列表项间距（vp） */
-  static readonly LIST_ITEM_SPACE: number = 8;
+  /* 列表项间距（vp）：2026-10-19 第五次调整 8→12，卡片之间适当留白 */
+  static readonly LIST_ITEM_SPACE: number = 12;
 
   /* 分组标题相对卡片的左内缩（vp） */
   static readonly SECTION_TITLE_INSET: number = 4;
+
+  /**
+   * 卡片阴影色（rgba 字面量）。
+   *
+   * 这是本文件**允许出现字面量**的又一处：`shadow()` 的 `color` 参数需要具体的
+   * `ResourceColor`，官方语义 token 里没有"卡片投影"这一档。
+   * 用在「压在主卡片底下、只露一条边的副卡片」上，让它和主卡片有层次区分。
+   */
+  static readonly SHADOW_COLOR: string = 'rgba(0, 0, 0, 0.16)';
+  /** 副卡片阴影参数（vp） */
+  static readonly SHADOW_RADIUS: number = 8;
+  static readonly SHADOW_OFFSET_Y: number = 2;
 }
 
 /* ─────────────────────────── 二、主题色档位 ─────────────────────────── */
