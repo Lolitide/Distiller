@@ -17,6 +17,7 @@
 import { Task, TaskPriority, TaskSource } from '../model';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 import { OptionPickerBody } from './OptionPickerBody';
+import { Theme } from '../utils/Theme';
 
 /** 圆形图标直径（vp） */
 const ICON_CIRCLE_SIZE_VP: number = 32;
@@ -36,6 +37,12 @@ const CLEAR_BUTTON_SIZE_VP: number = 40;
  * ArkTS 里把枚举当数字下标用属于容易踩的行为，写成分支最稳。
  */
 const PRIORITY_OPTIONS: string[] = ['普通', '重要', '紧急'];
+/** 三档分段按钮之间的间距（vp） */
+const SEGMENT_GAP_VP: number = Theme.GAP_S;
+/** 分段按钮高度（vp） */
+const SEGMENT_HEIGHT_VP: number = 32;
+/** 分段行与下方内容的下边距（vp） */
+const THEME_GAP_M: number = Theme.GAP_M;
 /** 来源通道五档：文案与 `SOURCE_VALUES` **一一对应**，改一边必须改另一边 */
 const SOURCE_OPTIONS: string[] = ['粘贴', '分享', '机器人', '语音', '手动'];
 const SOURCE_VALUES: TaskSource[] = [TaskSource.PASTE, TaskSource.SHARE, TaskSource.BOT, TaskSource.VOICE, TaskSource.MANUAL];
@@ -63,6 +70,21 @@ export struct TaskMetaCard {
   @Computed
   get priorityLabel(): ResourceStr {
     return TaskListViewModel.priorityLabel(this.task.priority);
+  }
+
+  /**
+   * 重要程度在**三档分段按钮**里的选中下标（0 普通 / 1 重要 / 2 紧急）。
+   * 与 `TaskPriority` 枚举值一致，但这里显式换算，不拿枚举当数组下标用。
+   */
+  @Computed
+  get priorityIndex(): number {
+    if (this.task.priority === TaskPriority.URGENT) {
+      return 2;
+    }
+    if (this.task.priority === TaskPriority.IMPORTANT) {
+      return 1;
+    }
+    return 0;
   }
 
   /**
@@ -258,6 +280,31 @@ export struct TaskMetaCard {
   }
 
   /**
+   * 一颗三档分段按钮。
+   *
+   * ⚠️ 与全项目同一条坑：`@Builder` 的**值参数不随状态刷新**。
+   * 所以 `selected` 由**调用点**读 `this.priorityIndex` 求值（外层重渲染时重新算），
+   * 不要指望传进来之后自己更新。
+   */
+  @Builder
+  segment(text: string, selected: boolean, onTap: () => void) {
+    Text(text)
+      .fontSize(Theme.FONT_BODY)
+      .fontColor(selected
+        ? $r('sys.color.ohos_id_color_text_primary_contrary')
+        : $r('sys.color.ohos_id_color_text_primary'))
+      .height(SEGMENT_HEIGHT_VP)
+      .padding({ left: Theme.GAP_M, right: Theme.GAP_M })
+      .backgroundColor(selected
+        ? $r('sys.color.ohos_id_color_emphasize')
+        : $r('sys.color.comp_background_secondary'))
+      .borderRadius(SEGMENT_HEIGHT_VP / 2)
+      .textAlign(TextAlign.Center)
+      .onClick(onTap)
+      .accessibilityText(text)
+  }
+
+  /**
    * 重要程度面板内容 —— **复用 `components/OptionPickerBody.ets`**（官方 `TextPicker` ＋ 共用底部条）。
    * 原来这里内联了一份 `TextPicker` + `sheetFooter`，与「添加任务」那边的面板各写一遍；
    * 按 `references/02-编码规约.md` §10 规则 3，长得像就必须是同一个组件。
@@ -303,7 +350,8 @@ export struct TaskMetaCard {
    */
   build() {
     Column() {
-      // ① 重要程度
+      // ① 重要程度：**三档内联分段按钮**（2026-10-19：「任务重要性可用三档按钮直接设置」，
+      //    不再开半模态 —— 三档的东西开弹窗属于模态滥用）
       Row() {
         Row() {
           this.iconCircle($r('sys.symbol.star'))
@@ -326,29 +374,27 @@ export struct TaskMetaCard {
         .layoutWeight(1)
         .height('100%')
         .alignItems(VerticalAlign.Center)
-        .onClick(() => {
-          // 重要程度：带标题的面板（抬头「设置重要程度」）
-          this.openPrioritySheet();
-        })
-
-        this.clearButton(() => {
-          this.clearPriority();
-        })
       }
       .width('100%')
       .height(ROW_HEIGHT_VP)
       .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
       .alignItems(VerticalAlign.Center)
-      .bindSheet(this.prioritySheetOpen, this.prioritySheet(), {
-        title: { title: $r('app.string.picker_title_priority') },
-        preferType: SheetType.CENTER,
-        height: SheetSize.FIT_CONTENT,
-        showClose: false,
-        dragBar: false,
-        onDisappear: () => {
-          this.prioritySheetOpen = false;
-        }
+
+      // 三档分段：普通 / 重要 / 紧急（整行铺开，点哪个就是哪个）
+      Row({ space: SEGMENT_GAP_VP }) {
+        ForEach(PRIORITY_OPTIONS, (label: string, index: number) => {
+          this.segment(label, this.priorityIndex === index, () => {
+            this.applyPriority(index);
+          })
+        }, (label: string, index: number) => `${label}-${index}`)
+      }
+      .width('100%')
+      .padding({
+        left: ROW_SIDE_PADDING_VP,
+        right: ROW_SIDE_PADDING_VP,
+        bottom: THEME_GAP_M
       })
+      .justifyContent(FlexAlign.Start)
 
       this.rowDivider()
 
