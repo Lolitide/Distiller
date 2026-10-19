@@ -115,7 +115,8 @@ export struct A_TaskList {
   private toggleSteps(taskId: number): void {
     this.getUIContext().animateTo({
       duration: EXPAND_ANIM_MS,
-      curve: Curve.EaseOut
+      // 与副卡内部 `.animation()` 用同一条曲线，展开/收起手感一致
+      curve: Curve.FastOutSlowIn
     }, () => {
       const next: number[] = this.expandedStepIds.slice();
       const index: number = next.indexOf(taskId);
@@ -148,7 +149,15 @@ export struct A_TaskList {
         pendingCount: this.store.visiblePendingCount(group),
         totalCount: this.store.visibleTasks(group).length,
         onToggle: () => {
-          group.expanded = !group.expanded;
+          // 2026-10-19 第七次：分组**收起**之前是"啪"地消失（只有展开有动画）。
+          // 包进 `animateTo` 后，组内卡片被移除时也会走 ListItem 上挂的 `transition`
+          // 反向播放（淡出 + 上移），展开/收起两个方向就都有动效了。
+          this.getUIContext().animateTo({
+            duration: GROUP_EXPAND_ANIM_MS,
+            curve: Curve.FastOutSlowIn
+          }, () => {
+            group.expanded = !group.expanded;
+          });
         }
       })
     }
