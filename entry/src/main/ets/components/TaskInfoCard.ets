@@ -21,6 +21,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Task, TaskLevel, TaskPriority, TASK_CATEGORY_PRESETS } from '../model';
 import { SegmentRow } from './SegmentRow';
+import { PopupSelector } from './PopupSelector';
 import { OptionPickerBody } from './OptionPickerBody';
 import { Theme } from '../utils/Theme';
 
@@ -272,16 +273,19 @@ export struct TaskInfoCard {
       // ① 重要性（可改）—— 与难易程度**同一张卡、同一行式**（2026-10-19 作者要求：
       //    「任务重要性、难易程度这俩放一块」，并且**不要**再与"来源"混在一张卡里）。
       //    标题 + 三档按钮**并排一行**，不再"上面显示当前值、下面再来一排按钮"。
+      //    2026-10-19 第二次调整：三档不再铺成按钮，改成**锚定浮窗**
+      //    （作者：「信息重要性的选项，改成图二所示的浮窗组件」）—— 点这一行弹选项、当前项打勾。
       Row({ space: Theme.GAP_M }) {
         this.rowLabel($r('app.string.info_priority'))
-        SegmentRow({
+        PopupSelector({
+          label: '',
+          value: PRIORITY_OPTIONS[this.priorityIndex],
           options: PRIORITY_OPTIONS,
           selectedIndex: this.priorityIndex,
           onSelect: (index: number) => {
             this.applyPriority(index);
           }
         })
-        Blank()
       }
       .width('100%')
       .height(ROW_HEIGHT_VP)
