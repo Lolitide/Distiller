@@ -33,6 +33,8 @@ import { Theme, ThemeStore } from '../utils/Theme';
 
 /** M3 对话框内边距（vp）：规范 24dp */
 const DIALOG_PADDING_VP: number = 24;
+/** 横向内边距（vp）：收窄到 16，给「年月日时分」五列滚轮腾地方 */
+const DIALOG_PADDING_H_VP: number = 16;
 /** M3 对话框圆角（vp）：shape scale 的 extra-large */
 const DIALOG_RADIUS_VP: number = 28;
 /** 对话框最小宽度（vp）：M3 规范 280dp */
@@ -51,9 +53,17 @@ export struct CenterDialogFrame {
     }
     .width('100%')
     .constraintSize({ minWidth: DIALOG_MIN_WIDTH_VP })
-    .padding(DIALOG_PADDING_VP)
+    .padding({
+      left: DIALOG_PADDING_H_VP,
+      right: DIALOG_PADDING_H_VP,
+      top: DIALOG_PADDING_VP,
+      bottom: DIALOG_PADDING_VP
+    })
     .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
     .borderRadius(DIALOG_RADIUS_VP)
+    // 内容再宽也不许画出圆角外：窄窗口下五列滚轮会撑破弹窗宽度，
+    // 加裁剪后只会被切在容器里，不会压在圆角外的背景上（作者图 3 箭头所指的那个现象）。
+    .clip(true)
   }
 }
 
