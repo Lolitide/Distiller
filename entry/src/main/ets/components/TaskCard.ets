@@ -23,7 +23,7 @@ import { HdsListItemCard, PrefixCustomBuilder, SuffixCustomBuilder } from '@kit.
 import { Task, TaskAlarm, TaskPriority, TaskStatus } from '../model';
 import { TaskStatusIcon } from './TaskStatusIcon';
 import { TaskListStore } from '../viewmodel/TaskListStore';
-import { DueParts, TaskListViewModel } from '../viewmodel/TaskListViewModel';
+import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 import { ThemeStore } from '../utils/Theme';
 
 /**
@@ -48,7 +48,11 @@ const SECOND_LINE_GAP_VP: number = 6;
  * 不会因为「明天截止」和「10 天后截止」长短不同而左右跳动。
  */
 /** 「XXX」槽宽度（vp）：定宽居中，14h / 3 天 / 已过期 都放得下 */
-const DUE_VALUE_WIDTH_VP: number = 48;
+/**
+ * tag 槽的固定宽度（vp）：约 4 个汉字 + 内边距。
+ * 槽定宽是为了让后面的**重要性标识起点对齐**；胶囊本身仍按内容自适应。
+ */
+const TAG_SLOT_WIDTH_VP: number = 64;
 /** 重复标识图标字号（vp）：第二行最后那个小图标 */
 const REPEAT_ICON_SIZE_VP: number = 16;
 /** 重复图标槽宽度（vp）：**始终占位**，这样有无重复铃铛位置都不动 */
@@ -214,14 +218,6 @@ export struct TaskCard {
   }
 
   /**
-   * 截止文案拆两段：`value` 进定宽居中槽、`suffix` 是固定的「后截止」。
-   * 拆开是为了让「后截止」三个字**永远落在同一横向位置**（2026-10-19 效果图）。
-   */
-  @Computed
-  get dueParts(): DueParts {
-    return TaskListViewModel.dueParts(this.task);
-  }
-
   /** 卡片第二行：重复性标识（`每周一、二、四`）。非周期任务为空 */
   @Computed
   get repeatLabel(): string {
@@ -319,24 +315,35 @@ export struct TaskCard {
         //    （作者：「截止时间不需要加边框，这样字号太小了」）。
         // ⑤ 重复图标已移到 C 区（铃铛左边），第二行不再有它。
 
-        // ① 标签 / 类型名
-        if (this.chipText !== '') {
-          Text(this.chipText)
-            .fontSize($r('sys.float.ohos_id_text_size_caption'))
-            .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-            .maxLines(1)
-            .padding({
-              left: TAG_CHIP_SIDE_PADDING_VP,
-              right: TAG_CHIP_SIDE_PADDING_VP,
-              top: TAG_CHIP_VERTICAL_PADDING_VP,
-              bottom: TAG_CHIP_VERTICAL_PADDING_VP
-            })
-            .backgroundColor($r('sys.color.comp_background_secondary'))
-            .borderRadius(TAG_CHIP_RADIUS_VP)
-            .flexShrink(0)
+        // ① 标签槽：**槽定宽、胶囊自身自适应**（2026-10-19 第四次调整）
+        //    作者原话：「tag 自身自适应，但 tag 占定宽位置，让重要性标识对齐」
+        //    —— 所以外面这层 Row 是固定宽度（保证后面重要性标识起点一致），
+        //    里面的胶囊按内容宽（2 字就是 2 字的宽），**左对齐**贴槽的起点。
+        //    标签过长时在槽内省略，不会把后面的内容顶开。
+        Row() {
+          if (this.chipText !== '') {
+            Text(this.chipText)
+              .fontSize($r('sys.float.ohos_id_text_size_caption'))
+              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .constraintSize({ maxWidth: TAG_SLOT_WIDTH_VP })
+              .padding({
+                left: TAG_CHIP_SIDE_PADDING_VP,
+                right: TAG_CHIP_SIDE_PADDING_VP,
+                top: TAG_CHIP_VERTICAL_PADDING_VP,
+                bottom: TAG_CHIP_VERTICAL_PADDING_VP
+              })
+              .backgroundColor($r('sys.color.comp_background_secondary'))
+              .borderRadius(TAG_CHIP_RADIUS_VP)
+          }
         }
+        .width(TAG_SLOT_WIDTH_VP)
+        .justifyContent(FlexAlign.Start)
+        .flexShrink(0)
 
-        // ② 重要性标识：**固定槽**（没有也占位）。0 档留空，1/2 档画红圈
+        // ② 重要性标识：**固定槽，没有也占位**（作者：「如果没有预留空位」）
+        //    这样有无重要性都不影响后面截止文字的起点。
         Stack() {
           if (this.showPriorityBadge) {
             this.priorityBadge()
@@ -346,22 +353,13 @@ export struct TaskCard {
         .height(PRIORITY_BADGE_SIZE_VP)
         .flexShrink(0)
 
-        // ③「XXX」定宽居中（今天 / 明天 / 后天 / 3 天 / 14h / 已过期）
-        Text(this.dueParts.value)
+        // ③ 截止文字：**整体自然显示**（作者：「后面的所有字（已过期 / 未定时 /
+        //    xxx 后截止）直接显示就行」）—— 不再拆「XXX + 后截止」两段、也不再定宽居中。
+        Text(this.dueLabel)
           .fontSize($r('sys.float.ohos_id_text_size_body2'))
           .fontColor(this.textColor)
           .maxLines(1)
-          .textAlign(TextAlign.Center)
-          .width(DUE_VALUE_WIDTH_VP)
-          .flexShrink(0)
-
-        // ④「后截止」固定文本；已过期/未定时间时为空
-        Text(this.dueParts.suffix)
-          .fontSize($r('sys.float.ohos_id_text_size_body2'))
-          .fontColor(this.textColor)
-          .maxLines(1)
-          .textAlign(TextAlign.Start)
-          .flexShrink(0)
+          .flexShrink(1)
 
         // 右侧弹性空白：剩下的空间留给 C 区（重复槽 + 铃铛）
         Blank()
