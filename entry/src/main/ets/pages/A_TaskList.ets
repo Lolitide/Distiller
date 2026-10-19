@@ -272,17 +272,17 @@ export struct A_TaskList {
                     )
 
                     if (this.hasSteps(task)) {
-                      // 副卡片：**始终是同一张卡**，不再用"细边线 ↔ 完整卡"两个组件互换
-                      // （作者 2026-10-19：「半展开的和真正的其实是两个东西」）。
+                      // 副卡片：**始终是同一张卡**（作者：「半展开的和真正的其实是两个东西」）。
                       //
-                      // 做法：外层容器裁剪 + 高度动画，副卡**贴容器底部**摆放。
-                      //   · 收起：容器高 6vp → 只露出副卡**最下面那一条**，像从主卡底下探出来；
-                      //   · 展开：容器涨到副卡自身高度 → 整张卡滑出来；
-                      //   · 因为副卡始终贴底、容器从主卡下沿开始长高，看上去就是
-                      //     **副卡一直在主卡底下，被主卡压着慢慢滑出来**。
-                      // 阴影按作者反馈去掉（「莫名其妙地边框阴影」）。
+                      // 2026-10-19 第七次修正：上一版只让**容器高度**变，副卡自己贴底不动，
+                      // 观感是"被裁短了"而不是"滑出来"（作者：「副卡的位置不带动的」）。
+                      // 现在让**两个量同时动**：
+                      //   · 外层容器高度：6vp ↔ 36vp（裁切窗口）
+                      //   · 副卡 translateY：-(36-6) ↔ 0（它自己从主卡底下往上顶 / 往下沉）
+                      // 两者同步 → 副卡的**位置真的在动**，从主卡底下滑出来。
+                      // 阴影按作者反馈已去掉（「莫名其妙地边框阴影」）。
                       //
-                      // ⚠️ 宽度：百分比是相对**父容器**（整屏 1320px）算的，直接写 92% 会比主卡还宽
+                      // ⚠️ 宽度：百分比相对**父容器**（整屏 1320px）算，直接写 92% 会比主卡还宽
                       //   （实测 1214px vs 1208px）。所以先左右各缩进 16vp（与主卡留白一致）再取 92%。
                       Column() {
                         Column() {
@@ -294,15 +294,19 @@ export struct A_TaskList {
                           })
                         }
                         .width(STACK_LAYER_WIDTH)
-                        // 贴底：容器变矮时留下的是副卡的**下边缘**
-                        .justifyContent(FlexAlign.End)
+                        // 收起时把副卡整体上推 (36-6)=30vp，只留最下面一条在裁切窗口里
+                        .translate({
+                          y: this.isStepsExpanded(task.id)
+                            ? 0
+                            : -(SUB_CARD_FULL_HEIGHT_VP - STACK_LAYER_EDGE_VP)
+                        })
+                        .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
                       }
                       .width('100%')
                       .padding({ left: CARD_SIDE_MARGIN_VP, right: CARD_SIDE_MARGIN_VP })
                       .height(this.isStepsExpanded(task.id) ? SUB_CARD_FULL_HEIGHT_VP : STACK_LAYER_EDGE_VP)
                       .clip(true)
                       .alignItems(HorizontalAlign.Center)
-                      // 高度变化即"滑出来/收回去"的动画
                       .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
                       .accessibilityText($r('app.string.subcard_stacked_hint'))
                     }
