@@ -1,4 +1,4 @@
-import { HdsNavigation, HdsNavigationMenuContentOptions } from '@kit.UIDesignKit';
+import { HdsNavigation, HdsNavigationMenuContentOptions, HdsNavigationTitleMode } from '@kit.UIDesignKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AddTaskSheet, addTaskSheetOptions } from '../components/AddTaskSheet';
@@ -20,6 +20,13 @@ struct A_Main {
    * 一路透传 `MainTabBar → A_TaskList` 给 `List` 用，再交给 `HdsNavigation.bindToScrollable`。
    */
   private taskListScroller: Scroller = new Scroller();
+
+  /**
+   * 设置页的 Scroller：**必须也绑到 indToScrollable**。
+   * 不绑的话，导航栏的大标题只在任务列表里跟着收缩；切到设置页滚动时
+   * 标题会**原样压在内容上**（实测：滑到中间时「设置」两个大字盖住「提醒提前量」卡片）。
+   */
+  private settingsScroller: Scroller = new Scroller();
   /**
    * 任务列表的「数据 ＋ 编辑态」store：页面持有、按引用透传（`@ObservedV2` 必须 `new` 出来才可观测）。
    * 编辑态要同时被导航栏（取消/全选）、底部悬浮栏（添加↔删除）、每张卡片（圆圈↔方框勾选框）读到，
@@ -162,6 +169,7 @@ struct A_Main {
       // 底部页签栏（HdsTabs 容器 + 两个页签 + 悬浮样式 + 迷你栏）整个在 components/MainTabBar.ets 里
       MainTabBar({
         scroller: this.taskListScroller,
+        settingsScroller: this.settingsScroller,
         store: this.store,
         onIndexChange: (index: number) => {
           this.currentIndex = index;
@@ -179,7 +187,11 @@ struct A_Main {
     // 官方原文：「6.0.0(20)及以上版本，推荐使用 bindToScrollable、bindToNestedScrollable 属性绑定导航组件和
     // 可滚动容器组件后，再使用导航组件滚动相关的功能，从而获得更优的体验」；
     // `HdsNavigationTitleMode.FREE` 的官方说明也写着「推荐搭配 bindToScrollable/bindToNestedScrollable 体验更佳的联动效果」。
-    .bindToScrollable([this.taskListScroller])
+    .bindToScrollable([this.taskListScroller, this.settingsScroller])
+    // 设置页用**小标题**：它在 FREE（大标题）下没有可靠的滚动联动，
+    // 实测滚到中间时「设置」两个大字会直接压在卡片上（任务列表没这问题）。
+    // 任务列表保持 FREE（大标题 + 跟手收缩）。
+    .titleMode(this.currentIndex === 0 ? HdsNavigationTitleMode.FREE : HdsNavigationTitleMode.MINI)
     .hideBackButton(true)
     .titleBar({
       style: MainTitleBar.STYLE,

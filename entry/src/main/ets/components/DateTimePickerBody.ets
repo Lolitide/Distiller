@@ -88,8 +88,26 @@ export struct DateTimePickerBody {
   /** 点「确定」 */
   @Event onConfirm: () => void = () => {};
 
-  /** 输入框里的文本（切到输入模式时由当前选择回填） */
+  /** 输入框里的文本：与 `selected` 双向同步 */
   @Local inputText: string = '';
+
+  /**
+   * 监听外部草稿变化 → 回填输入框。
+   *
+   * ⚠️ 为什么不能用「在滚轮 onChange 里调一次 sync」：`onChange` 里刚发出的
+   * `onSelectedChange(新值)` 要等父组件重渲染才会变成新的 `this.selected`，
+   * 此时读到的还是**旧值** —— 实测出现过「输入框 18:14、滚轮 18:15」差一分钟的错位。
+   * `@Monitor` 在 `selected` 真正变化后才回调，时序是对的（V2 官方做法）。
+   */
+  @Monitor('selected')
+  onSelectedChanged(): void {
+    this.syncInputText();
+  }
+
+  /** 面板首次出现时也回填一次，两处从同一个值起步 */
+  aboutToAppear(): void {
+    this.syncInputText();
+  }
 
   build() {
     Column() {
@@ -136,7 +154,6 @@ export struct DateTimePickerBody {
         .onDateChange((value: Date) => {
           // 只取日期部分，时分保留草稿里的（DatePicker 回来的 Date 带的是系统时分）
           this.onSelectedChange(mergeDatePart(value, this.selected));
-          this.syncInputText();
         })
 
       TimePicker({ selected: this.selected })
@@ -144,7 +161,6 @@ export struct DateTimePickerBody {
         .width('100%')
         .onChange((value: TimePickerResult) => {
           this.onSelectedChange(mergeTimePart(this.selected, value.hour, value.minute));
-          this.syncInputText();
         })
 
       // 底部「取消 / 确定」与单列文本面板共用同一个组件（不各写一份）
@@ -158,10 +174,7 @@ export struct DateTimePickerBody {
       })
     }
     .width('100%')
-    .onAppear(() => {
-      // 面板一打开就把当前选择回填进输入框，两处从同一个值起步
-      this.syncInputText();
-    })
+
   }
 
   /** 把当前草稿同步成输入框文本（滚轮改动后调用，实现双向「指哪改哪」） */

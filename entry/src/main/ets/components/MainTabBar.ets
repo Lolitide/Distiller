@@ -70,6 +70,8 @@ export struct MainTabBar {
    * 外层还要用它 `bindToScrollable`（标题栏跟手的前提），所以必须是同一个对象。
    */
   @Require @Param scroller: Scroller;
+  /** 设置页的 Scroller（同上，给 indToScrollable 用，让大标题在设置页也跟手收缩） */
+  @Require @Param settingsScroller: Scroller;
   /** 任务列表的「数据 ＋ 编辑态」store（页面持有、按引用共享）：底部这颗按钮按它切「添加 / 删除」 */
   @Require @Param store: TaskListStore;
   /** 当前页签下标，报给外层：标题栏按钮要按页签变（任务列表＝编辑+搜索；设置＝关于） */
@@ -223,7 +225,7 @@ export struct MainTabBar {
 
         TabContent() {
           // 设置页要 store 只为一件事：「清空全部任务」。其余设置项与本机任务数据无关
-          A_Settings({ store: this.store })
+          A_Settings({ store: this.store, scroller: this.settingsScroller })
         }
         .tabBar(SETTINGS_TAB)
       }
