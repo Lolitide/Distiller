@@ -1,4 +1,6 @@
 import { HdsNavigation, HdsNavigationMenuContentOptions, HdsNavigationTitleMode } from '@kit.UIDesignKit';
+import { common } from '@kit.AbilityKit';
+import { ThemeStore } from '../utils/Theme';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AddTaskSheet, addTaskSheetOptions } from '../components/AddTaskSheet';
@@ -49,6 +51,9 @@ struct A_Main {
    */
   @Local addSheetShown: boolean = false;
 
+  /** 视觉个性化：M3 色系（页面底色取 surface） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
+
   /**
    * 把导航栈放进 `AppStorage`：点卡片进详情这件事发生在 `A_TaskList`（以及搜索页的 `B_Search`）里，
    * 官方《Navigation 页面路由》的方式一就是「使用 AppStorage 存储与获取」——
@@ -57,6 +62,29 @@ struct A_Main {
   aboutToAppear(): void {
     AppStorage.setOrCreate<NavPathStack>(NAV_STACK_KEY, this.navPathStack);
     this.syncRemindLead();
+    this.syncTheme();
+  }
+
+  /**
+   * 把持久化的**主题色与卡片密度**读回 `ThemeStore`（2026-10-19）。
+   *
+   * ⚠️ 必须放在**根页面**而不是设置页：`ThemeStore` 是内存态，用户上次选的橙色
+   * 重启后要靠这里恢复。只写在 `A_Settings.aboutToAppear` 里的话，
+   * 用户停在任务列表页时根本不会执行 → 主题永远是默认蓝（实测踩过）。
+   */
+  private async syncTheme(): Promise<void> {
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      return;
+    }
+    const accent: number = await SettingsRepository.getThemeAccent(context, this.themeStore.accentIndex);
+    const density: number = await SettingsRepository.getDensity(context, this.themeStore.density);
+    if (accent !== this.themeStore.accentIndex) {
+      this.themeStore.accentIndex = accent;
+    }
+    if (density !== this.themeStore.density) {
+      this.themeStore.density = density;
+    }
   }
 
   /**
@@ -208,6 +236,9 @@ struct A_Main {
     // **内容与选项都不在这里**：`AddTaskSheet()` 是内容、`addTaskSheetOptions()` 是挡位/标题/关闭按钮，
     // 两者都在 `components/AddTaskSheet.ets` 里（组件化约定见 `references/02-编码规约.md` §10 规则 5）。
     .bindSheet(this.addSheetShown!!, this.addTaskSheet(), addTaskSheetOptions())
+    // M3（2026-10-19）：页面底色 = `surface` —— 很淡、带一丝主题色；
+    // 卡片用 `surface-container-low`（tone 更低一档），层次靠色调表达而不是描边/重阴影。
+    .backgroundColor(this.themeStore.scheme.surface)
     .width('100%')
     .height('100%')
   }

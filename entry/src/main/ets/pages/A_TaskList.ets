@@ -376,5 +376,9 @@ export struct A_TaskList {
     }
     .width('100%')
     .height('100%')
+    // M3（2026-10-19）：内容区底色 = `surface`。
+    // 设在 `A_Main` 的 HdsNavigation 上会被 HDS 自己的背景盖住（实测页面仍是冷灰），
+    // 所以必须落在**真正铺满视口的这一层**上，卡片才能和它形成「深一档」的层次。
+    .backgroundColor(this.themeStore.scheme.surface)
   }
 }

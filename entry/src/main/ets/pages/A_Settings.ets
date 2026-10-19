@@ -123,6 +123,9 @@ export struct A_Settings {
     this.remindLead = await SettingsRepository.getRemindLead(context);
     this.parseMode = await SettingsRepository.getParseMode(context);
     this.store.remindLeadMinutes = this.remindLead;
+    // 视觉效果持久化（2026-10-19）：主题色与卡片密度重启后要记住
+    this.themeStore.accentIndex = await SettingsRepository.getThemeAccent(context, this.themeStore.accentIndex);
+    this.themeStore.density = await SettingsRepository.getDensity(context, this.themeStore.density);
   }
 
   /* ── 文案 ── */
@@ -164,6 +167,24 @@ export struct A_Settings {
     const context: common.Context | undefined = this.hostContext();
     if (context !== undefined) {
       SettingsRepository.setRemindLead(context, minutes);
+    }
+  }
+
+  /** 切换主题色：先改内存（界面立刻变色），再异步落盘 */
+  private applyAccent(index: number): void {
+    this.themeStore.accentIndex = index;
+    const context: common.Context | undefined = this.hostContext();
+    if (context !== undefined) {
+      SettingsRepository.setThemeAccent(context, index);
+    }
+  }
+
+  /** 切换卡片密度：同上 */
+  private applyDensity(index: number): void {
+    this.themeStore.density = index;
+    const context: common.Context | undefined = this.hostContext();
+    if (context !== undefined) {
+      SettingsRepository.setDensity(context, index);
     }
   }
 
@@ -353,7 +374,7 @@ export struct A_Settings {
         options: DENSITY_OPTIONS,
         selectedIndex: this.themeStore.density,
         onSelect: (index: number) => {
-          this.themeStore.density = index;
+          this.applyDensity(index);
         }
       })
     }
@@ -392,7 +413,7 @@ export struct A_Settings {
               Row()
                 .width(ACCENT_DOT_SIZE_VP - ACCENT_SELECT_RING_VP * 2)
                 .height(ACCENT_DOT_SIZE_VP - ACCENT_SELECT_RING_VP * 2)
-                .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+                .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
                 .borderRadius((ACCENT_DOT_SIZE_VP - ACCENT_SELECT_RING_VP * 2) / 2)
                 .transition(TransitionEffect.OPACITY.animation({ duration: 150 }))
             }
@@ -400,7 +421,7 @@ export struct A_Settings {
           .width(Theme.HIT_MIN)
           .height(Theme.HIT_MIN)
           .onClick(() => {
-            this.themeStore.accentIndex = index;
+            this.applyAccent(index);
           })
           .accessibilityText(option.label)
         }, (option: AccentOption, index: number) => `${option.label}-${index}`)
@@ -427,7 +448,7 @@ export struct A_Settings {
           this.densityRow()
         }
         .width('100%')
-        .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
         .borderRadius(Theme.RADIUS_CARD)
         .clip(true)
 
@@ -448,7 +469,7 @@ export struct A_Settings {
           })
         }
         .width('100%')
-        .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
         .borderRadius(Theme.RADIUS_CARD)
         .clip(true)
 
@@ -466,7 +487,7 @@ export struct A_Settings {
           this.infoRow('订阅消息管理', '未接入')
         }
         .width('100%')
-        .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
         .borderRadius(Theme.RADIUS_CARD)
         .clip(true)
 
@@ -486,7 +507,7 @@ export struct A_Settings {
           })
         }
         .width('100%')
-        .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
         .borderRadius(Theme.RADIUS_CARD)
         .clip(true)
 
@@ -517,7 +538,7 @@ export struct A_Settings {
           this.infoRow($r('app.string.settings_cloud_off'), '')
         }
         .width('100%')
-        .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
         .borderRadius(Theme.RADIUS_CARD)
         .clip(true)
 
@@ -533,7 +554,7 @@ export struct A_Settings {
           this.infoRow('隐私说明', '未接入')
         }
         .width('100%')
-        .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
         .borderRadius(Theme.RADIUS_CARD)
         .clip(true)
 
@@ -546,6 +567,8 @@ export struct A_Settings {
     }
     .width('100%')
     .height('100%')
+    // M3：设置页底色同样是 `surface`（与任务列表一致）
+    .backgroundColor(this.themeStore.scheme.surface)
     .scrollBar(BarState.Off)
     .align(Alignment.Top)
     .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
