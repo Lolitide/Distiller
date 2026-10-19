@@ -104,7 +104,7 @@ export struct TaskSubCard {
         : $r('sys.symbol.circle'))
         .fontSize(STEP_CIRCLE_SIZE_VP)
         .fontColor([this.currentStep !== undefined && this.currentStep.done === 1
-          ? $r('sys.color.icon_emphasize')
+          ? this.themeStore.scheme.primary
           : $r('sys.color.icon_secondary')])
         .margin({ right: STEP_ICON_GAP_VP })
         .onClick(() => {

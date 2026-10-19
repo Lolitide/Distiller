@@ -293,12 +293,12 @@ export struct TaskMetaCard {
     Text(text)
       .fontSize(Theme.FONT_BODY)
       .fontColor(selected
-        ? $r('sys.color.ohos_id_color_text_primary_contrary')
+        ? this.themeStore.scheme.onPrimary
         : $r('sys.color.ohos_id_color_text_primary'))
       .height(SEGMENT_HEIGHT_VP)
       .padding({ left: Theme.GAP_M, right: Theme.GAP_M })
       .backgroundColor(selected
-        ? $r('sys.color.ohos_id_color_emphasize')
+        ? this.themeStore.scheme.primary
         : $r('sys.color.comp_background_secondary'))
       .borderRadius(SEGMENT_HEIGHT_VP / 2)
       .textAlign(TextAlign.Center)

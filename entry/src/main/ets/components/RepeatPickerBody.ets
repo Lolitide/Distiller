@@ -1,3 +1,4 @@
+import { ThemeStore } from '../utils/Theme';
 /*
  * 重复规则面板（`bindSheet` 的 body）：**档位 ＋ 星期多选 ＋ 间隔**。
  *
@@ -25,6 +26,9 @@ const WEEKDAY_MAX: number = 7;
 
 @ComponentV2
 export struct RepeatPickerBody {
+  /** 视觉个性化：M3 色系（全局 MD3 化，2026-10-19） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
+
   /** 档位文案（**已经是字符串**：`TextPicker.range` 只吃字符串数组） */
   @Require @Param options: string[];
   /** 当前草稿档位 */
@@ -108,14 +112,14 @@ export struct RepeatPickerBody {
     Text(this.weekdayLabel(day))
       .fontSize($r('sys.float.ohos_id_text_size_body2'))
       .fontColor(this.isPicked(day)
-        ? $r('sys.color.ohos_id_color_text_primary_contrary')
+        ? this.themeStore.scheme.onPrimary
         : $r('sys.color.ohos_id_color_text_primary'))
       .width(WEEKDAY_CHIP_SIZE_VP)
       .height(WEEKDAY_CHIP_SIZE_VP)
       .textAlign(TextAlign.Center)
       .borderRadius(WEEKDAY_CHIP_SIZE_VP / 2)
       .backgroundColor(this.isPicked(day)
-        ? $r('sys.color.ohos_id_color_emphasize')
+        ? this.themeStore.scheme.primary
         : $r('sys.color.comp_background_secondary'))
       .onClick(() => {
         this.toggleDay(day);

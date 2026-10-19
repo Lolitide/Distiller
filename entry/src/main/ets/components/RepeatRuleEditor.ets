@@ -1,3 +1,4 @@
+import { ThemeStore } from '../utils/Theme';
 /*
  * 周期规则编辑器（半模态内容）。
  *
@@ -90,6 +91,9 @@ const EDITOR_MAX_HEIGHT_VP: number = 420;
 
 @ComponentV2
 export struct RepeatRuleEditor {
+  /** 视觉个性化：M3 色系（全局 MD3 化，2026-10-19） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
+
   /** 进来时要回填的规则（没有就传 undefined） */
   @Param initialRule: RepeatRule | undefined = undefined;
   @Event onCancel: () => void = () => {};
@@ -250,12 +254,12 @@ export struct RepeatRuleEditor {
     Text(text)
       .fontSize(Theme.FONT_BODY)
       .fontColor(selected
-        ? $r('sys.color.ohos_id_color_text_primary_contrary')
+        ? this.themeStore.scheme.onPrimary
         : $r('sys.color.ohos_id_color_text_primary'))
       .height(SEGMENT_HEIGHT_VP)
       .padding({ left: Theme.GAP_M, right: Theme.GAP_M })
       .backgroundColor(selected
-        ? $r('sys.color.ohos_id_color_emphasize')
+        ? this.themeStore.scheme.primary
         : $r('sys.color.comp_background_secondary'))
       .borderRadius(SEGMENT_HEIGHT_VP / 2)
       .textAlign(TextAlign.Center)
@@ -269,14 +273,14 @@ export struct RepeatRuleEditor {
     Text(label)
       .fontSize(Theme.FONT_BODY)
       .fontColor(this.weekdays.indexOf(day) >= 0
-        ? $r('sys.color.ohos_id_color_text_primary_contrary')
+        ? this.themeStore.scheme.onPrimary
         : $r('sys.color.ohos_id_color_text_primary'))
       .width(Theme.HIT_MIN)
       .height(Theme.HIT_MIN)
       .textAlign(TextAlign.Center)
       .borderRadius(Theme.HIT_MIN / 2)
       .backgroundColor(this.weekdays.indexOf(day) >= 0
-        ? $r('sys.color.ohos_id_color_emphasize')
+        ? this.themeStore.scheme.primary
         : $r('sys.color.comp_background_secondary'))
       .onClick(() => {
         this.toggleWeekday(day);
@@ -338,7 +342,7 @@ export struct RepeatRuleEditor {
                 if (this.frequency === option.value) {
                   SymbolGlyph($r('sys.symbol.checkmark'))
                     .fontSize(Theme.FONT_BODY)
-                    .fontColor([$r('sys.color.icon_emphasize')])
+                    .fontColor([this.themeStore.scheme.primary])
                     .transition(TransitionEffect.OPACITY.animation({ duration: 120 }))
                 }
               }
@@ -440,7 +444,7 @@ export struct RepeatRuleEditor {
           })
         Text('确定')
           .fontSize(Theme.FONT_TITLE)
-          .fontColor($r('sys.color.ohos_id_color_emphasize'))
+          .fontColor(this.themeStore.scheme.primary)
           .layoutWeight(1)
           .height('100%')
           .textAlign(TextAlign.Center)

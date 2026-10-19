@@ -1,5 +1,6 @@
 import { HdsNavigation, HdsNavigationMenuContentOptions, HdsNavigationTitleMode } from '@kit.UIDesignKit';
 import { common } from '@kit.AbilityKit';
+import { window } from '@kit.ArkUI';
 import { ThemeStore } from '../utils/Theme';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -63,6 +64,34 @@ struct A_Main {
     AppStorage.setOrCreate<NavPathStack>(NAV_STACK_KEY, this.navPathStack);
     this.syncRemindLead();
     this.syncTheme();
+    this.applyWindowTheme();
+  }
+
+  /**
+   * **全屏沉浸**：把窗口背景色也设成 M3 `surface`（2026-10-19）。
+   *
+   * 为什么单靠 `expandSafeArea` 不够：`HdsNavigation` 内部会按安全区裁剪，
+   * 页面底色铺不到**状态栏**和**底部导航条**底下，那两个位置露出的仍是窗口默认白，
+   * 与暖色页面拼成一道白条（作者标注截图里箭头指的就是这两条）。
+   * 直接把**窗口背景色**设成同一个 `surface`，系统栏区域就有了同样的底色。
+   */
+  private async applyWindowTheme(): Promise<void> {
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      return;
+    }
+    try {
+      const win: window.Window = await window.getLastWindow(context);
+      await win.setWindowBackgroundColor(this.themeStore.scheme.surface);
+    } catch (error) {
+      // 设不上就算了：只少了沉浸底色，不影响功能
+    }
+  }
+
+  /** 主题色一变，窗口底色跟着换（否则切主题后系统栏处还是旧色） */
+  @Monitor('themeStore.accentIndex')
+  onAccentChanged(): void {
+    this.applyWindowTheme();
   }
 
   /**
@@ -239,6 +268,11 @@ struct A_Main {
     // M3（2026-10-19）：页面底色 = `surface` —— 很淡、带一丝主题色；
     // 卡片用 `surface-container-low`（tone 更低一档），层次靠色调表达而不是描边/重阴影。
     .backgroundColor(this.themeStore.scheme.surface)
+    // **全屏沉浸**（作者 2026-10-19）：让 `surface` 铺到状态栏与导航条底下，
+    // 而不是在顶部/底部留出系统默认的白条 —— 那样会和页面底色拼出一道色块。
+    // `expandSafeArea` 只扩展绘制区域，系统栏图标仍然悬浮在上面（内容不会被挡：
+    // 标题栏自身有 safe-area 内边距，列表底部也有 `contentEndOffset`）。
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     .width('100%')
     .height('100%')
   }
