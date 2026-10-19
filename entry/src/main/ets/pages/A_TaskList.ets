@@ -186,6 +186,9 @@ export struct A_TaskList {
     }
     .width('100%')
     .height('100%')
+    // 任务列表**不显示滚动条**（2026-10-19 定）。不设的话系统给默认滚动条，
+    // 在悬浮页签栏旁边会多出一条竖线。
+    .scrollBar(BarState.Off)
     // 让开悬浮页签栏的高度，否则最后一张卡片会被栏压住（见 LIST_BOTTOM_CLEARANCE_VP 的来历）
     .contentEndOffset(LIST_BOTTOM_CLEARANCE_VP)
   }
