@@ -287,17 +287,19 @@ export struct MainTabBar {
       .barFloatingStyle({
         barWidth: { smallWidth: 200, mediumWidth: 300, largeWidth: 400 },
         barBottomMargin: BAR_BOTTOM_MARGIN,
-        // ⚠️ 示例的 mask 是 '#66F1F3F5'（40% 透明）。官方 token 只有不透明的
-        // `ohos_id_color_sub_background`(#fff1f3f5) 和全透明的 `..._transparent`(#00ffffff)，
-        // 没有 40% 那一档。为了「质感和官方一致」这里保留示例的字面值（已知偏离「不许裸色值」的约定）。
-        gradientMask: {
-          maskColor: this.barMaskColor,
-          maskHeight: 92
-        },
-        systemMaterialEffect: {
-          materialType: hdsMaterial.MaterialType.IMMERSIVE,
-          materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
-        },
+        // **2026-10-19 全局 MD3 + 全屏沉浸**：这里原来有两样东西，都与"跟主题色走"互斥，
+        // 已一并关掉：
+        //
+        // ① `gradientMask`（`maskHeight: 92`）—— 在屏幕底部铺 40% 的半透明遮罩。
+        //    它就是作者箭头指的那条**浅色带**：遮罩色与页面 `surface` 不同色，
+        //    叠出来的条带在整个暖色页面上非常明显。M3 不用渐变遮罩表达层次，
+        //    所以直接去掉，让页面底色一路铺到屏幕底。
+        //
+        // ② `systemMaterialEffect: IMMERSIVE` —— 系统毛玻璃材质。
+        //    材质是系统定色，会**盖掉**我们按主题算的底色，暖色主题下页签栏永远偏冷。
+        //    M3 用"色调表面"表达层级，不用系统材质，所以也去掉；
+        //    页签栏底色改由下面 `.backgroundColor(scheme.surfaceContainer)` 显式给。
+        //    （代价：失去官方毛玻璃质感 —— 这是"全局 MD3"必然的取舍，作者已确认要做 M3。）
         // 右侧借它占位并**由它渲染那颗圆钮**（见文件头 ②③）：
         // · miniBarStyle 用 COLLAPSE —— 与页签栏互补，页签栏才是「图标 + 文字」的完整药丸；
         // · miniBarWidth 三档都钉成 56vp —— 万一状态被系统改掉（如旋转），也还是同样大小的圆钮、不会突然拉长；
