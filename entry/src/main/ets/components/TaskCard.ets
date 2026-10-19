@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 卡片本体用官方 HdsListItemCard（@kit.UIDesignKit），未自造控件。
  * 三处例外说明：
  *   1. 圆圈：HdsListItemCard 的 PrefixIcon 没有 onClick（PrefixIconOptions 只有 iconSize / iconValue），
@@ -24,6 +24,7 @@ import { Task, TaskAlarm, TaskPriority, TaskStatus } from '../model';
 import { TaskStatusIcon } from './TaskStatusIcon';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
+import { ThemeStore } from '../utils/Theme';
 
 /**
  * 卡片固定高度（vp）＝ **所有卡片同一个值**（需求方 2026-10-16 要求上下留白一致）。
@@ -79,6 +80,12 @@ export struct TaskCard {
   @Event onRemindChange: (isOn: boolean) => void = () => {};
   /** 点整卡 → 交给页面去压任务详情页（卡片本身不知道路由） */
   @Event onOpen: () => void = () => {};
+
+  /**
+   * 视觉个性化（`utils/Theme.ets`）：卡片密度与主题色都从这里读。
+   * 用 `AppStorageV2` 共享同一实例 → 设置页改完，返回列表立刻生效，不需要页面间传参。
+   */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
 
   /** 是否处于编辑（多选）模式 */
   @Computed
@@ -156,7 +163,7 @@ export struct TaskCard {
     SymbolGlyph(this.remindOn ? $r('sys.symbol.bell') : $r('sys.symbol.bell_slash'))
       .fontSize(BELL_ICON_SIZE_VP)
       .fontColor([this.remindOn
-        ? $r('sys.color.icon_emphasize')
+        ? this.themeStore.accent.light
         : $r('sys.color.icon_tertiary')])
       .width(BELL_HIT_SIZE_VP)
       .height(BELL_HIT_SIZE_VP)
@@ -349,7 +356,8 @@ export struct TaskCard {
   build() {
     HdsListItemCard({
       cardBackgroundColor: this.cardBackground,
-      cardHeight: CARD_HEIGHT_VP,
+      // 卡片高度随「设置 → 视觉个性化 → 卡片密度」变（标准 76 / 紧凑 64）
+      cardHeight: this.themeStore.cardHeight,
       prefixItem: new PrefixCustomBuilder((): void => {
         this.prefixCircle();
       }),
