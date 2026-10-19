@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 「添加任务」半模态的**表单草稿**（ViewModel 层）。
  *
  * 为什么要有这个类（袁正锟 2026-10-17：「半模态右上角关闭按钮旁加一个保存按钮…点击后创建一个任务」）：
@@ -61,6 +61,14 @@ export class AddTaskDraft {
   @Trace repeatDaysOfWeek: number[] = [];
   /** 「每周」时的间隔：每 N 周重复一次，最小 1。1 ＝ 每周（与 `daysOfWeek` 组合即「每周一、二、四」） */
   @Trace repeatInterval: number = 1;
+  /**
+   * `RepeatRuleEditor` 产出的**完整规则**（2026-10-19）。
+   *
+   * 有了它之后 `repeatRules()` 直接返回这一条，不再靠 `repeatIndex` 推；
+   * `repeatDaysOfWeek` / `repeatInterval` 保留为老口径的兜底（编辑器之前的实现仍可能走到）。
+   * `undefined` ＝ 不重复。
+   */
+  @Trace repeatRule: RepeatRule | undefined = undefined;
   /** 重要程度档位：0 普通 / 1 重要 / 2 紧急（必填，默认普通） */
   @Trace priorityIndex: number = PRIORITY_NORMAL_INDEX;
   /** 来源档位：`-1` ＝ 未设置 */
@@ -163,6 +171,39 @@ export class AddTaskDraft {
     return TaskPriority.NORMAL;
   }
 
+  /** 编辑器回填用：把当前规则交出去（没有就是 undefined） */
+  firstRepeatRule(): RepeatRule | undefined {
+    const edited: RepeatRule | undefined = this.repeatRule;
+    if (edited !== undefined) {
+      return edited;
+    }
+    const rules: RepeatRule[] = this.repeatRules();
+    return rules.length === 0 ? undefined : rules[0];
+  }
+
+  /**
+   * 编辑器确定：写入完整规则。`undefined` ＝ 不重复。
+   * 同时把 `repeatIndex` 对齐到频率档位，保证芯片行与旧路径读到的档位不错位。
+   */
+  applyRepeatRule(rule: RepeatRule | undefined): void {
+    this.repeatRule = rule;
+    if (rule === undefined) {
+      this.repeatIndex = REPEAT_NONE_INDEX;
+      this.repeatDaysOfWeek = [];
+      this.repeatInterval = 1;
+      return;
+    }
+    if (rule.frequency === RepeatFrequency.DAILY) {
+      this.repeatIndex = 1;
+    } else if (rule.frequency === RepeatFrequency.WEEKLY) {
+      this.repeatIndex = 2;
+    } else if (rule.frequency === RepeatFrequency.MONTHLY) {
+      this.repeatIndex = 3;
+    } else {
+      this.repeatIndex = 4;
+    }
+  }
+
   /**
    * 档位 → 单条 `RepeatRule`（与详情页 `applyRepeat` 同一口径）。
    *
@@ -171,7 +212,13 @@ export class AddTaskDraft {
    * 「每月 / 每年」仍用截止日当锚点（本版不给选几号/几月，字段表 §1.1 的核心诉求是星期）。
    * 「不重复」返回空数组（契约里 `repeat` 为空＝不重复）。
    */
-  private repeatRules(): RepeatRule[] {
+  repeatRules(): RepeatRule[] {
+    // ① 编辑器给过完整规则就用它（支持每周多天 / 每月月初月中月末 / 间隔）
+    const edited: RepeatRule | undefined = this.repeatRule;
+    if (edited !== undefined) {
+      return [edited];
+    }
+    // ② 老口径：按 `repeatIndex` 档位推（编辑器出现之前的面板仍走这条）
     if (this.repeatIndex === REPEAT_NONE_INDEX) {
       return [];
     }
