@@ -213,10 +213,7 @@ export struct A_TaskList {
         // 当前筛选下这一组一条都没有 → 整组不渲染（组头也不出现）
         if (this.store.visibleTasks(group).length > 0) {
           ListItemGroup({
-            header: this.groupHeader(group),
-            // 卡片之间的间距（2026-10-19 第五次调整）：8vp → `Theme.LIST_ITEM_SPACE`(12vp)，
-            // 卡片压矮之后需要一点呼吸，否则会挤成一片
-            spaceWidth: Theme.LIST_ITEM_SPACE
+            header: this.groupHeader(group)
           }) {
             if (group.expanded) {
               ForEach(this.store.visibleTasks(group), (task: Task) => {
@@ -324,6 +321,10 @@ export struct A_TaskList {
                   }
                   .width('100%')
                   .alignItems(HorizontalAlign.Center)
+                  // 卡片之间的间距（2026-10-19 第五次调整）。
+                  // ⚠️ `ListItemGroup.spaceWidth` 在本项目里**实测不生效**（`Resource` / 裸数字 /
+                  //    `'12vp'` 三种写法都试过，两卡始终紧贴、间距 0px），所以改成给每项加下外边距。
+                  .margin({ bottom: Theme.LIST_ITEM_SPACE })
                   // 分组展开/收起时，这一组里的**每张卡片**也做淡入（2026-10-19 第五次：
                   // 「为所有任务卡片展开时增加展开项的动画」）——
                   // `transition` 在 ListItem 内容被创建/销毁时自动播放，组收起来就是反向。
