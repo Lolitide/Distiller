@@ -34,6 +34,7 @@ import {
 } from '../repository/SettingsRepository';
 import { OptionPickerBody } from '../components/OptionPickerBody';
 import { SettingsNavRow } from '../components/SettingsNavRow';
+import { PopupSelector } from '../components/PopupSelector';
 import { ToggleSlider } from '../components/ToggleSlider';
 import { Task } from '../model';
 import { TaskListStore } from '../viewmodel/TaskListStore';
@@ -129,6 +130,12 @@ export struct A_Settings {
   }
 
   /* ── 文案 ── */
+
+  /** 提醒提前量的文案数组（PopupSelector 要整组文案） */
+  @Computed
+  get remindLeadOptionLabels(): string[] {
+    return REMIND_LEAD_OPTIONS.map((minutes: number) => this.remindLeadLabel(minutes));
+  }
 
   private remindLeadLabel(minutes: number): string {
     if (minutes === 0) {
@@ -459,12 +466,14 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
-          // 用组件而不是 `@Builder`：Builder 的值参数不刷新，选完值那行不会更新（2026-10-19 bug）
-          SettingsNavRow({
+          // 2026-10-19：改成**锚定浮窗**（图二样式），不再是整屏底部面板
+          PopupSelector({
             label: '提醒提前量',
             value: this.remindLeadLabel(this.remindLead),
-            onTap: () => {
-              this.openSheet(SHEET_REMIND_LEAD);
+            options: this.remindLeadOptionLabels,
+            selectedIndex: REMIND_LEAD_OPTIONS.indexOf(this.remindLead),
+            onSelect: (index: number) => {
+              this.applyRemindLead(REMIND_LEAD_OPTIONS[index]);
             }
           })
         }
@@ -498,11 +507,13 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
-          SettingsNavRow({
+          PopupSelector({
             label: '解析方式',
             value: this.parseModeLabel(this.parseMode),
-            onTap: () => {
-              this.openSheet(SHEET_PARSE_MODE);
+            options: PARSE_MODE_OPTIONS,
+            selectedIndex: this.parseMode,
+            onSelect: (index: number) => {
+              this.applyParseMode(index);
             }
           })
         }
