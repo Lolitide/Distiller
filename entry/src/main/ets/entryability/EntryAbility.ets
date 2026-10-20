@@ -38,7 +38,7 @@ export default class EntryAbility extends UIAbility {
     // Main window is created, set main page for this ability
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
 
-    this.setImmersiveWindow(windowStage);
+    this.setupWindow(windowStage);
 
     windowStage.loadContent('pages/A_Main', (err) => {
       if (err.code) {
@@ -50,29 +50,31 @@ export default class EntryAbility extends UIAbility {
   }
 
   /**
-   * 全屏沉浸窗口（做法参考 MoMo/EntryAbility.setImmersiveWindow）：
-   * 布局扩到安全区外 + 系统栏透明 + 内容深色（我们只做亮色主题）。
+   * 窗口设置。
+   *
+   * ⚠️ 2026-10-20 **取消全屏沉浸**（需求方：「为了让页面更加简洁，取消全屏沉浸的状态栏和底部导航栏处的沉浸显示」）：
+   * 原来是 `setWindowLayoutFullScreen(true)` + 系统栏透明色（内容铺到状态栏/手势条底下）。
+   * 现在改成 `false` —— 页面布局区**不再**伸进系统栏，状态栏与底部导航条回到系统自己的区域，
+   * 内容不会再从它们底下穿过。系统栏图标仍要深色（页面是亮色），所以只给 `*ContentColor`，不给背景色；
+   * 背景色由 `A_Main.applyWindowTheme()` 在主题加载后统一刷成 M3 `surface`（避免顶部露出白条）。
+   *
+   * 顺带删掉了 `AppStorage['statusBarHeightPx']` + 三个页面的 `sbVp` 补偿：
+   * 那是给「布局伸进状态栏」补回来的高度，取消沉浸后**布局区已自动让开状态栏**，再补就成了双倍留白。
    */
-  private setImmersiveWindow(windowStage: window.WindowStage): void {
+  private setupWindow(windowStage: window.WindowStage): void {
     try {
       windowStage.getMainWindow().then((w: window.Window) => {
-        w.setWindowLayoutFullScreen(true);
+        w.setWindowLayoutFullScreen(false);
         w.setWindowSystemBarProperties({
-          statusBarColor: '#00000000',
-          navigationBarColor: '#00000000',
           statusBarContentColor: Theme.STATUS_BAR_CONTENT,
           navigationBarContentColor: Theme.STATUS_BAR_CONTENT
         });
-        // 把状态栏高度（px）存进 AppStorage：全屏后页面整体上移了这么多，
-        // 各页面的标题栏占位要补回来，否则内容会顶到标题上。
-        const area = w.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
-        AppStorage.setOrCreate<number>('statusBarHeightPx', area.topRect.height);
-        hilog.info(DOMAIN, 'testTag', 'Immersive window configured, statusBar=%{public}d', area.topRect.height);
+        hilog.info(DOMAIN, 'testTag', 'Window configured (non-immersive)');
       }).catch((e: Error) => {
-        hilog.warn(DOMAIN, 'testTag', 'setImmersiveWindow failed: %{public}s', e.message);
+        hilog.warn(DOMAIN, 'testTag', 'setupWindow failed: %{public}s', e.message);
       });
     } catch (e) {
-      hilog.warn(DOMAIN, 'testTag', 'setImmersiveWindow exception');
+      hilog.warn(DOMAIN, 'testTag', 'setupWindow exception');
     }
   }
 

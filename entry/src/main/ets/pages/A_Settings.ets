@@ -59,6 +59,13 @@ const PAGE_SIDE_PADDING_VP: number = 16;
 const TITLE_CLEARANCE_VP: number = 64;
 /** 让开悬浮页签栏（vp）：与 `A_TaskList.LIST_BOTTOM_CLEARANCE_VP` 同值 */
 const BOTTOM_CLEARANCE_VP: number = 80;
+
+/**
+ * 底部渐变遮罩高度（vp）：与 A_TaskList.BOTTOM_MASK_VP 同值同理由 ——
+ * 弃用 HdsTabs 后 gradientMask 跟着没了，内容会在视口底边被齐切（2026-10-20 截图下方两个箭头）。
+ * 取 100 而不是当时的 140，理由见 `A_TaskList.BOTTOM_MASK_VP`（实色渐变比旧的 40% 遮罩强，140 会洗白最后一项）。
+ */
+const BOTTOM_MASK_VP: number = 140;
 /** 分隔线宽（vp） */
 const DIVIDER_WIDTH_VP: number = 0.5;
 /** 分组标题内缩 / 与卡片间距（vp） */
@@ -99,10 +106,23 @@ export struct A_Settings {
   /** 视觉个性化状态（跨页共享，见 utils/Theme.ets） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
 
-  /** 状态栏高度（vp）：全屏沉浸后页面整体上移，顶部让位要补回来 */
+  /**
+   * 底部遮罩的两端色（`GradientDirection.Bottom`：第一项画在**上**边，所以上透下实）。
+   * 与 `A_TaskList.bottomMaskColors` 同一套算法，色相都取当前主题的 `surface`。
+   */
   @Computed
-  get sbVp(): number {
-    return px2vp(AppStorage.get<number>('statusBarHeightPx') ?? 0);
+  get bottomMaskColors(): Array<[ResourceColor, number]> {
+    const surface: string = this.themeStore.scheme.surface;
+    const colors: Array<[ResourceColor, number]> = [
+      // 与 `A_TaskList.bottomMaskColors` 同一套 6 档色标（理由见那里：胶囊上沿要有 ~55% 遮挡）
+      [Theme.withAlpha(surface, '00'), 0.0],
+      [Theme.withAlpha(surface, '40'), 0.25],
+      [Theme.withAlpha(surface, '8C'), 0.49],
+      [Theme.withAlpha(surface, 'CC'), 0.70],
+      [Theme.withAlpha(surface, 'EE'), 0.85],
+      [Theme.withAlpha(surface, 'FF'), 1.0]
+    ];
+    return colors;
   }
 
   @Local remindLead: number = DEFAULT_REMIND_LEAD;
@@ -447,12 +467,14 @@ export struct A_Settings {
   }
 
   build() {
+    // 外面套一层 Stack：底部要叠一条渐变遮罩（内容淡出而不是被齐切）
+    Stack({ alignContent: Alignment.Bottom }) {
     Column() {
       // **让位放在 Scroll 外面**（2026-10-19 修「滚动后内容压在标题上」）：
       // 原来这段占位是 Scroll 的**内容首项**，滚动时它会带着正文一起上移，
       // 正文就钻到标题栏/状态栏区域、与「设置」叠字（实测状态栏变成  8:1提醒提前量）。
       // 放到外面后，**滚动视口本身**从标题栏下方开始，正文永远进不了标题区。
-      Row().width('100%').height(TITLE_CLEARANCE_VP + this.sbVp)
+      Row().width('100%').height(TITLE_CLEARANCE_VP)
 
       Scroll() {
       Column() {
@@ -620,6 +642,20 @@ export struct A_Settings {
     .width('100%')
     .height('100%')
     .backgroundColor(this.themeStore.scheme.surface)
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+    // 2026-10-20 取消全屏沉浸：原来这里还有一行 `.expandSafeArea([SYSTEM], [BOTTOM])`，
+    // 让底色铺到手势条底下。现在页面不再伸进系统栏，底部那截交给系统栏背景色（`A_Main.applyWindowTheme`）。
+
+    // **底部渐变遮罩**：与任务列表同一套做法，内容滑到胶囊/＋ 那一带时淡出
+    Column()
+      .width('100%')
+      .height(BOTTOM_MASK_VP)
+      .linearGradient({
+        direction: GradientDirection.Bottom,
+        colors: this.bottomMaskColors
+      })
+      .hitTestBehavior(HitTestMode.None)
+    }
+    .width('100%')
+    .height('100%')
   }
 }

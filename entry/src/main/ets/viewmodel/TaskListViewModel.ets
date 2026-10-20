@@ -50,6 +50,9 @@ const EVERY_PREFIX: string = '每';
 /** 每天（interval ≤ 1 时不说「每 1 天」） */
 const EVERY_DAY: string = '每天';
 
+/** 「未安排日期」组的持久化键（它没有时间戳，用固定串代替） */
+const UNDATED_GROUP_KEY: string = 'undated';
+
 /** 一天的分组。`@ObservedV2` 是为了让「展开/收起」与任务变更能被界面观察到 */
 @ObservedV2
 export class TaskDayGroup {
@@ -67,6 +70,17 @@ export class TaskDayGroup {
   day: number = 1;
   @Trace expanded: boolean = false;
   @Trace tasks: Task[] = [];
+
+  /**
+   * 持久化用的组标识（`SettingsRepository` 记「展开/收起」时按它存）。
+   *
+   * 用**当天 0 点的时间戳**而不是数组下标：`groupByDay` 每次重算都会增删组，
+   * 下标会漂移（今天第 3 组、明天可能变成第 1 组），存下标等于记错组。
+   * 「未安排日期」没有时间戳 → 用固定串 `undated`。
+   */
+  get persistKey(): string {
+    return this.hasDate ? `${this.sortValue}` : UNDATED_GROUP_KEY;
+  }
 
   /** 组内总项数。做成 getter：任务增删或状态一变，组头副标题自动跟着变 */
   get totalCount(): number {

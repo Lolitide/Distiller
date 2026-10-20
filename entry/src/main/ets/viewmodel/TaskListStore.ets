@@ -17,6 +17,8 @@
 import { Task, TaskAlarm, TaskPriority, TaskStatus, TaskStep } from '../model';
 import { MOCK_TASKS } from '../mock/MockTasks';
 import { TaskDayGroup, TaskListViewModel } from './TaskListViewModel';
+import { SettingsRepository } from '../repository/SettingsRepository';
+import { common } from '@kit.AbilityKit';
 
 /** 固定筛选项的键（与文案分开：以后"设置里让用户选固定哪几个"就是让用户勾这几个 key） */
 export const FILTER_ALL: string = 'all';
@@ -72,6 +74,26 @@ export class TaskListStore {
   /** 标签项的点选次数（用于「按点击次数自动排序」） */
   @Trace tagUsages: TagUsage[] = [];
 
+  /*
+   * ── 分组展开状态的持久化（2026-10-20，需求方：「记住上次的展开状态」）──
+   *
+   * 为什么不是简单的 `@Trace expanded`：
+   * `groupByDay` 每次重算都会造新组对象，默认只有「今天」那组展开（`findOrCreate` 里定的）。
+   * `refreshGroups` 会**复用**旧对象，所以同一次运行内展开状态天然保留；
+   * 但**杀进程重启**后组是全新的 → 状态丢失。于是把「用户手动设过的状态」记在下面这张表里，
+   * 落盘交给 `SettingsRepository`（首选项），建组/合并时再套回去。
+   *
+   * 条目形如 `<组键>:1|0`，组键见 `TaskDayGroup.persistKey`（不用下标，见那里的说明）。
+   * 这张表**不需要被 UI 观测**（只有建组/切换时才读），所以不加 `@Trace`。
+   */
+  private expandedOverrides: Map<string, boolean> = new Map();
+  /** 写首选项要的 Context：`syncGroupExpand` 时缓存一份，供 `setGroupExpanded` 落盘 */
+  private prefsContext: common.Context | undefined = undefined;
+  /** 条目分隔符：`<组键>:1|0` 里的冒号（组键是纯数字或 `undated`，不含冒号） */
+  private static readonly EXPAND_ENTRY_SEP: string = ':';
+  /** 只保留最近这么多天的展开记录（更早的日期组已经不会再出现，留着只是占地方） */
+  private static readonly EXPAND_KEEP_DAYS: number = 30;
+
   /** 勾选条数 */
   get selectedCount(): number {
     return this.selectedIds.length;
@@ -98,6 +120,62 @@ export class TaskListStore {
       group.tasks.forEach((task: Task) => tasks.push(task));
     });
     return tasks;
+  }
+
+  /**
+   * 读回「各分组展开状态」并套到现有分组上（`A_Main` 一进页面就调一次）。
+   *
+   * 读失败/没存过 → `expandedOverrides` 还是空的 → 各组保持 `groupByDay` 给的默认
+   * （只有「今天」那组展开），行为与改造前完全一致，不会因为首选项坏了就全展开或全收起。
+   */
+  async syncGroupExpand(context: common.Context): Promise<void> {
+    this.prefsContext = context;
+    const entries: string[] = await SettingsRepository.getGroupExpanded(context);
+    entries.forEach((entry: string) => {
+      const sep: number = entry.indexOf(TaskListStore.EXPAND_ENTRY_SEP);
+      if (sep <= 0) {
+        return;
+      }
+      this.expandedOverrides.set(entry.substring(0, sep), entry.substring(sep + 1) === '1');
+    });
+    this.groups.forEach((group: TaskDayGroup) => this.applyExpandOverride(group));
+  }
+
+  /**
+   * 展开/收起某一组：改状态 + 记住。
+   *
+   * 页面（`A_TaskList` 的组头）只调这一个入口 —— 直接写 `group.expanded = ...` 的话
+   * 界面会变、但**下次启动就忘了**（需求方 2026-10-20 要的正是"记住"）。
+   * 落盘是异步的，失败只影响"下次启动能不能记住"，不影响本次交互，所以不 await、不抛。
+   */
+  setGroupExpanded(group: TaskDayGroup, expanded: boolean): void {
+    group.expanded = expanded;
+    this.expandedOverrides.set(group.persistKey, expanded);
+    const context: common.Context | undefined = this.prefsContext;
+    if (context === undefined) {
+      // 还没读过首选项（正常流程不会走到：`A_Main` 进页面就 sync）→ 本次运行有效、重启丢失
+      return;
+    }
+    const entries: string[] = [];
+    const oldestKept: number = Date.now() - TaskListStore.EXPAND_KEEP_DAYS * 24 * 60 * 60 * 1000;
+    this.expandedOverrides.forEach((value: boolean, key: string) => {
+      // 纯数字键＝某一天 0 点的时间戳：太早的日期组已经不会再出现在列表里，丢掉免得无限涨。
+      // `undated` 这种非数字键 `Number()` 会给 NaN，走 `!isNaN` 分支一律保留。
+      const dayStart: number = Number(key);
+      if (!Number.isNaN(dayStart) && dayStart < oldestKept) {
+        return;
+      }
+      entries.push(`${key}${TaskListStore.EXPAND_ENTRY_SEP}${value ? '1' : '0'}`);
+    });
+    SettingsRepository.setGroupExpanded(context, entries);
+  }
+
+  /** 把记住的展开状态套到这个组上；没记过就保持它自己的默认值（`groupByDay` 定的） */
+  private applyExpandOverride(group: TaskDayGroup): void {
+    const remembered: boolean | undefined = this.expandedOverrides.get(group.persistKey);
+    if (remembered !== undefined) {
+      group.expanded = remembered;
+    }
   }
 
   /**
@@ -131,6 +209,8 @@ export class TaskListStore {
       if (kept === undefined) {
         // 全新的一天：键值变了，ForEach 会新建节点，直接用新算出来的这份
         this.expandIfContains(fresh, expandTaskId);
+        // 新组也要套用「记住的展开状态」（比如用户把某天收起了，那天后来又加进任务）
+        this.applyExpandOverride(fresh);
         merged.push(fresh);
         return;
       }
@@ -174,6 +254,8 @@ export class TaskListStore {
       const kept: TaskDayGroup | undefined = this.findGroup(fresh.sortValue, fresh.hasDate);
       if (kept === undefined) {
         this.expandIfContains(fresh, task.id);
+        // 同 `refreshGroups`：新组也要套用记住的展开状态
+        this.applyExpandOverride(fresh);
         merged.push(fresh);
         return;
       }
