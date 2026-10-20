@@ -450,7 +450,7 @@ export struct A_Settings {
     Scroll() {
       Column() {
         // 让开浮层标题栏：做成**内容首项**，标题才会跟着滚（固定 padding-top 会让大字压住内容）
-        Row().width('100%').height(TITLE_CLEARANCE_VP)
+        Row().width('100%').height(TITLE_CLEARANCE_VP + this.sbVp)
 
         // ① 视觉个性化
         this.sectionTitle('视觉个性化')
