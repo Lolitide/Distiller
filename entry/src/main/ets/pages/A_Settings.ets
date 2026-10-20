@@ -593,6 +593,10 @@ export struct A_Settings {
     // 2026-10-19 作者：「设置页滑动怎么没有像任务页一样的回弹效果」——
     // 任务页的 List 有 `EdgeEffect.Spring`，这里漏了，补上。
     .edgeEffect(EdgeEffect.Spring)
+    // 2026-10-19 设置页调研：**底部要让开悬浮页签栏**。
+    // 任务页有 `LIST_BOTTOM_CLEARANCE_VP`(80)，设置页漏了 →
+    // 实测「云端同步（未接入）」「关于」被底部胶囊压住一半（截图 CA1-settings-audit.png）。
+    .contentEndOffset(80)
     .align(Alignment.Top)
     .bindSheet(this.sheetKind !== SHEET_NONE, this.sheetBody(), {
       title: { title: this.sheetTitle },

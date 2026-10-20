@@ -252,7 +252,7 @@ struct A_Main {
     .hideBackButton(true)
     .titleBar({
       avoidLayoutSafeArea: true,
-      style: MainTitleBar.style(`#CC${this.themeStore.scheme.surface.substring(1)}`, this.themeStore.scheme.onSurface),
+      style: MainTitleBar.style(`#F2${this.themeStore.scheme.surface.substring(1)}`, this.themeStore.scheme.onSurface),
       content: {
         title: { mainTitle: this.navTitle },
         menu: this.navMenu
