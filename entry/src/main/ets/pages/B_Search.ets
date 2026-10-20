@@ -221,7 +221,7 @@ export struct B_Search {
     }
     // 标题栏沿用主页面那套官方风格（`MainTitleBar.STYLE`），观感与首页一致
     .titleBar({
-      style: MainTitleBar.STYLE,
+      style: MainTitleBar.style(this.themeStore.scheme.surface),
       content: {
         title: { mainTitle: $r('app.string.title_search') }
       }
