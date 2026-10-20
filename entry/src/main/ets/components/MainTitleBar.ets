@@ -38,11 +38,18 @@ export class MainTitleBar {
    */
   static style(background: ResourceColor): TitleBarStyleOptions {
     return {
+      // **滚动渐变模糊已关闭**（2026-10-19 作者：「文字对比度极低，完全看不清了，
+      // 就不能不动文字、按钮、状态栏图标颜色吗」）。
+      //
+      // 前情：`GRADIENT_BLUR` 的默认背板是**深色**、配套的滚动态文字/图标是**白色**。
+      // 我们为了去掉那条深灰带把背板换成了浅色 `surface`，但白字仍压在上面 →
+      // 标题、右上角两个按钮、状态栏图标全部白化、对比度极低。
+      //
+      // 官方没有单独暴露"滚动态的字体/图标颜色"，只能整段 `scrollEffectStyle` 一起给；
+      // 既然作者要求**不动文字与图标颜色**，就直接关掉这个滚动效果 ——
+      // 标题栏保持常态配色，滚动时不再浮起、不再蒙层。
       scrollEffectOpts: {
-        enableScrollEffect: true,
-        scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
-        blurEffectiveStartOffset: LengthMetrics.vp(0),
-        blurEffectiveEndOffset: LengthMetrics.vp(20)
+        enableScrollEffect: false
       },
       scrollEffectStyle: {
         backgroundStyle: {
