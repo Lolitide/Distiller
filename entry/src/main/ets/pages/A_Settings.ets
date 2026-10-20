@@ -590,6 +590,9 @@ export struct A_Settings {
     //（作者 2026-10-19 截图箭头指的就是这块）。已删掉那一句。
     .backgroundColor(this.themeStore.scheme.surface)
     .scrollBar(BarState.Off)
+    // 2026-10-19 作者：「设置页滑动怎么没有像任务页一样的回弹效果」——
+    // 任务页的 List 有 `EdgeEffect.Spring`，这里漏了，补上。
+    .edgeEffect(EdgeEffect.Spring)
     .align(Alignment.Top)
     .bindSheet(this.sheetKind !== SHEET_NONE, this.sheetBody(), {
       title: { title: this.sheetTitle },

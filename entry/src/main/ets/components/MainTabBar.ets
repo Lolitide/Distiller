@@ -107,7 +107,7 @@ export struct MainTabBar {
       {
         normal: new SymbolGlyphModifier($r('sys.symbol.list_checkmark'))
           .fontColor([$r('sys.color.icon_secondary')]),
-        selected: new SymbolGlyphModifier($r('sys.symbol.list_checkmark'))
+        selected: new SymbolGlyphModifier($r('sys.symbol.checkmark_circle_fill'))
           .fontColor([this.themeStore.scheme.primary])
       },
       // 2026-10-19 作者：「把字删掉即可」—— 页签**只留图标**。
@@ -124,7 +124,7 @@ export struct MainTabBar {
       {
         normal: new SymbolGlyphModifier($r('sys.symbol.gearshape'))
           .fontColor([$r('sys.color.icon_secondary')]),
-        selected: new SymbolGlyphModifier($r('sys.symbol.gearshape'))
+        selected: new SymbolGlyphModifier($r('sys.symbol.gearshape_fill'))
           .fontColor([this.themeStore.scheme.primary])
       },
       ''
