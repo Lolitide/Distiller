@@ -304,7 +304,7 @@ export struct AddTaskAttributeChips {
 
   /** 面板标题随 `pickerKind` 变（官方 `SheetOptions.title` 只吃 `ResourceStr`） */
   @Computed
-  get pickerTitle(): Resource {
+  get pickerTitle(): ResourceStr {
     if (this.pickerKind === PICKER_REMIND) {
       return $r('app.string.picker_title_remind');
     }
@@ -320,7 +320,14 @@ export struct AddTaskAttributeChips {
     if (this.pickerKind === PICKER_TAG) {
       return $r('app.string.chip_add_tag');
     }
-    return $r('app.string.picker_title_due');
+    if (this.pickerKind === PICKER_DUE) {
+      return $r('app.string.picker_title_due');
+    }
+    // **PICKER_NONE 返回空串**（2026-10-19 修「取消时闪现设置到期日期标题」）：
+    // 弹窗关闭有退场动画，在它还在屏幕上时若 pickerKind 已复位成 NONE，
+    // 标题会回落到兜底的「设置到期日期」→ 用户就看到那个标题闪一下。
+    // 现在 NONE 返回空串，退场过程中标题为空，不再回落。
+    return '';
   }
 
   @Computed
