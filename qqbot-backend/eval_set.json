@@ -1,0 +1,72 @@
+{
+  "version": 2,
+  "base_time": "2026-10-14 10:00:00",
+  "note": "评测集：横向比较小模型。kind 用内置枚举；kind_any 表示「这些类都算对」（标注本身有歧义，不能拿模型的合理答案当错误）。time_text/place 必须是原文子串；must_contain 粗略衡量摘要是否漏关键信息。",
+  "items": [
+    {"id": "k01", "text": "今天上午9点记得来教学楼上课", "kind": "待办", "time_text": "今天上午9点", "place": "教学楼", "must_contain": ["上课"]},
+    {"id": "k02", "text": "明天去超市买点吃的", "kind": "待办", "time_text": "明天", "place": "超市", "must_contain": ["超市"]},
+    {"id": "k03", "text": "周五前交实验报告", "kind": "待办", "time_text": "周五", "place": "", "must_contain": ["实验报告"]},
+    {"id": "k04", "text": "记得明天晚上康桥见", "kind": "待办", "time_text": "明天", "place": "康桥", "must_contain": ["康桥"]},
+    {"id": "k05", "text": "明天四六级记得带准考证和收音机电池", "kind": "待办", "time_text": "明天", "place": "", "must_contain": ["准考证"]},
+    {"id": "k06", "text": "明天上课地点从中三3202改成主楼A304，记得不要跑错了", "kind": "待办", "time_text": "明天", "place": "主楼A304", "must_contain": ["主楼"]},
+    {"id": "k07", "text": "1月10号之前把大作业交了，不然挂科", "kind": "待办", "time_text": "1月10号", "place": "", "must_contain": ["大作业"]},
+    {"id": "k08", "text": "下午三点在体育馆集合，别迟到", "kind": "待办", "kind_any": ["待办", "活动"], "time_text": "下午三点", "place": "体育馆", "must_contain": ["集合"]},
+
+    {"id": "n01", "text": "【通知】原定5月27日下午2:30主D104的心理委员培训，改为6月3日周三下午2:30在主楼D104，全体参加，不能参加者提前向辅导员请假。", "kind": "通知", "time_text": "6月3日", "place": "主楼D104", "must_contain": ["心理委员"]},
+    {"id": "n02", "text": "最近大学生职业规划大赛报名，有兴趣的同学可以参加", "kind": "通知", "kind_any": ["通知", "活动"], "time_text": "", "place": "", "must_contain": ["大赛"]},
+    {"id": "n03", "text": "挑战杯报名截止到10月20日，想参加的抓紧", "kind": "通知", "kind_any": ["通知", "待办"], "time_text": "10月20日", "place": "", "must_contain": ["挑战杯"]},
+    {"id": "n04", "text": "智慧社区签到签退码，请心理委员转发给各班同学一下", "kind": "通知", "kind_any": ["通知", "待办"], "time_text": "", "place": "", "must_contain": ["签到"]},
+    {"id": "n05", "text": "2026年春季学期选课通知：1月5日开始，1月9日结束", "kind": "通知", "time_text": "1月5日", "place": "", "must_contain": ["选课"]},
+
+    {"id": "a01", "text": "挑战网招新啦，技术部视频部美工部都收人", "kind": "活动", "time_text": "", "place": "", "must_contain": ["招新"]},
+    {"id": "a02", "text": "周日晚七点在大礼堂有迎新晚会，欢迎来看", "kind": "活动", "time_text": "周日晚七点", "place": "大礼堂", "must_contain": ["晚会"]},
+
+    {"id": "p01", "text": "后天先去火车站坐车，再去北京旅游", "kind": "出行计划", "time_text": "后天", "place": "火车站", "must_contain": ["北京"]},
+    {"id": "p02", "text": "假期坐高铁回家，票已经买好了", "kind": "出行计划", "time_text": "", "place": "", "must_contain": []},
+
+    {"id": "c01", "text": "几点停电", "kind": "闲聊", "time_text": "", "place": "", "must_contain": []},
+    {"id": "c02", "text": "最近那个比赛你们参加了吗", "kind": "闲聊", "time_text": "", "place": "", "must_contain": []},
+    {"id": "c03", "text": "没签到签退咋办", "kind": "闲聊", "time_text": "", "place": "", "must_contain": []},
+    {"id": "c04", "text": "哈哈哈哈笑死我了", "kind": "闲聊", "kind_any": ["闲聊", "忽略"], "time_text": "", "place": "", "must_contain": []},
+    {"id": "c05", "text": "感觉今年冬天来得挺早的", "kind": "闲聊", "time_text": "", "place": "", "must_contain": []},
+    {"id": "c06", "text": "都回家了", "kind": "闲聊", "kind_any": ["闲聊", "忽略"], "time_text": "", "place": "", "must_contain": []},
+    {"id": "c07", "text": "但是通知书没发到手", "kind": "闲聊", "time_text": "", "place": "", "must_contain": []},
+    {"id": "c08", "text": "需要的时候再充呗", "kind": "闲聊", "time_text": "", "place": "", "must_contain": []},
+    {"id": "c09", "text": "想吃康桥一楼的螺蛳粉了", "kind": "闲聊", "time_text": "", "place": "康桥", "must_contain": []},
+    {"id": "c10", "text": "歪歪歪", "kind": "闲聊", "kind_any": ["闲聊", "忽略"], "time_text": "", "place": "", "must_contain": []},
+
+    {"id": "i01", "text": "124124", "kind": "忽略", "time_text": "", "place": "", "must_contain": []},
+    {"id": "i02", "text": "ok", "kind": "忽略", "time_text": "", "place": "", "must_contain": []},
+    {"id": "i03", "text": "熊永轩加入了群聊", "kind": "忽略", "time_text": "", "place": "", "must_contain": []},
+    {"id": "i04", "text": "某某拍了拍你", "kind": "忽略", "time_text": "", "place": "", "must_contain": []},
+
+    {"id": "s01", "text": "下午两点开打", "kind": "闲聊", "kind_any": ["闲聊", "活动"], "time_text": "下午两点", "place": "", "note": "黑话：开打=开始比赛，不是打架"},
+    {"id": "s02", "text": "上号上号，今天必须上分", "kind": "闲聊", "time_text": "", "place": "", "note": "黑话：上号=开始打游戏"},
+    {"id": "s03", "text": "有无组队的，传智杯还缺一个人", "kind": "活动", "kind_any": ["活动", "闲聊"], "time_text": "", "place": "", "must_contain": ["组队"], "note": "黑话：组队找搭子"},
+    {"id": "s04", "text": "几点开黑", "kind": "闲聊", "time_text": "", "place": "", "note": "黑话：开黑=一起打游戏"},
+
+    {"id": "t01", "text": "十一点交作业", "kind": "待办", "time_text": "十一点", "place": "", "must_contain": ["作业"]},
+    {"id": "t02", "text": "下周三开组会", "kind": "待办", "time_text": "下周三", "place": "", "must_contain": ["组会"]},
+    {"id": "t03", "text": "下周把材料交上来", "kind": "待办", "time_text": "下周", "place": "", "must_contain": ["材料"], "note": "推不出确切日期，应标 unresolved"},
+    {"id": "t04", "text": "9点30分到文治门口等我", "kind": "待办", "time_text": "9点30分", "place": "文治", "must_contain": ["文治"]},
+    {"id": "t05", "text": "月底前把开题报告写完", "kind": "待办", "time_text": "月底", "place": "", "must_contain": ["开题报告"]},
+    {"id": "t06", "text": "今晚八点半在兴庆校区操场跑步", "kind": "待办", "kind_any": ["待办", "活动"], "time_text": "今晚八点半", "place": "兴庆校区", "must_contain": ["跑步"]},
+
+    {"id": "h01", "text": "明天下午两点开打，打3个小时", "kind": "闲聊", "kind_any": ["闲聊", "活动"], "time_text": "明天下午两点", "place": "", "note": "黑话 + 时长"},
+    {"id": "h02", "text": "仲英书院的同学明天来梧桐苑领教材", "kind": "通知", "kind_any": ["通知", "待办"], "time_text": "明天", "place": "梧桐", "must_contain": ["教材"]},
+    {"id": "h03", "text": "去康桥吃饭吗", "kind": "闲聊", "time_text": "", "place": "康桥"},
+    {"id": "h04", "text": "10月15日雁塔校区有招聘会，记得带简历", "kind": "通知", "kind_any": ["通知", "待办"], "time_text": "10月15日", "place": "雁塔校区", "must_contain": ["简历"]},
+    {"id": "h05", "text": "军训服明天在宿舍楼下发", "kind": "通知", "kind_any": ["通知", "待办"], "time_text": "明天", "place": "宿舍", "must_contain": ["军训服"]},
+
+    {"id": "x01", "text": "请问一下教务系统怎么登录", "kind": "闲聊", "time_text": "", "place": "", "note": "请问 不是任务词"},
+    {"id": "x02", "text": "我要准备考研，想问问西交能不能进", "kind": "闲聊", "time_text": "", "place": "", "note": "要准备 是打算，不是待办"},
+    {"id": "x03", "text": "主要是不想去", "kind": "闲聊", "time_text": "", "place": "", "note": "主要是/不想 不是待办"},
+    {"id": "x04", "text": "交流一下学习经验", "kind": "闲聊", "time_text": "", "place": "", "note": "交流 不是交作业"},
+    {"id": "x05", "text": "没必要", "kind": "忽略", "time_text": "", "place": ""},
+    {"id": "x06", "text": "这个可以有", "kind": "闲聊", "kind_any": ["闲聊", "忽略"], "time_text": "", "place": ""},
+    {"id": "x07", "text": "期末成绩啥时候出啊", "kind": "闲聊", "time_text": "", "place": ""},
+    {"id": "x08", "text": "咱们学校的图书馆几点关门", "kind": "闲聊", "time_text": "", "place": "图书馆"},
+    {"id": "x09", "text": "有人要二手自行车吗", "kind": "闲聊", "time_text": "", "place": ""},
+    {"id": "x10", "text": "求助！谁知道怎么申请助学贷款", "kind": "闲聊", "time_text": "", "place": "", "note": "求助不是待办"}
+  ]
+}
