@@ -62,6 +62,12 @@ const UNSET: number = 0;
 
 /** 当前打开的是哪个面板（0 ＝ 没开） */
 const PICKER_NONE: number = 0;
+/**
+ * 对话框退场动画时长（毫秒）：复位 pickerKind 要等它走完。
+ * 否则对话框在淡出过程中被重新渲染成一个**只有圆角容器、没有标题和内容**的空壳，
+ * 用户就会看到「一个空的窗口闪一下」（作者 2026-10-19 截图）。
+ */
+const DIALOG_CLOSE_ANIM_MS: number = 320;
 const PICKER_DUE: number = 1;
 const PICKER_REMIND: number = 2;
 const PICKER_REPEAT: number = 3;
@@ -410,7 +416,8 @@ export struct AddTaskAttributeChips {
       this.draft.tags = next;
     }
     this.tagDraft = '';
-    this.pickerKind = PICKER_NONE;
+    // 同 `confirmPicker()`：走 `closePicker()`，等退场动画结束再复位，避免空壳闪现
+    this.closePicker();
   }
 
   /** 删掉一个标签 */
@@ -436,8 +443,18 @@ export struct AddTaskAttributeChips {
     if (this.pickerDialogId >= 0) {
       this.getUIContext().getPromptAction().closeCustomDialog(this.pickerDialogId);
       this.pickerDialogId = -1;
+      // **等退场动画走完再复位 pickerKind**。
+      // 立刻复位的话，对话框还在淡出、内容却被重渲染成 PICKER_NONE，
+      // 于是画出「只有圆角容器、没有任何标题与内容」的空壳 → 空窗口闪现。
+      // 复位前再确认没有新弹窗被打开（快速连点场景）。
+      setTimeout(() => {
+        if (this.pickerDialogId < 0) {
+          this.pickerKind = PICKER_NONE;
+        }
+      }, DIALOG_CLOSE_ANIM_MS);
+    } else {
+      this.pickerKind = PICKER_NONE;
     }
-    this.pickerKind = PICKER_NONE;
   }
 
   /** 「确定」才写回：把当前草稿落到对应字段 */
@@ -456,7 +473,9 @@ export struct AddTaskAttributeChips {
     } else if (this.pickerKind === PICKER_SOURCE) {
       this.draft.sourceIndex = this.sourceDraftIndex;
     }
-    this.pickerKind = PICKER_NONE;
+    // 「确定」也要走 `closePicker()`：它会**等退场动画结束再复位** `pickerKind`。
+    // 直接写 `pickerKind = PICKER_NONE` 会让对话框在淡出时被重渲染成空壳（同样的闪现问题）。
+    this.closePicker();
   }
 
   private clearDue(): void {
