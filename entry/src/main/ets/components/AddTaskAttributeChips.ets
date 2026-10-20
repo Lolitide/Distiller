@@ -417,8 +417,19 @@ export struct AddTaskAttributeChips {
     this.draft.tags = next;
   }
 
-  /** 关面板（草稿丢弃） */
+  /**
+   * 关面板（草稿丢弃）。
+   *
+   * ⚠️ **必须先关弹窗、再把 `pickerKind` 复位**（2026-10-19 修「点取消时到期弹窗闪现」）。
+   * 原来只写 `this.pickerKind = PICKER_NONE`，而 `pickerBody()` 的最后一条分支是**兜底 `else`**
+   * （到期时间选择器），于是 `pickerKind` 变回 `PICKER_NONE(0)` 的那一帧会命中兜底分支 →
+   * **设置日期时间的面板闪现一下**再消失。先关弹窗，builder 就没机会用错分支渲染。
+   */
   private closePicker(): void {
+    if (this.pickerDialogId >= 0) {
+      this.getUIContext().getPromptAction().closeCustomDialog(this.pickerDialogId);
+      this.pickerDialogId = -1;
+    }
     this.pickerKind = PICKER_NONE;
   }
 
@@ -852,7 +863,12 @@ export struct AddTaskAttributeChips {
 
   /** 面板内容：一个 body 按 `pickerKind` 切，日期/时间的草稿各自独立（与详情页同一套组件） */
   @Builder
-  pickerBody() {    if (this.pickerKind === PICKER_REMIND) {
+  pickerBody() {
+    // 2026-10-19：`PICKER_NONE` 时**什么都不渲染**。
+    // 原来没有这层保护，且最后一条是兜底 `else`（到期选择器），
+    // 于是关闭面板那一帧会命中兜底分支、把到期时间弹窗闪出来。
+    if (this.pickerKind !== PICKER_NONE) {
+      if (this.pickerKind === PICKER_REMIND) {
       DateTimePickerBody({
         selected: this.remindDraft,
         onSelectedChange: (date: Date) => {
@@ -924,19 +940,20 @@ export struct AddTaskAttributeChips {
           this.confirmTag();
         }
       })
-    } else {
-      DateTimePickerBody({
-        selected: this.dueDraft,
+      } else if (this.pickerKind === PICKER_DUE) {
+        DateTimePickerBody({
+          selected: this.dueDraft,
         onSelectedChange: (date: Date) => {
           this.dueDraft = date;
         },
-        onCancel: () => {
-          this.closePicker();
-        },
-        onConfirm: () => {
-          this.confirmPicker();
-        }
-      })
+          onCancel: () => {
+            this.closePicker();
+          },
+          onConfirm: () => {
+            this.confirmPicker();
+          }
+        })
+      }
     }
   }
 
