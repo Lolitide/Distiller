@@ -1,3 +1,4 @@
+import { ThemeStore } from '../utils/Theme';
 /*
  * 任务详情页（**二级页**，按 §9.1 用 `B_` 前缀）。
  *
@@ -50,6 +51,9 @@ export function TaskDetailPageBuilder(name: string, param: Object) {
 
 @ComponentV2
 export struct B_TaskDetail {
+  /** 视觉个性化：M3 色系（详情页底色 = surface） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
+
   /** 跳转参数：任务对象 + store（`Task` 是 `@ObservedV2`，改字段卡片会跟着刷新） */
   @Require @Param param: TaskDetailParam;
 
@@ -364,9 +368,11 @@ export struct B_TaskDetail {
       }
       .width('100%')
       .height('100%')
-      .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
-      // 底部安全区（手势条那一条）也要同一个灰
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+      // 2026-10-19 全局 MD3：底色从系统浅蓝 `ohos_id_color_sub_background` 换成 M3 `surface`，
+      // 与任务列表 / 设置页同一套色系（作者：「详情页的背景底色也没加」）。
+      .backgroundColor(this.themeStore.scheme.surface)
+      // **全屏沉浸**：上下都铺进安全区，内容可以滚到状态栏与手势条底下
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }
     // 标题栏与搜索页同一套官方风格；**标题固定写「任务详情」**，不显示任务名
     // （袁正锟 2026-10-16：「任务详情顶部栏不是显示任务名称 就显示任务详情」）
