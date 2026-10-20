@@ -1,0 +1,23 @@
+# Deps for botpy_main.py (main entry)
+qq-botpy-v2==1.0.2
+aiosqlite==0.22.1
+python-dotenv==1.2.4
+
+# Extra deps for main.py (qqbot_agent_sdk fallback entry)
+qqbot-agent-sdk==1.2.2
+httpx==0.28.1
+
+# Shared
+aiohttp==3.14.5
+
+# 中文数字/时间归一化（pipeline_proto._cn2int 用它；缺失时自动回退内置实现）
+# MIT · pure-python · 仅依赖 proces
+cn2an==0.5.24
+
+# PDF 文本抽取（/parse 的 .pdf 分支，office_extract.py 软依赖；缺失时该分支 501 降级）
+# MIT · pure-python · https://pypi.org/project/pypdf/
+pypdf>=5.0
+
+# Push Kit 服务账号 JWT（PS256 / RSA-PSS）签名，push_sender.py 用它
+# Apache-2.0 OR BSD-3-Clause · cp311-abi3 wheel（本机 Python 3.14 实测可装 50.0.2）
+cryptography>=42.0
