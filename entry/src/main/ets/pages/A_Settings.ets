@@ -447,10 +447,15 @@ export struct A_Settings {
   }
 
   build() {
-    Scroll() {
+    Column() {
+      // **让位放在 Scroll 外面**（2026-10-19 修「滚动后内容压在标题上」）：
+      // 原来这段占位是 Scroll 的**内容首项**，滚动时它会带着正文一起上移，
+      // 正文就钻到标题栏/状态栏区域、与「设置」叠字（实测状态栏变成  8:1提醒提前量）。
+      // 放到外面后，**滚动视口本身**从标题栏下方开始，正文永远进不了标题区。
+      Row().width('100%').height(TITLE_CLEARANCE_VP + this.sbVp)
+
+      Scroll() {
       Column() {
-        // 让开浮层标题栏：做成**内容首项**，标题才会跟着滚（固定 padding-top 会让大字压住内容）
-        Row().width('100%').height(TITLE_CLEARANCE_VP + this.sbVp)
 
         // ① 视觉个性化
         this.sectionTitle('视觉个性化')
@@ -593,11 +598,14 @@ export struct A_Settings {
     // 2026-10-19 作者：「设置页滑动怎么没有像任务页一样的回弹效果」——
     // 任务页的 List 有 `EdgeEffect.Spring`，这里漏了，补上。
     .edgeEffect(EdgeEffect.Spring)
+    .layoutWeight(1)
     // 2026-10-19 设置页调研：**底部要让开悬浮页签栏**。
     // 任务页有 `LIST_BOTTOM_CLEARANCE_VP`(80)，设置页漏了 →
     // 实测「云端同步（未接入）」「关于」被底部胶囊压住一半（截图 CA1-settings-audit.png）。
     .contentEndOffset(80)
     .align(Alignment.Top)
+    .width('100%')
+    .layoutWeight(1)
     .bindSheet(this.sheetKind !== SHEET_NONE, this.sheetBody(), {
       title: { title: this.sheetTitle },
       preferType: SheetType.CENTER,
@@ -608,5 +616,10 @@ export struct A_Settings {
         this.sheetKind = SHEET_NONE;
       }
     })
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.themeStore.scheme.surface)
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
   }
 }
