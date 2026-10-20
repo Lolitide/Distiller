@@ -54,7 +54,8 @@ export class MainTitleBar {
       originalStyle: {
         contentStyle: {
           titleStyle: { mainTitleColor: onSurface },
-          backIconStyle: { iconColor: onSurface }
+          // 2026-10-19：底色也要显式给 —— 只给图标色的话，`originalStyle` 下`r`n          // HDS 会给按钮一个**深色底**（实测未滚动时是两个深色圆、滚动后又变浅），`r`n          // 两种状态观感不一致。统一用与背板同源的半透明暖色。
+          backIconStyle: { backgroundColor: background, iconColor: onSurface }
         }
       },
       // 滚动后：M3 暖色半透背板 + 深色文字/图标。
@@ -66,7 +67,8 @@ export class MainTitleBar {
         },
         contentStyle: {
           titleStyle: { mainTitleColor: onSurface },
-          backIconStyle: { iconColor: onSurface }
+          // 2026-10-19：底色也要显式给 —— 只给图标色的话，`originalStyle` 下`r`n          // HDS 会给按钮一个**深色底**（实测未滚动时是两个深色圆、滚动后又变浅），`r`n          // 两种状态观感不一致。统一用与背板同源的半透明暖色。
+          backIconStyle: { backgroundColor: background, iconColor: onSurface }
         }
       },
       systemMaterialEffect: {
