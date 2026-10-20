@@ -22,17 +22,36 @@ export class MainTitleBar {
    */
   static readonly CONTENT_TOP_OFFSET_VP: number = 112;
 
-  static readonly STYLE: TitleBarStyleOptions = {
-    scrollEffectOpts: {
-      enableScrollEffect: true,
-      scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
-      blurEffectiveStartOffset: LengthMetrics.vp(0),
-      blurEffectiveEndOffset: LengthMetrics.vp(20)
-    },
-    scrollEffectStyle: {
-      backgroundStyle: { maskExtraHeight: 56.0 }
-    }
-  };
+  /**
+   * 标题栏样式。
+   *
+   * ⚠️ 2026-10-19 修「滚动后顶部一条深灰渐变、状态栏被压暗」：
+   * `scrollEffectType: GRADIENT_BLUR`（滚动到一定偏移后标题栏浮起并做渐变模糊）
+   * 本身就是要的效果，但那层**背板默认是深色的**，叠在暖色页面上就是一条脏灰色带、
+   * 还把状态栏文字压得看不清。
+   *
+   * `HdsNavigationBackgroundStyle.backgroundColor` 能指定背板色，
+   * 所以这里把它做成**带参方法**，由调用方传入当前主题的 `scheme.surface`，
+   * 背板与页面同色、只保留模糊 —— 这才是「能隐约看到内容」的观感。
+   *
+   * 原来是 `static readonly STYLE`（常量拿不到主题色），改成静态方法。
+   */
+  static style(background: ResourceColor): TitleBarStyleOptions {
+    return {
+      scrollEffectOpts: {
+        enableScrollEffect: true,
+        scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
+        blurEffectiveStartOffset: LengthMetrics.vp(0),
+        blurEffectiveEndOffset: LengthMetrics.vp(20)
+      },
+      scrollEffectStyle: {
+        backgroundStyle: {
+          backgroundColor: background,
+          maskExtraHeight: 56.0
+        }
+      }
+    };
+  }
 
   /**
    * 任务列表页的右上角：**两个内联图标按钮**（多选 / 搜索），不是下拉。

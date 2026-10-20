@@ -377,7 +377,7 @@ export struct B_TaskDetail {
     // 标题栏与搜索页同一套官方风格；**标题固定写「任务详情」**，不显示任务名
     // （需求方 2026-10-16：「任务详情顶部栏不是显示任务名称 就显示任务详情」）
     .titleBar({
-      style: MainTitleBar.STYLE,
+      style: MainTitleBar.style(this.themeStore.scheme.surface),
       content: {
         title: { mainTitle: $r('app.string.title_task_detail') },
         // 右上角：响铃（有提醒时间才出现）+ 删除
