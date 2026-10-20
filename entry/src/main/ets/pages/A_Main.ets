@@ -1,7 +1,7 @@
 import { HdsNavigation, HdsNavigationMenuContentOptions, HdsNavigationTitleMode } from '@kit.UIDesignKit';
 import { common } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
-import { ThemeStore } from '../utils/Theme';
+import { Theme, ThemeStore } from '../utils/Theme';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { AddTaskSheet, addTaskSheetOptions } from '../components/AddTaskSheet';
@@ -64,16 +64,34 @@ struct A_Main {
     AppStorage.setOrCreate<NavPathStack>(NAV_STACK_KEY, this.navPathStack);
     this.syncRemindLead();
     this.syncTheme();
+    this.syncGroupExpand();
     this.applyWindowTheme();
   }
 
   /**
-   * **全屏沉浸**：把窗口背景色也设成 M3 `surface`（2026-10-19）。
+   * 把持久化的**分组展开状态**读回 store（2026-10-20，袁正锟：「记住上次的展开状态」）。
    *
-   * 为什么单靠 `expandSafeArea` 不够：`HdsNavigation` 内部会按安全区裁剪，
-   * 页面底色铺不到**状态栏**和**底部导航条**底下，那两个位置露出的仍是窗口默认白，
-   * 与暖色页面拼成一道白条（作者标注截图里箭头指的就是这两条）。
-   * 直接把**窗口背景色**设成同一个 `surface`，系统栏区域就有了同样的底色。
+   * 与 `syncTheme` 同一个理由放在根页面：`TaskListStore` 是页面持有的内存态，
+   * 用户上次收起/展开了哪几天，重启后要在这里恢复；只写在 `A_TaskList` 里的话
+   * 首帧就会闪一下「默认展开」（读盘是异步的）。
+   */
+  private async syncGroupExpand(): Promise<void> {
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      return;
+    }
+    await this.store.syncGroupExpand(context);
+  }
+
+  /**
+   * 系统栏底色跟随主题（2026-10-19 起；2026-10-20 取消沉浸后改成**系统栏背景色**）。
+   *
+   * 历史：沉浸时代这里调的是 `setWindowBackgroundColor`（把窗口底色设成 `surface`，
+   * 让布局伸进系统栏时那两块不露白）—— 但那条 API 在手机上会打 `unavailable to phone` 警告，形同没设。
+   *
+   * 现在取消了全屏沉浸（`setWindowLayoutFullScreen(false)`，见 `EntryAbility.setupWindow`），
+   * 系统栏有自己的区域，颜色由 `setWindowSystemBarProperties` 给：刷成同一个 `surface`，
+   * 顶部就不会出现「暖色页面 + 白状态栏」的拼色。主题色一变也跟着刷。
    */
   private async applyWindowTheme(): Promise<void> {
     const context: common.Context | undefined = this.getUIContext().getHostContext();
@@ -82,9 +100,14 @@ struct A_Main {
     }
     try {
       const win: window.Window = await window.getLastWindow(context);
-      await win.setWindowBackgroundColor(this.themeStore.scheme.surface);
+      win.setWindowSystemBarProperties({
+        statusBarColor: this.themeStore.scheme.surface,
+        navigationBarColor: this.themeStore.scheme.surface,
+        statusBarContentColor: Theme.STATUS_BAR_CONTENT,
+        navigationBarContentColor: Theme.STATUS_BAR_CONTENT
+      });
     } catch (error) {
-      // 设不上就算了：只少了沉浸底色，不影响功能
+      // 设不上就算了：只是系统栏露出系统默认色，不影响功能
     }
   }
 
@@ -251,8 +274,11 @@ struct A_Main {
     .titleMode(this.currentIndex === 0 ? HdsNavigationTitleMode.FREE : HdsNavigationTitleMode.MINI)
     .hideBackButton(true)
     .titleBar({
-      avoidLayoutSafeArea: true,
-      style: MainTitleBar.style(`#F2${this.themeStore.scheme.surface.substring(1)}`, this.themeStore.scheme.onSurface),
+      // 2026-10-20 取消全屏沉浸后必须从 `true` 改成 `false`：
+      // 布局区本身已经让开了状态栏，再 `true` 会让标题栏**把状态栏高度叠第二遍**
+      //（实测 TitleBar 变成 151vp ≈ 112+39，大标题被压到 Chip 行上、两者重叠）。
+      avoidLayoutSafeArea: false,
+      style: MainTitleBar.style(this.themeStore.scheme.surface, this.themeStore.scheme.onSurface),
       content: {
         title: { mainTitle: this.navTitle },
         menu: this.navMenu
@@ -269,11 +295,9 @@ struct A_Main {
     // M3（2026-10-19）：页面底色 = `surface` —— 很淡、带一丝主题色；
     // 卡片用 `surface-container-low`（tone 更低一档），层次靠色调表达而不是描边/重阴影。
     .backgroundColor(this.themeStore.scheme.surface)
-    // **全屏沉浸**（作者 2026-10-19）：让 `surface` 铺到状态栏与导航条底下，
-    // 而不是在顶部/底部留出系统默认的白条 —— 那样会和页面底色拼出一道色块。
-    // `expandSafeArea` 只扩展绘制区域，系统栏图标仍然悬浮在上面（内容不会被挡：
-    // 标题栏自身有 safe-area 内边距，列表底部也有 `contentEndOffset`）。
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+    // 2026-10-20 取消全屏沉浸：这里原有一行 `.expandSafeArea([SYSTEM], [BOTTOM])`
+    // （让 surface 铺到手势条底下），现在**删掉** —— 页面布局区不再伸进系统栏，
+    // 底部导航条区域的底色交给 `applyWindowTheme()` 刷的系统栏背景色。
     .width('100%')
     .height('100%')
   }

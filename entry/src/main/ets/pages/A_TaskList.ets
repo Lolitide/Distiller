@@ -28,7 +28,53 @@ const CHIPS_BAND_HEIGHT_VP: number = 52;
 /** 标题栏收起后的高度（vp）：HdsNavigation 的 MINI 档 */
 const TITLE_BAR_COLLAPSED_VP: number = 56;
 
-const LIST_BOTTOM_CLEARANCE_VP: number = 80;
+const LIST_BOTTOM_CLEARANCE_VP: number = 156;
+
+/**
+ * Chip 行"收起 / 展开"的滚动阈值（vp）与动画时长（毫秒）。
+ *
+ * ⚠️ 为什么不做"跟手连续"（2026-10-21 实测，袁正锟第 1 条反馈的真因）：
+ * 用布局探针同时读 TitleBar 高度与 Chip 行顶边 —— 滚动约 16vp 时标题栏**已经收到 55.7vp（收完了）**，
+ * 而 Chip 行还在按 1:1 往下滑，要滑到 ~60vp 才到位 → 两者必然错位，"标题一下就没了、筛选器还在飘"。
+ * 结论：HDS 的 FREE 大标题是**状态驱动的收起动画**，不是连续滚动量。所以这里也让 Chip 行
+ * 跟着标题"一起到位"：阈值 2vp 去抖，时长与 HDS 的收起动画同档。
+ */
+const CHIP_COLLAPSE_THRESHOLD_VP: number = 2;
+/**
+ * 收起时 Chip 行的启动延迟（毫秒）—— 2026-10-21 第二轮修「Chip 行压在大标题上」。
+ *
+ * HDS 的大标题只缩**高度**（112→56vp）、**字号不变**，所以收起过程中那行 36vp 的大字
+ * 仍占着展开态的 66~101vp 区间；Chip 行若和标题同时起步，就会穿过这一带、和文字叠在一起
+ *（袁正锟截图：Chip 行压在「任务列表」四个字上）。
+ * 官方没有能改 FREE 态字号的字段（`TitleSize` 只在 MINI 模式生效，且是 6.1.0(23)），
+ * 所以只能让收起方向**晚一拍**：等标题先收上去，Chip 行再落到 56vp。
+ * 展开方向不需要延迟 —— 那时 Chip 行是往下走、离开文字区。
+ */
+const CHIP_COLLAPSE_DELAY_MS: number = 240;
+/** Chip 行自身的移动时长（毫秒）：延迟之后快速落位，整体节奏 ≈ 240+160 = 400ms */
+const CHIP_COLLAPSE_ANIM_MS: number = 160;
+/**
+ * Chip 行底边圆角（vp）—— 实验性（袁正锟 2026-10-21 第 3 条）：
+ * 让"内容被裁切"的那条边看起来是**圆角矩形的下沿**，而不是一条刀切的直线
+ *（参照他给的日历 App：内容面板上下沿是圆角）。实色背板给圆角后，卡片从两个底角落里
+ * 露一点点出来，观感上就是"内容滑进一个有圆角的容器"，比硬边柔和。
+ */
+const CHIP_BAND_RADIUS_VP: number = 20;
+
+/**
+ * 底部渐变遮罩高度（vp）。
+ *
+ * 来历：HdsTabs 时代 `barFloatingStyle.gradientMask.maskHeight` 是 140
+ *（2026-10-19 袁正锟：「底部加上一段距离的渐变遮罩」→ 当时从 92 加高到 140）。
+ * 弃用 HdsTabs 后这层遮罩跟着没了，于是卡片在视口底边被齐切（2026-10-20 截图下方两个箭头），
+ * 现在用自绘渐变恢复它。
+ *
+ * ⚠️ 取 **100** 而不是当时的 140：旧实现那层遮罩的 `maskColor` 只有 40% 不透明度，而这里是**实色**渐变，
+ * 同样 140 会把滑到底的最后一张卡洗白（实测 `m4-list-end.png` 就是被洗白的样子）。
+ * 100 刚好罩住胶囊（16~72vp）又不动到最后一张卡；配套把 `LIST_BOTTOM_CLEARANCE_VP` 从 80 提到 96，
+ * 保证滚到底时最后一张卡整个落在遮罩之外。
+ */
+const BOTTOM_MASK_VP: number = 140;
 
 /* ── 副卡片「堆叠」形态（2026-10-19 实验性 UI）── */
 
@@ -97,30 +143,47 @@ export struct A_TaskList {
   /** 视觉个性化状态：卡片间距按密度档取值（紧凑档更紧） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
 
-  /** 列表当前滚动量（vp）：用来让 Chip 行跟着标题一起上滑 */
+  /** 列表当前滚动量（vp）：只用来判断"是否已经离开顶部"（见 `onDidScroll`） */
   @Local scrollVp: number = 0;
 
+  /** 标题栏是否已收起（＝ HDS 把大标题收到 MINI 档的状态，实测是**状态驱动**，见 `CHIP_COLLAPSE_THRESHOLD_VP`） */
+  @Local titleCollapsed: boolean = false;
+
   /**
-   * Chip 行悬浮层的顶部位置（vp）。
+   * Chip 行悬浮层的顶部位置（vp）—— 只有两档：展开态贴着大标题，收起态贴着 MINI 标题栏。
    *
-   * 作者 2026-10-19：「它应该上滑一段距离直到标题不再移动变化时停在那个位置，
-   * 就像和标题的运动绑在一起」。
+   * 作者 2026-10-19：「它应该上滑一段距离直到标题不再移动变化时停在那个位置，就像和标题的运动绑在一起」。
    *
-   * 标题栏从 `CONTENT_TOP_OFFSET_VP`(112) 收到 `TITLE_BAR_COLLAPSED_VP`(56)，
-   * 收起过程正好消耗 56vp 的滚动量；Chip 行用同样的起点与同样的收缩距离，
-   * 到 56vp 后 `max` 把它钉住 —— 视觉上就是和标题同步移动、然后一起停住。
+   * ⚠️ 2026-10-21 改成**两档 + 动画**，不再按滚动量线性插值：
+   * 布局探针实测 HDS 的大标题是"一滚就收完"（16vp 滚动时标题栏已从 111.7vp 变成 55.7vp），
+   * 而线性插值要 56vp 才走完 → Chip 行必然落后于标题。现在两者用同一拍、同一时长切换。
    */
   @Computed
   get chipsTopVp(): number {
-    const expanded: number = MainTitleBar.CONTENT_TOP_OFFSET_VP + this.sbVp;
-    const collapsed: number = TITLE_BAR_COLLAPSED_VP + this.sbVp;
-    return Math.max(collapsed, expanded - Math.max(0, this.scrollVp));
+    return this.titleCollapsed
+      ? TITLE_BAR_COLLAPSED_VP
+      : MainTitleBar.CONTENT_TOP_OFFSET_VP;
   }
 
-  /** 状态栏高度（vp）：全屏沉浸后页面整体上移了这么多，标题栏占位要补回来 */
+  /** 底部遮罩的两端色（`GradientDirection.Bottom`：第一项画在**上**边，所以上透下实） */
   @Computed
-  get sbVp(): number {
-    return px2vp(AppStorage.get<number>('statusBarHeightPx') ?? 0);
+  get bottomMaskColors(): Array<[ResourceColor, number]> {
+    const surface: string = this.themeStore.scheme.surface;
+    // ⚠️ 不要退回「两档线性 alpha」（`[00, 0.0], [FF, 1.0]`）：8bit 线性 alpha 在深色内容上
+    // 感知是"到最底下才突然变实"，袁正锟 2026-10-21 的原话是「淡出得太晚，内容到胶囊才淡」。
+    // 这里给 6 档、把中段 alpha 抬快，淡出在胶囊上方就很明显了。
+    const colors: Array<[ResourceColor, number]> = [
+      // 关键：**胶囊上沿**约在遮罩高度的 0.49 处，那里必须有 ~55% 遮挡，否则可见区域（胶囊上方）
+      // 全是 0~20% 的"看不见的渐变"，观感就是"到胶囊才淡"（袁正锟 2026-10-21 第 D 条）。
+      // 括号里是 alpha 百分比：0x40=25%、0x8C=55%、0xCC=80%、0xEE=93%
+      [Theme.withAlpha(surface, '00'), 0.0],
+      [Theme.withAlpha(surface, '40'), 0.25],
+      [Theme.withAlpha(surface, '8C'), 0.49],
+      [Theme.withAlpha(surface, 'CC'), 0.70],
+      [Theme.withAlpha(surface, 'EE'), 0.85],
+      [Theme.withAlpha(surface, 'FF'), 1.0]
+    ];
+    return colors;
   }
 
   /**
@@ -189,11 +252,13 @@ export struct A_TaskList {
           // 2026-10-19 第七次：分组**收起**之前是"啪"地消失（只有展开有动画）。
           // 包进 `animateTo` 后，组内卡片被移除时也会走 ListItem 上挂的 `transition`
           // 反向播放（淡出 + 上移），展开/收起两个方向就都有动效了。
+          // 2026-10-20：改成走 store 的唯一入口 —— 它除了改状态还会**记住**这次选择
+          // （袁正锟：「记住上次的展开状态」），直接写 `group.expanded` 的话重启就忘了。
           this.getUIContext().animateTo({
             duration: GROUP_EXPAND_ANIM_MS,
             curve: Curve.FastOutSlowIn
           }, () => {
-            group.expanded = !group.expanded;
+            this.store.setGroupExpanded(group, !group.expanded);
           });
         }
       })
@@ -238,7 +303,7 @@ export struct A_TaskList {
   emptyState() {
     Column() {
       // 顶部让开标题栏（与列表首项同一段留白，保持一致）
-      Row().width('100%').height(MainTitleBar.CONTENT_TOP_OFFSET_VP + this.sbVp)
+      Row().width('100%').height(MainTitleBar.CONTENT_TOP_OFFSET_VP)
 
       // 顶部筛选 Chip 行（空态下也要在，否则回不去「全部」）
       TaskFilterChips({ store: this.store })
@@ -267,7 +332,7 @@ export struct A_TaskList {
       ListItem() {
         // `Blank` 只能放进 Row/Column/Flex，所以这里用一行空 `Row` 撑出这段高度。
         // 无障碍不上报这个空项（否则读屏会播报一个空列表项）
-        Row().width('100%').height(MainTitleBar.CONTENT_TOP_OFFSET_VP + this.sbVp)
+        Row().width('100%').height(MainTitleBar.CONTENT_TOP_OFFSET_VP)
       }
       .accessibilityLevel('no')
 
@@ -400,9 +465,32 @@ export struct A_TaskList {
     .scrollBar(BarState.Off)
     // 让开悬浮页签栏的高度，否则最后一张卡片会被栏压住（见 LIST_BOTTOM_CLEARANCE_VP 的来历）
     .contentEndOffset(LIST_BOTTOM_CLEARANCE_VP)
-    // 把滚动量喂给 Chip 悬浮层，让它跟标题一起上滑（见 `chipsTopVp`）
+    // 把滚动位置喂给 Chip 悬浮层：只判「是否离开顶部」，切换时**带动画**（见 `chipsTopVp` 的说明）
     .onDidScroll(() => {
-      this.scrollVp = px2vp(this.scroller.currentOffset().yOffset);
+      const offsetVp: number = px2vp(this.scroller.currentOffset().yOffset);
+      this.scrollVp = offsetVp;
+      const next: boolean = offsetVp > CHIP_COLLAPSE_THRESHOLD_VP;
+      if (next === this.titleCollapsed) {
+        return;
+      }
+      // 与 HDS 大标题的收起动画同一拍：时长取 CHIP_COLLAPSE_ANIM_MS，曲线与标题一致用 FastOutSlowIn
+      if (next) {
+        // **收起**：标题先上去，Chip 行晚一拍再跟（`CHIP_COLLAPSE_DELAY_MS`）
+        this.getUIContext().animateTo({
+          duration: CHIP_COLLAPSE_ANIM_MS,
+          delay: CHIP_COLLAPSE_DELAY_MS,
+          curve: Curve.FastOutSlowIn
+        }, () => {
+          this.titleCollapsed = true;
+        });
+        return;
+      }
+      // **展开**：直接落位、**不做动画**。
+      // 往下滑时 HDS 把大标题展开回 112vp，那行 36vp 的大字会往下压回 66~101vp；
+      // Chip 行只要在 56~112 之间有**任何中间位置**，就可能被标题文字追上（袁正锟 2026-10-21 的叠字图）。
+      // 而 HDS 的展开进度我们读不到，所以最稳的做法是"一有滚动立刻落到展开位、连中间帧都不留"。
+      // 代价是这一下是瞬时的 —— 但它发生在用户正往下拉的瞬间，内容本来也在动，观感上不突兀。
+      this.titleCollapsed = false;
     })
   }
 
@@ -417,19 +505,60 @@ export struct A_TaskList {
 
       // **Chip 行悬浮冻结层**（2026-10-19，作者要求）：
       // 未滚动时贴在展开的标题栏下方；上滑时与标题同步上移；
-      // 标题收到 MINI 档后停在那个位置不再动。
-      // 底色用页面 `surface`，把从下面滚过的卡片挡住。
+      // 标题收到 MINI 档后停在那个位置不再动。底色用页面 `surface`，把从下面滚过的卡片挡住。
+      //
+      // ⚠️ 2026-10-20 取消全屏沉浸后，这一层的底色**从屏幕顶端（0）开始铺**，不再从标题栏收起线开始：
+      // 官方 `HdsNavigation` 的标题栏背板在非沉浸布局下实测**只出模糊、不填色**（换
+      // `GRADIENT_BLUR` / 关掉 `systemMaterialEffect` 都一样），于是大标题后面会透出滚动内容的
+      // 「幽灵文字」，再往下又被这一层的实色边缘齐刷刷切断。
+      // 把底色一路铺到顶端后：标题区与 Chip 行是同一块不透明底色，滚动内容只会被整体挡住。
+      // 标题、右上角按钮由 `HdsNavigation` 画在这一层**上面**，不受影响。
+      if (!this.isEmpty) {
+        // **底部渐变遮罩**（2026-10-20 恢复）：内容滑到胶囊/＋ 那一带时淡出，而不是在视口底边被齐切。
+        // 结构与上面那层一样：外层铺满、内容靠底，`HitTestMode.None` 让滚动/点击穿透给下面的列表。
+        Column() {
+          Column()
+            .width('100%')
+            .height(BOTTOM_MASK_VP)
+            .linearGradient({
+              // Bottom = 从上向下：上面全透明 -> 底部实色页面（方向别写反，见 bottomMaskColors 的说明）
+              direction: GradientDirection.Bottom,
+              colors: this.bottomMaskColors
+            })
+        }
+        .width('100%')
+        .height('100%')
+        .justifyContent(FlexAlign.End)
+        .hitTestBehavior(HitTestMode.None)
+      }
+
+      // **Chip 行悬浮冻结层**（2026-10-19，作者要求）：
+      // 未滚动时贴在展开的标题栏下方；上滑时与标题同步上移；
+      // 标题收到 MINI 档后停在那个位置不再动。底色用页面 `surface`，把从下面滚过的卡片挡住。
+      //
+      // ⚠️ 2026-10-20 取消全屏沉浸后，这一层的底色**从屏幕顶端（0）开始铺**，不再从标题栏收起线开始：
+      // 官方 `HdsNavigation` 的标题栏背板在非沉浸布局下实测**只出模糊、不填色**（换
+      // `GRADIENT_BLUR` / 关掉 `systemMaterialEffect` 都一样），于是大标题后面会透出滚动内容的
+      // 「幽灵文字」，再往下又被这一层的实色边缘齐刷刷切断。
+      // 把底色一路铺到顶端后：标题区与 Chip 行是同一块不透明底色，滚动内容只会被整体挡住。
+      // 标题、右上角按钮由 `HdsNavigation` 画在这一层**上面**，不受影响。
+      //
+      // 2026-10-21 第 3 条（实验性）：把实色背板的**下沿做成圆角**。
+      // 上一步（2026-10-20）这里接的是一条 20vp 的渐隐尾巴；袁正锟这次要的是
+      // 「上下裁切的边缘是圆角矩形」——于是改成给背板 `borderRadius({bottomLeft, bottomRight})`：
+      // 圆角之外的两个角会露出下面滑过的卡片，视觉上就是"内容正滑进一个带圆角的容器"，
+      // 比渐隐更利落。底部那条边缘按他给的兜底方案仍用渐变遮罩（见上面那段）。
       if (!this.isEmpty) {
         Column() {
           TaskFilterChips({ store: this.store })
         }
         .width('100%')
-        // 底色从**标题栏收起线**开始铺，而不是从 chip 本身开始：
-        // 否则标题与 chip 之间那条缝仍会透出滚动的内容（实测能看到「未安排日期」的上半截）。
-        // 用 padding 把上方那段补成同色，chip 的视觉位置仍由 `chipsTopVp` 决定。
-        .margin({ top: TITLE_BAR_COLLAPSED_VP + this.sbVp })
-        .padding({ top: Math.max(0, this.chipsTopVp - (TITLE_BAR_COLLAPSED_VP + this.sbVp)) })
+        .padding({ top: this.chipsTopVp })
         .backgroundColor(this.themeStore.scheme.surface)
+        .borderRadius({
+          bottomLeft: CHIP_BAND_RADIUS_VP,
+          bottomRight: CHIP_BAND_RADIUS_VP
+        })
       }
     }
     .width('100%')
@@ -440,3 +569,6 @@ export struct A_TaskList {
     .backgroundColor(this.themeStore.scheme.surface)
   }
 }
+
+
+

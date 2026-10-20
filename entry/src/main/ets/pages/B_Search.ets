@@ -60,12 +60,6 @@ export struct B_Search {
   /** 视觉个性化：M3 色系（搜索页底色 = surface） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
 
-  /** 状态栏高度（vp） */
-  @Computed
-  get sbVp(): number {
-    return px2vp(AppStorage.get<number>('statusBarHeightPx') ?? 0);
-  }
-
   /** 任务数据源：**列表页同一个 store**（搜的是同一份数据，不是副本） */
   @Require @Param store: TaskListStore;
 
@@ -216,21 +210,19 @@ export struct B_Search {
       }
       .width('100%')
       .height('100%')
-      // 全屏沉浸：内容整体下沉一个状态栏高度，避免顶到状态栏
-      .padding({ top: this.sbVp })
+      // 2026-10-20 取消全屏沉浸：布局区已自动让开状态栏，
+      // 原来的 `.padding({ top: this.sbVp })` 与 `.expandSafeArea(...)` 一并删掉（否则是双倍留白）。
       // 2026-10-19 全局 MD3：底色从系统浅蓝 `ohos_id_color_sub_background`(#f1f3f5)
       // 换成 M3 `surface` —— 与任务列表 / 设置 / 详情页同一套色系
       //（原先这里是为了跟主页 HdsTabs 容器那层灰对齐，现在主页也走 M3 了）。
       .backgroundColor(this.themeStore.scheme.surface)
-      // **全屏沉浸**：上下都铺进安全区（与详情页一致）。
-      // 原来只扩底部 —— 顶部那 56vp 是给 MINI 标题栏留的位，标题栏自己有内边距，
-      // 扩进去只会让底色铺到状态栏底下，内容不会被挡。
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
     }
-    // 标题栏沿用主页面那套官方风格（`MainTitleBar.STYLE`），观感与首页一致
+    // 标题栏沿用主页面那套官方风格（`MainTitleBar.style`），观感与首页一致
+    // 2026-10-21：入参从「#F2+surface 半透背板」改成「surface 实色背板」（背板与图标圆底在 style() 内推导），
+    // 这样滚动时标题栏与 Chip 行接成一整块实色，内容不再从顶部透出。
     .titleBar({
-      avoidLayoutSafeArea: true,
-      style: MainTitleBar.style(`#F2${this.themeStore.scheme.surface.substring(1)}`, this.themeStore.scheme.onSurface),
+      avoidLayoutSafeArea: false,
+      style: MainTitleBar.style(this.themeStore.scheme.surface, this.themeStore.scheme.onSurface),
       content: {
         title: { mainTitle: $r('app.string.title_search') }
       }

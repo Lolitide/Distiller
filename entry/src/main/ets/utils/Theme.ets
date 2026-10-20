@@ -83,6 +83,16 @@ export class Theme {
   static readonly SHADOW_OFFSET_Y: number = 2;
 
   /**
+   * **悬浮件**投影（底部页签胶囊 / 右下「＋」用）。2026-10-21 袁正锟：「为底部页签增加阴影」。
+   *
+   * 比卡片阴影（`SHADOW_RADIUS` 8 / 0.16）更散更浅：悬浮件体积大、离页面远，
+   * 用「大半径 + 低透明度」才有浮起来的感觉，小半径会像描边。
+   */
+  static readonly FLOATING_SHADOW_COLOR: string = 'rgba(0, 0, 0, 0.14)';
+  static readonly FLOATING_SHADOW_RADIUS: number = 24;
+  static readonly FLOATING_SHADOW_OFFSET_Y: number = 8;
+
+  /**
    * 副卡片**折叠态**的底色：比卡片白暗一层（半透明黑叠在页面底色上）。
    *
    * 与 `OPACITY_CARD_DIM` 一起用 —— 作者 2026-10-19：「同时更改 bg 颜色和 opacity」。
@@ -98,6 +108,20 @@ export class Theme {
 
   /** 状态栏/导航条内容色（深色，亮色主题下才看得清） */
   static readonly STATUS_BAR_CONTENT: string = '#1A1A1A';
+
+  /**
+   * 给一个 `#RRGGBB` 主题色拼上 alpha，得到 `#AARRGGBB`。
+   *
+   * 用途：**渐隐遮罩**（`linearGradient`）要把主题色做成「透明 → 实色」的两端，
+   * 而 `linearGradient.colors` 只吃具体色值字符串，没法用 `opacity` 叠出来。
+   * 这里拼的是**透明度前缀**、不是新颜色 —— 色相仍来自 `scheme.surface`，
+   * 所以不违反「色值只有 Theme.ets 一个来源」的约定。
+   *
+   * 例：`Theme.withAlpha('#F3F7FF', '00')` → `'#00F3F7FF'`（全透明）。
+   */
+  static withAlpha(color: string, alpha: string): string {
+    return `#${alpha}${color.substring(1)}`;
+  }
 }
 
 /* ─────────────────────────── 二、主题色档位 ─────────────────────────── */

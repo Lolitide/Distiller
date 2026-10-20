@@ -28,6 +28,12 @@ const KEY_PARSE_MODE: string = 'parse_mode';
 const KEY_THEME_ACCENT: string = 'theme_accent_index';
 /** 卡片密度（`DENSITY_STANDARD` / `DENSITY_COMPACT`）：2026-10-19 起持久化 */
 const KEY_DENSITY: string = 'card_density';
+/**
+ * 任务列表各分组的展开状态：`Array<string>`，每项形如 `<组键>:1|0`（1＝展开）。
+ * 组键见 `TaskDayGroup.persistKey`（有日期＝当天 0 点时间戳，无日期＝`undated`）。
+ * 2026-10-20 起持久化（袁正锟：「记住上次的展开状态」）。
+ */
+const KEY_GROUP_EXPANDED: string = 'task_group_expanded';
 
 /** 默认提醒提前量：0 分钟（到点提醒） */
 export const DEFAULT_REMIND_LEAD: number = 0;
@@ -198,6 +204,48 @@ export class SettingsRepository {
     } catch (error) {
       const err = error as BusinessError;
       hilog.error(DOMAIN, TAG, 'setDensity failed: %{public}s', err.message);
+      return false;
+    }
+  }
+
+  /* ── 任务列表分组展开状态（2026-10-20 起持久化）── */
+
+  /**
+   * 读各分组的展开状态。
+   *
+   * 返回**原始条目**数组（`<组键>:1|0`），解析与「套到哪些组上」归 `TaskListStore` ——
+   * 本层只认「一个字符串数组」，不认识分组，避免仓储层反过来依赖 ViewModel 的组结构。
+   * 读不到／格式不对一律返回空数组（＝全部按默认展开规则走），不抛异常。
+   */
+  static async getGroupExpanded(context: common.Context): Promise<string[]> {
+    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
+    if (store === undefined) {
+      return [];
+    }
+    try {
+      const empty: string[] = [];
+      const value: preferences.ValueType = await store.get(KEY_GROUP_EXPANDED, empty);
+      return Array.isArray(value) ? value as string[] : [];
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'getGroupExpanded failed: %{public}s', err.message);
+      return [];
+    }
+  }
+
+  /** 写各分组的展开状态（整份覆盖）。**写完必须 flush**，否则只在内存里、杀进程就丢 */
+  static async setGroupExpanded(context: common.Context, entries: string[]): Promise<boolean> {
+    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
+    if (store === undefined) {
+      return false;
+    }
+    try {
+      await store.put(KEY_GROUP_EXPANDED, entries);
+      await store.flush();
+      return true;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'setGroupExpanded failed: %{public}s', err.message);
       return false;
     }
   }
