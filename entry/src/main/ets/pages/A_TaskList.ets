@@ -89,6 +89,12 @@ export struct A_TaskList {
   /** 视觉个性化状态：卡片间距按密度档取值（紧凑档更紧） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
 
+  /** 状态栏高度（vp）：全屏沉浸后页面整体上移了这么多，标题栏占位要补回来 */
+  @Computed
+  get sbVp(): number {
+    return px2vp(AppStorage.get<number>('statusBarHeightPx') ?? 0);
+  }
+
   /**
    * 哪些任务的副卡片被**长按展开**了（存 task.id）。
    *
@@ -204,7 +210,7 @@ export struct A_TaskList {
   emptyState() {
     Column() {
       // 顶部让开标题栏（与列表首项同一段留白，保持一致）
-      Row().width('100%').height(MainTitleBar.CONTENT_TOP_OFFSET_VP)
+      Row().width('100%').height(MainTitleBar.CONTENT_TOP_OFFSET_VP + this.sbVp)
 
       // 顶部筛选 Chip 行（空态下也要在，否则回不去「全部」）
       TaskFilterChips({ store: this.store })
@@ -233,7 +239,7 @@ export struct A_TaskList {
       ListItem() {
         // `Blank` 只能放进 Row/Column/Flex，所以这里用一行空 `Row` 撑出这段高度。
         // 无障碍不上报这个空项（否则读屏会播报一个空列表项）
-        Row().width('100%').height(MainTitleBar.CONTENT_TOP_OFFSET_VP)
+        Row().width('100%').height(MainTitleBar.CONTENT_TOP_OFFSET_VP + this.sbVp)
       }
       .accessibilityLevel('no')
 

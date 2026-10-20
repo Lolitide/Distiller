@@ -95,6 +95,9 @@ export class Theme {
 
   /** 副卡片展开/收起动画时长（毫秒）：与页面里的高度动画保持一致 */
   static readonly ANIM_EXPAND_MS: number = 220;
+
+  /** 状态栏/导航条内容色（深色，亮色主题下才看得清） */
+  static readonly STATUS_BAR_CONTENT: string = '#1A1A1A';
 }
 
 /* ─────────────────────────── 二、主题色档位 ─────────────────────────── */

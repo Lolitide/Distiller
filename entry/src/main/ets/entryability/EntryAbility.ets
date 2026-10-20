@@ -16,6 +16,7 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import { Theme } from '../utils/Theme';
 
 const DOMAIN = 0x0000;
 
@@ -37,6 +38,8 @@ export default class EntryAbility extends UIAbility {
     // Main window is created, set main page for this ability
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
 
+    this.setImmersiveWindow(windowStage);
+
     windowStage.loadContent('pages/A_Main', (err) => {
       if (err.code) {
         hilog.error(DOMAIN, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err));
@@ -44,6 +47,33 @@ export default class EntryAbility extends UIAbility {
       }
       hilog.info(DOMAIN, 'testTag', 'Succeeded in loading the content.');
     });
+  }
+
+  /**
+   * 全屏沉浸窗口（做法参考 MoMo/EntryAbility.setImmersiveWindow）：
+   * 布局扩到安全区外 + 系统栏透明 + 内容深色（我们只做亮色主题）。
+   */
+  private setImmersiveWindow(windowStage: window.WindowStage): void {
+    try {
+      windowStage.getMainWindow().then((w: window.Window) => {
+        w.setWindowLayoutFullScreen(true);
+        w.setWindowSystemBarProperties({
+          statusBarColor: '#00000000',
+          navigationBarColor: '#00000000',
+          statusBarContentColor: Theme.STATUS_BAR_CONTENT,
+          navigationBarContentColor: Theme.STATUS_BAR_CONTENT
+        });
+        // 把状态栏高度（px）存进 AppStorage：全屏后页面整体上移了这么多，
+        // 各页面的标题栏占位要补回来，否则内容会顶到标题上。
+        const area = w.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM);
+        AppStorage.setOrCreate<number>('statusBarHeightPx', area.topRect.height);
+        hilog.info(DOMAIN, 'testTag', 'Immersive window configured, statusBar=%{public}d', area.topRect.height);
+      }).catch((e: Error) => {
+        hilog.warn(DOMAIN, 'testTag', 'setImmersiveWindow failed: %{public}s', e.message);
+      });
+    } catch (e) {
+      hilog.warn(DOMAIN, 'testTag', 'setImmersiveWindow exception');
+    }
   }
 
   onWindowStageDestroy(): void {

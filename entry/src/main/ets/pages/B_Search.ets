@@ -60,6 +60,12 @@ export struct B_Search {
   /** 视觉个性化：M3 色系（搜索页底色 = surface） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
 
+  /** 状态栏高度（vp） */
+  @Computed
+  get sbVp(): number {
+    return px2vp(AppStorage.get<number>('statusBarHeightPx') ?? 0);
+  }
+
   /** 任务数据源：**列表页同一个 store**（搜的是同一份数据，不是副本） */
   @Require @Param store: TaskListStore;
 
@@ -210,6 +216,8 @@ export struct B_Search {
       }
       .width('100%')
       .height('100%')
+      // 全屏沉浸：内容整体下沉一个状态栏高度，避免顶到状态栏
+      .padding({ top: this.sbVp })
       // 2026-10-19 全局 MD3：底色从系统浅蓝 `ohos_id_color_sub_background`(#f1f3f5)
       // 换成 M3 `surface` —— 与任务列表 / 设置 / 详情页同一套色系
       //（原先这里是为了跟主页 HdsTabs 容器那层灰对齐，现在主页也走 M3 了）。
@@ -221,7 +229,8 @@ export struct B_Search {
     }
     // 标题栏沿用主页面那套官方风格（`MainTitleBar.STYLE`），观感与首页一致
     .titleBar({
-      style: MainTitleBar.style(this.themeStore.scheme.surface),
+      avoidLayoutSafeArea: true,
+      style: MainTitleBar.style(`#CC${this.themeStore.scheme.surface.substring(1)}`, this.themeStore.scheme.onSurface),
       content: {
         title: { mainTitle: $r('app.string.title_search') }
       }

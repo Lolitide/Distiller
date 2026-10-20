@@ -99,6 +99,12 @@ export struct A_Settings {
   /** 视觉个性化状态（跨页共享，见 utils/Theme.ets） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
 
+  /** 状态栏高度（vp）：全屏沉浸后页面整体上移，顶部让位要补回来 */
+  @Computed
+  get sbVp(): number {
+    return px2vp(AppStorage.get<number>('statusBarHeightPx') ?? 0);
+  }
+
   @Local remindLead: number = DEFAULT_REMIND_LEAD;
   @Local parseMode: number = DEFAULT_PARSE_MODE;
 
