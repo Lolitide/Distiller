@@ -1,0 +1,28 @@
+# ---- 密钥与本地凭据（绝不入库）----
+.env
+.relay_key
+service_account.json
+
+# ---- 运行期落盘数据（含用户信息，不随仓库分发）----
+relay_store.json
+group_lexicon.json
+group_names.json
+bot.db
+bot.db-shm
+bot.db-wal
+_tmp_test/
+labeling/
+*.log
+
+# ---- 虚拟环境与缓存 ----
+.venv/
+__pycache__/
+*.pyc
+
+# ---- 大样本 / 生成物 ----
+eval_set_real.json
+eval_sample.json
+eval_results.json
+theme_dark.png
+theme_light.png
+ocr_test/
