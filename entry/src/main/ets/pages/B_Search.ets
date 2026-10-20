@@ -230,7 +230,7 @@ export struct B_Search {
     // 标题栏沿用主页面那套官方风格（`MainTitleBar.STYLE`），观感与首页一致
     .titleBar({
       avoidLayoutSafeArea: true,
-      style: MainTitleBar.style(`#CC${this.themeStore.scheme.surface.substring(1)}`, this.themeStore.scheme.onSurface),
+      style: MainTitleBar.style(`#F2${this.themeStore.scheme.surface.substring(1)}`, this.themeStore.scheme.onSurface),
       content: {
         title: { mainTitle: $r('app.string.title_search') }
       }
