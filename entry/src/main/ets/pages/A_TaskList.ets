@@ -20,6 +20,14 @@ import { TaskListStore } from '../viewmodel/TaskListStore';
  * 即 **256px = 72vp ＝ 栏高 `tab_bar_default_height`(56vp) + 栏底距 `barBottomMargin`(16vp)**；
  * 再加一点呼吸 → 取 **80vp**。之前这里只有 `padding_level4`(8vp)，所以最后一张卡片会被压住。
  */
+/**
+ * Chip 行悬浮层的高度（vp）：一行 chip（40）+ 上下呼吸。
+ * 列表里留出同样高度的空档，第一张卡片才不会钻到 chip 底下。
+ */
+const CHIPS_BAND_HEIGHT_VP: number = 52;
+/** 标题栏收起后的高度（vp）：HdsNavigation 的 MINI 档 */
+const TITLE_BAR_COLLAPSED_VP: number = 56;
+
 const LIST_BOTTOM_CLEARANCE_VP: number = 80;
 
 /* ── 副卡片「堆叠」形态（2026-10-19 实验性 UI）── */
@@ -88,6 +96,26 @@ export struct A_TaskList {
 
   /** 视觉个性化状态：卡片间距按密度档取值（紧凑档更紧） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
+
+  /** 列表当前滚动量（vp）：用来让 Chip 行跟着标题一起上滑 */
+  @Local scrollVp: number = 0;
+
+  /**
+   * Chip 行悬浮层的顶部位置（vp）。
+   *
+   * 作者 2026-10-19：「它应该上滑一段距离直到标题不再移动变化时停在那个位置，
+   * 就像和标题的运动绑在一起」。
+   *
+   * 标题栏从 `CONTENT_TOP_OFFSET_VP`(112) 收到 `TITLE_BAR_COLLAPSED_VP`(56)，
+   * 收起过程正好消耗 56vp 的滚动量；Chip 行用同样的起点与同样的收缩距离，
+   * 到 56vp 后 `max` 把它钉住 —— 视觉上就是和标题同步移动、然后一起停住。
+   */
+  @Computed
+  get chipsTopVp(): number {
+    const expanded: number = MainTitleBar.CONTENT_TOP_OFFSET_VP + this.sbVp;
+    const collapsed: number = TITLE_BAR_COLLAPSED_VP + this.sbVp;
+    return Math.max(collapsed, expanded - Math.max(0, this.scrollVp));
+  }
 
   /** 状态栏高度（vp）：全屏沉浸后页面整体上移了这么多，标题栏占位要补回来 */
   @Computed
@@ -243,10 +271,13 @@ export struct A_TaskList {
       }
       .accessibilityLevel('no')
 
-      // 页面最顶上那一排筛选 Chip（在第一项让位区之后，所以它正好贴在标题栏下方）
+      // 2026-10-19：Chip 行**不再作为普通列表项**（那样会随页面滑出屏幕）。
+      // 改成 `build()` 里的**悬浮冻结层**，跟着标题一起上滑、标题收起后停住。
+      // 这里只留出与它等高的空档，让第一张卡片从 Chip 行下方开始、不会钻到它底下。
       ListItem() {
-        TaskFilterChips({ store: this.store })
+        Row().width('100%').height(CHIPS_BAND_HEIGHT_VP)
       }
+      .accessibilityLevel('no')
 
       ForEach(this.store.groups, (group: TaskDayGroup) => {
         // 当前筛选下这一组一条都没有 → 整组不渲染（组头也不出现）
@@ -369,15 +400,36 @@ export struct A_TaskList {
     .scrollBar(BarState.Off)
     // 让开悬浮页签栏的高度，否则最后一张卡片会被栏压住（见 LIST_BOTTOM_CLEARANCE_VP 的来历）
     .contentEndOffset(LIST_BOTTOM_CLEARANCE_VP)
+    // 把滚动量喂给 Chip 悬浮层，让它跟标题一起上滑（见 `chipsTopVp`）
+    .onDidScroll(() => {
+      this.scrollVp = px2vp(this.scroller.currentOffset().yOffset);
+    })
   }
 
   build() {
     // 有任务＝列表；一条都没有＝官方风格的空状态（两者都是内容区的根，外面套 Stack 保证根节点是容器）
-    Stack() {
+    Stack({ alignContent: Alignment.TopStart }) {
       if (this.isEmpty) {
         this.emptyState()
       } else {
         this.taskList()
+      }
+
+      // **Chip 行悬浮冻结层**（2026-10-19，作者要求）：
+      // 未滚动时贴在展开的标题栏下方；上滑时与标题同步上移；
+      // 标题收到 MINI 档后停在那个位置不再动。
+      // 底色用页面 `surface`，把从下面滚过的卡片挡住。
+      if (!this.isEmpty) {
+        Column() {
+          TaskFilterChips({ store: this.store })
+        }
+        .width('100%')
+        // 底色从**标题栏收起线**开始铺，而不是从 chip 本身开始：
+        // 否则标题与 chip 之间那条缝仍会透出滚动的内容（实测能看到「未安排日期」的上半截）。
+        // 用 padding 把上方那段补成同色，chip 的视觉位置仍由 `chipsTopVp` 决定。
+        .margin({ top: TITLE_BAR_COLLAPSED_VP + this.sbVp })
+        .padding({ top: Math.max(0, this.chipsTopVp - (TITLE_BAR_COLLAPSED_VP + this.sbVp)) })
+        .backgroundColor(this.themeStore.scheme.surface)
       }
     }
     .width('100%')
