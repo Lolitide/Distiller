@@ -1,3 +1,4 @@
+import { ThemeStore } from '../utils/Theme';
 /*
  * 搜索页（**二级页**，按 §9.1 用 `B_` 前缀）。
  *
@@ -56,6 +57,9 @@ export function SearchPageBuilder(name: string, param: Object) {
 
 @ComponentV2
 export struct B_Search {
+  /** 视觉个性化：M3 色系（搜索页底色 = surface） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
+
   /** 任务数据源：**列表页同一个 store**（搜的是同一份数据，不是副本） */
   @Require @Param store: TaskListStore;
 
@@ -206,16 +210,14 @@ export struct B_Search {
       }
       .width('100%')
       .height('100%')
-      // 页面底色必须与主页一致：主页那层灰是 `MainTabBar` 的 HdsTabs 容器刷的
-      // `sys.color.ohos_id_color_sub_background`(#f1f3f5)；二级页没有那层容器，
-      // 不刷就是官方默认的白底 → 袁正锟 2026-10-16「搜索页的背景颜色和主页的不一致」。
-      .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
-      // 底部安全区（手势条那一条）也要是同一个灰：二级页的内容区默认**不**画进安全区，
-      // 于是最底下留了一条白（实测 y≥2740 是 (255,255,255)，而主页同一位置是 (240,243,245)）
-      // → 袁正锟 2026-10-16「最底下的安全区改成上面同样的灰色」。
-      // 用通用属性 `expandSafeArea` 把这块的**绘制**延伸进底部安全区（只扩底部，顶部不动 ——
-      // 顶部那 56vp 是给 MINI 标题栏留的位）。
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+      // 2026-10-19 全局 MD3：底色从系统浅蓝 `ohos_id_color_sub_background`(#f1f3f5)
+      // 换成 M3 `surface` —— 与任务列表 / 设置 / 详情页同一套色系
+      //（原先这里是为了跟主页 HdsTabs 容器那层灰对齐，现在主页也走 M3 了）。
+      .backgroundColor(this.themeStore.scheme.surface)
+      // **全屏沉浸**：上下都铺进安全区（与详情页一致）。
+      // 原来只扩底部 —— 顶部那 56vp 是给 MINI 标题栏留的位，标题栏自己有内边距，
+      // 扩进去只会让底色铺到状态栏底下，内容不会被挡。
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     }
     // 标题栏沿用主页面那套官方风格（`MainTitleBar.STYLE`），观感与首页一致
     .titleBar({
