@@ -321,6 +321,10 @@ export struct MainTabBar {
           enableMiniBarBackground: true
         }
       })
+      // **页签栏高度钉回原来的 56vp**（2026-10-19 作者：「我希望导航页签和原来一个高度」）。
+      // 官方 `barHeight` 说明：悬浮样式默认 56vp；但去掉文字后 HDS 会按内容自适应、药丸变矮，
+      // 所以显式指定，保持与原来（图标+文字时期）一致。
+      .barHeight(56)
       .onChange((index: number) => {
         this.onIndexChange(index);
       })
