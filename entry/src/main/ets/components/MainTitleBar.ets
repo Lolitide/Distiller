@@ -15,7 +15,8 @@ import {
   TextStyleMode,
   TitleBarStyleOptions
 } from '@kit.UIDesignKit';
-import { LengthMetrics } from '@kit.ArkUI';
+import { LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI';
+import { Theme } from '../utils/Theme';
 
 export class MainTitleBar {
   /**
@@ -93,7 +94,7 @@ export class MainTitleBar {
         {
           content: {
             label: $r('app.string.menu_multi_select'),
-            icon: $r('sys.symbol.checkmark_square_on_square'),
+            icon: new SymbolGlyphModifier($r('sys.symbol.checkmark_square_on_square')).fontColor([Theme.STATUS_BAR_CONTENT]),
             isEnabled: true,
             action: onEdit
           }
@@ -101,7 +102,7 @@ export class MainTitleBar {
         {
           content: {
             label: $r('app.string.menu_search'),
-            icon: $r('sys.symbol.magnifyingglass'),
+            icon: new SymbolGlyphModifier($r('sys.symbol.magnifyingglass')).fontColor([Theme.STATUS_BAR_CONTENT]),
             isEnabled: true,
             action: onSearch
           }
@@ -117,7 +118,7 @@ export class MainTitleBar {
         {
           content: {
             label: $r('app.string.menu_about'),
-            icon: $r('sys.symbol.info_circle'),
+            icon: new SymbolGlyphModifier($r('sys.symbol.info_circle')).fontColor([Theme.STATUS_BAR_CONTENT]),
             isEnabled: true,
             action: onAbout
           }
@@ -153,7 +154,7 @@ export class MainTitleBar {
     items.push({
       content: {
         label: $r('app.string.action_delete_task'),
-        icon: $r('sys.symbol.trash'),
+        icon: new SymbolGlyphModifier($r('sys.symbol.trash')).fontColor([Theme.STATUS_BAR_CONTENT]),
         isEnabled: true,
         action: onDelete
       }
