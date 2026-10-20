@@ -217,7 +217,7 @@ export struct B_Search {
       // **全屏沉浸**：上下都铺进安全区（与详情页一致）。
       // 原来只扩底部 —— 顶部那 56vp 是给 MINI 标题栏留的位，标题栏自己有内边距，
       // 扩进去只会让底色铺到状态栏底下，内容不会被挡。
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
     }
     // 标题栏沿用主页面那套官方风格（`MainTitleBar.STYLE`），观感与首页一致
     .titleBar({

@@ -272,7 +272,7 @@ struct A_Main {
     // 而不是在顶部/底部留出系统默认的白条 —— 那样会和页面底色拼出一道色块。
     // `expandSafeArea` 只扩展绘制区域，系统栏图标仍然悬浮在上面（内容不会被挡：
     // 标题栏自身有 safe-area 内边距，列表底部也有 `contentEndOffset`）。
-    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
     .width('100%')
     .height('100%')
   }
