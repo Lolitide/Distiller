@@ -372,7 +372,7 @@ export struct B_TaskDetail {
       // 与任务列表 / 设置页同一套色系（作者：「详情页的背景底色也没加」）。
       .backgroundColor(this.themeStore.scheme.surface)
       // **全屏沉浸**：上下都铺进安全区，内容可以滚到状态栏与手势条底下
-      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
+      .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
     }
     // 标题栏与搜索页同一套官方风格；**标题固定写「任务详情」**，不显示任务名
     // （需求方 2026-10-16：「任务详情顶部栏不是显示任务名称 就显示任务详情」）
