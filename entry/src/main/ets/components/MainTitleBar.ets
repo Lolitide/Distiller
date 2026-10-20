@@ -7,7 +7,14 @@
  * 这样也删掉了原来那套 `componentId` + `promptAction.openMenu` + 自建 `Menu/MenuItem` 的复杂度。
  * 图标一律取官方 HarmonyOS Symbol。
  */
-import { HdsNavigationMenuContentOptions, HdsNavigationMenuItemOptions, ScrollEffectType, TextStyleMode, TitleBarStyleOptions } from '@kit.UIDesignKit';
+import {
+  hdsMaterial,
+  HdsNavigationMenuContentOptions,
+  HdsNavigationMenuItemOptions,
+  ScrollEffectType,
+  TextStyleMode,
+  TitleBarStyleOptions
+} from '@kit.UIDesignKit';
 import { LengthMetrics } from '@kit.ArkUI';
 
 export class MainTitleBar {
@@ -36,26 +43,34 @@ export class MainTitleBar {
    *
    * 原来是 `static readonly STYLE`（常量拿不到主题色），改成静态方法。
    */
-  static style(background: ResourceColor): TitleBarStyleOptions {
+  static style(background: string, onSurface: ResourceColor): TitleBarStyleOptions {
     return {
-      // **滚动渐变模糊已关闭**（2026-10-19 作者：「文字对比度极低，完全看不清了，
-      // 就不能不动文字、按钮、状态栏图标颜色吗」）。
-      //
-      // 前情：`GRADIENT_BLUR` 的默认背板是**深色**、配套的滚动态文字/图标是**白色**。
-      // 我们为了去掉那条深灰带把背板换成了浅色 `surface`，但白字仍压在上面 →
-      // 标题、右上角两个按钮、状态栏图标全部白化、对比度极低。
-      //
-      // 官方没有单独暴露"滚动态的字体/图标颜色"，只能整段 `scrollEffectStyle` 一起给；
-      // 既然作者要求**不动文字与图标颜色**，就直接关掉这个滚动效果 ——
-      // 标题栏保持常态配色，滚动时不再浮起、不再蒙层。
+      // 沉浸式渐变模糊（参考 MoMo/components/MoMoBasePage）
       scrollEffectOpts: {
-        enableScrollEffect: false
+        scrollEffectType: ScrollEffectType.IMMERSIVE_GRADIENT_BLUR
       },
+      // 未滚动态：标题栏透明，只给深色文字/图标
+      originalStyle: {
+        contentStyle: {
+          titleStyle: { mainTitleColor: onSurface },
+          backIconStyle: { iconColor: onSurface }
+        }
+      },
+      // 滚动后：M3 暖色半透背板 + 深色文字/图标。
+      // ⚠️ 两套 contentStyle 都要显式给色，否则默认是白字压浅底、看不清。
       scrollEffectStyle: {
         backgroundStyle: {
           backgroundColor: background,
           maskExtraHeight: 56.0
+        },
+        contentStyle: {
+          titleStyle: { mainTitleColor: onSurface },
+          backIconStyle: { iconColor: onSurface }
         }
+      },
+      systemMaterialEffect: {
+        materialType: hdsMaterial.MaterialType.IMMERSIVE,
+        materialLevel: hdsMaterial.MaterialLevel.ADAPTIVE
       }
     };
   }

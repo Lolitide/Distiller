@@ -54,6 +54,12 @@ export struct B_TaskDetail {
   /** 视觉个性化：M3 色系（详情页底色 = surface） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
 
+  /** 状态栏高度（vp） */
+  @Computed
+  get sbVp(): number {
+    return px2vp(AppStorage.get<number>('statusBarHeightPx') ?? 0);
+  }
+
   /** 跳转参数：任务对象 + store（`Task` 是 `@ObservedV2`，改字段卡片会跟着刷新） */
   @Require @Param param: TaskDetailParam;
 
@@ -368,6 +374,8 @@ export struct B_TaskDetail {
       }
       .width('100%')
       .height('100%')
+      // 全屏沉浸：内容整体下沉一个状态栏高度，避免顶到状态栏
+      .padding({ top: this.sbVp })
       // 2026-10-19 全局 MD3：底色从系统浅蓝 `ohos_id_color_sub_background` 换成 M3 `surface`，
       // 与任务列表 / 设置页同一套色系（作者：「详情页的背景底色也没加」）。
       .backgroundColor(this.themeStore.scheme.surface)
@@ -377,7 +385,8 @@ export struct B_TaskDetail {
     // 标题栏与搜索页同一套官方风格；**标题固定写「任务详情」**，不显示任务名
     // （需求方 2026-10-16：「任务详情顶部栏不是显示任务名称 就显示任务详情」）
     .titleBar({
-      style: MainTitleBar.style(this.themeStore.scheme.surface),
+      avoidLayoutSafeArea: true,
+      style: MainTitleBar.style(`#CC${this.themeStore.scheme.surface.substring(1)}`, this.themeStore.scheme.onSurface),
       content: {
         title: { mainTitle: $r('app.string.title_task_detail') },
         // 右上角：响铃（有提醒时间才出现）+ 删除

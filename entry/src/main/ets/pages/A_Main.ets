@@ -251,7 +251,8 @@ struct A_Main {
     .titleMode(this.currentIndex === 0 ? HdsNavigationTitleMode.FREE : HdsNavigationTitleMode.MINI)
     .hideBackButton(true)
     .titleBar({
-      style: MainTitleBar.style(this.themeStore.scheme.surface),
+      avoidLayoutSafeArea: true,
+      style: MainTitleBar.style(`#CC${this.themeStore.scheme.surface.substring(1)}`, this.themeStore.scheme.onSurface),
       content: {
         title: { mainTitle: this.navTitle },
         menu: this.navMenu
