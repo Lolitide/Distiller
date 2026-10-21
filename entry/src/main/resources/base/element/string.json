@@ -11,6 +11,614 @@
     {
       "name": "EntryAbility_label",
       "value": "label"
+    },
+    {
+      "name": "tab_task_list",
+      "value": "任务列表"
+    },
+    {
+      "name": "tab_settings",
+      "value": "设置"
+    },
+    {
+      "name": "action_more",
+      "value": "更多"
+    },
+    {
+      "name": "menu_edit",
+      "value": "编辑"
+    },
+    {
+      "name": "menu_multi_select",
+      "value": "多选"
+    },
+    {
+      "name": "menu_search",
+      "value": "搜索"
+    },
+    {
+      "name": "menu_about",
+      "value": "关于"
+    },
+    {
+      "name": "group_undated",
+      "value": "未安排日期"
+    },
+    {
+      "name": "group_title_today",
+      "value": "今天 · %d月%d日"
+    },
+    {
+      "name": "group_title_tomorrow",
+      "value": "明天 · %d月%d日"
+    },
+    {
+      "name": "group_title_weekday_sun",
+      "value": "周日 · %d月%d日"
+    },
+    {
+      "name": "group_title_weekday_mon",
+      "value": "周一 · %d月%d日"
+    },
+    {
+      "name": "group_title_weekday_tue",
+      "value": "周二 · %d月%d日"
+    },
+    {
+      "name": "group_title_weekday_wed",
+      "value": "周三 · %d月%d日"
+    },
+    {
+      "name": "group_title_weekday_thu",
+      "value": "周四 · %d月%d日"
+    },
+    {
+      "name": "group_title_weekday_fri",
+      "value": "周五 · %d月%d日"
+    },
+    {
+      "name": "group_title_weekday_sat",
+      "value": "周六 · %d月%d日"
+    },
+    {
+      "name": "group_progress",
+      "value": "未完成 %d 项 / 共 %d 项"
+    },
+    {
+      "name": "group_expand",
+      "value": "展开"
+    },
+    {
+      "name": "group_collapse",
+      "value": "收起"
+    },
+    {
+      "name": "action_add_task",
+      "value": "添加任务"
+    },
+    {
+      "name": "action_save",
+      "value": "保存"
+    },
+    {
+      "name": "task_saved",
+      "value": "已保存"
+    },
+    {
+      "name": "action_cancel",
+      "value": "取消"
+    },
+    {
+      "name": "action_select_all",
+      "value": "全选"
+    },
+    {
+      "name": "action_delete",
+      "value": "删除"
+    },
+    {
+      "name": "action_select_task",
+      "value": "选择任务"
+    },
+    {
+      "name": "action_deselect_task",
+      "value": "取消选择"
+    },
+    {
+      "name": "action_complete_task",
+      "value": "标记完成"
+    },
+    {
+      "name": "action_uncomplete_task",
+      "value": "取消完成"
+    },
+    {
+      "name": "deleted_count",
+      "value": "已删除 %d 项"
+    },
+    {
+      "name": "delete_confirm_message",
+      "value": "真的要删除这 %d 项任务吗？"
+    },
+    {
+      "name": "empty_task_list",
+      "value": "无任务"
+    },
+    {
+      "name": "empty_filtered_task_list",
+      "value": "没有符合条件的任务"
+    },
+    {
+      "name": "filter_all",
+      "value": "全部"
+    },
+    {
+      "name": "filter_done",
+      "value": "已完成"
+    },
+    {
+      "name": "filter_todo",
+      "value": "未完成"
+    },
+    {
+      "name": "filter_urgent",
+      "value": "紧急"
+    },
+    {
+      "name": "title_search",
+      "value": "搜索"
+    },
+    {
+      "name": "search_placeholder",
+      "value": "搜索功能待实现"
+    },
+    {
+      "name": "search_hint",
+      "value": "搜索任务"
+    },
+    {
+      "name": "search_idle_hint",
+      "value": "点击搜索框开始"
+    },
+    {
+      "name": "search_no_result",
+      "value": "无结果"
+    },
+    {
+      "name": "task_detail_placeholder",
+      "value": "任务详情待做"
+    },
+    {
+      "name": "title_task_detail",
+      "value": "任务详情"
+    },
+    {
+      "name": "action_add_step",
+      "value": "添加步骤"
+    },
+    {
+      "name": "step_hint_next",
+      "value": "下一步"
+    },
+    {
+      "name": "action_delete_step",
+      "value": "删除"
+    },
+    {
+      "name": "delete_step_confirm",
+      "value": "真的要删除这个步骤吗？"
+    },
+    {
+      "name": "attr_no_remind",
+      "value": "未设置提醒"
+    },
+    {
+      "name": "attr_no_due",
+      "value": "未设置到期时间"
+    },
+    {
+      "name": "attr_no_repeat",
+      "value": "不重复"
+    },
+    {
+      "name": "action_clear_attribute",
+      "value": "清除"
+    },
+    {
+      "name": "attr_no_source",
+      "value": "未知来源"
+    },
+    {
+      "name": "action_confirm",
+      "value": "确定"
+    },
+    {
+      "name": "picker_title_remind",
+      "value": "设置提醒"
+    },
+    {
+      "name": "picker_title_due",
+      "value": "设置到期时间"
+    },
+    {
+      "name": "picker_title_repeat",
+      "value": "设置重复"
+    },
+    {
+      "name": "picker_title_priority",
+      "value": "设置重要程度"
+    },
+    {
+      "name": "picker_title_source",
+      "value": "设置来源"
+    },
+    {
+      "name": "tag_add",
+      "value": "添加标签"
+    },
+    {
+      "name": "note_hint",
+      "value": "添加备注"
+    },
+    {
+      "name": "action_remind_off",
+      "value": "关闭响铃"
+    },
+    {
+      "name": "action_remind_on",
+      "value": "开启响铃"
+    },
+    {
+      "name": "action_delete_task",
+      "value": "删除"
+    },
+    {
+      "name": "delete_task_confirm",
+      "value": "真的要删除这项任务吗？"
+    },
+    {
+      "name": "add_task_screenshot_hint",
+      "value": "选择截图"
+    },
+    {
+      "name": "add_task_screenshot_reselect",
+      "value": "重新选择截图"
+    },
+    {
+      "name": "add_task_pick_failed",
+      "value": "选图失败，请重试"
+    },
+    {
+      "name": "add_task_text_hint",
+      "value": "粘贴或输入任务原文"
+    },
+    {
+      "name": "add_task_record_start",
+      "value": "点击开始录音"
+    },
+    {
+      "name": "add_task_record_stop",
+      "value": "结束录音"
+    },
+    {
+      "name": "add_task_record_done",
+      "value": "已录 %s"
+    },
+    {
+      "name": "add_task_name_hint",
+      "value": "输入任务名称"
+    },
+    {
+      "name": "chip_set_due",
+      "value": "设置到期日期"
+    },
+    {
+      "name": "chip_due_set",
+      "value": "%d月%d日 到期"
+    },
+    {
+      "name": "chip_remind_me",
+      "value": "提醒我"
+    },
+    {
+      "name": "chip_remind_set",
+      "value": "在 %d月%d日 %s 提醒我"
+    },
+    {
+      "name": "chip_repeat",
+      "value": "重复"
+    },
+    {
+      "name": "repeat_option_none",
+      "value": "不重复"
+    },
+    {
+      "name": "repeat_option_daily",
+      "value": "每天"
+    },
+    {
+      "name": "repeat_option_weekly",
+      "value": "每周"
+    },
+    {
+      "name": "repeat_option_monthly",
+      "value": "每月"
+    },
+    {
+      "name": "repeat_option_yearly",
+      "value": "每年"
+    },
+    {
+      "name": "chip_priority",
+      "value": "重要程度"
+    },
+    {
+      "name": "priority_option_normal",
+      "value": "普通"
+    },
+    {
+      "name": "priority_option_important",
+      "value": "重要"
+    },
+    {
+      "name": "priority_option_urgent",
+      "value": "紧急"
+    },
+    {
+      "name": "chip_source",
+      "value": "来源"
+    },
+    {
+      "name": "chip_source_set",
+      "value": "来源于 %s"
+    },
+    {
+      "name": "source_option_paste",
+      "value": "粘贴"
+    },
+    {
+      "name": "source_option_share",
+      "value": "分享"
+    },
+    {
+      "name": "source_option_bot",
+      "value": "机器人"
+    },
+    {
+      "name": "source_option_voice",
+      "value": "语音"
+    },
+    {
+      "name": "source_option_manual",
+      "value": "手动"
+    },
+    {
+      "name": "chip_add_tag",
+      "value": "添加标签"
+    },
+    {
+      "name": "tag_input_hint",
+      "value": "输入标签名"
+    },
+    {
+      "name": "source_screenshot",
+      "value": "截图"
+    },
+    {
+      "name": "source_voice",
+      "value": "录音"
+    },
+    {
+      "name": "source_text",
+      "value": "文本"
+    },
+    {
+      "name": "weekday_short_mon",
+      "value": "一"
+    },
+    {
+      "name": "weekday_short_tue",
+      "value": "二"
+    },
+    {
+      "name": "weekday_short_wed",
+      "value": "三"
+    },
+    {
+      "name": "weekday_short_thu",
+      "value": "四"
+    },
+    {
+      "name": "weekday_short_fri",
+      "value": "五"
+    },
+    {
+      "name": "weekday_short_sat",
+      "value": "六"
+    },
+    {
+      "name": "weekday_short_sun",
+      "value": "日"
+    },
+    {
+      "name": "repeat_weekday_hint",
+      "value": "选择星期"
+    },
+    {
+      "name": "repeat_interval_value",
+      "value": "每 %d 周"
+    },
+    {
+      "name": "repeat_weekday_required",
+      "value": "请至少选一天"
+    },
+    {
+      "name": "info_place",
+      "value": "地点"
+    },
+    {
+      "name": "info_who",
+      "value": "对象"
+    },
+    {
+      "name": "info_category",
+      "value": "类型"
+    },
+    {
+      "name": "info_level",
+      "value": "难易程度"
+    },
+    {
+      "name": "info_priority",
+      "value": "重要性"
+    },
+    {
+      "name": "info_urls",
+      "value": "链接"
+    },
+    {
+      "name": "info_certainty",
+      "value": "置信度"
+    },
+    {
+      "name": "info_created",
+      "value": "创建于"
+    },
+    {
+      "name": "info_finished",
+      "value": "完成于"
+    },
+    {
+      "name": "info_unset",
+      "value": "未设置"
+    },
+    {
+      "name": "level_easy",
+      "value": "简单"
+    },
+    {
+      "name": "level_medium",
+      "value": "中等"
+    },
+    {
+      "name": "level_hard",
+      "value": "困难"
+    },
+    {
+      "name": "picker_title_level",
+      "value": "设置难易程度"
+    },
+    {
+      "name": "picker_title_category",
+      "value": "设置类型"
+    },
+    {
+      "name": "picker_title_place",
+      "value": "设置地点"
+    },
+    {
+      "name": "picker_title_who",
+      "value": "设置对象"
+    },
+    {
+      "name": "subcard_steps_title",
+      "value": "步骤"
+    },
+    {
+      "name": "subcard_toggle",
+      "value": "展开或收起步骤"
+    },
+    {
+      "name": "card_bell_on",
+      "value": "提醒已开启，点击关闭"
+    },
+    {
+      "name": "card_bell_off",
+      "value": "提醒已关闭，点击开启"
+    },
+    {
+      "name": "subcard_stacked_hint",
+      "value": "长按展开步骤"
+    },
+    {
+      "name": "settings_section_remind",
+      "value": "提醒"
+    },
+    {
+      "name": "settings_remind_lead",
+      "value": "提醒提前量"
+    },
+    {
+      "name": "settings_remind_lead_0",
+      "value": "到点提醒"
+    },
+    {
+      "name": "settings_remind_lead_5",
+      "value": "提前 5 分钟"
+    },
+    {
+      "name": "settings_remind_lead_15",
+      "value": "提前 15 分钟"
+    },
+    {
+      "name": "settings_remind_lead_30",
+      "value": "提前 30 分钟"
+    },
+    {
+      "name": "settings_remind_lead_60",
+      "value": "提前 1 小时"
+    },
+    {
+      "name": "settings_section_parse",
+      "value": "解析"
+    },
+    {
+      "name": "settings_parse_mode",
+      "value": "解析方式"
+    },
+    {
+      "name": "settings_parse_auto",
+      "value": "自动（端侧优先）"
+    },
+    {
+      "name": "settings_parse_local",
+      "value": "仅本机（不外发）"
+    },
+    {
+      "name": "settings_parse_server",
+      "value": "服务端（质量更好）"
+    },
+    {
+      "name": "settings_section_data",
+      "value": "数据"
+    },
+    {
+      "name": "settings_clear_tasks",
+      "value": "清空全部任务"
+    },
+    {
+      "name": "settings_clear_confirm",
+      "value": "将删除本机全部任务，且不可恢复。确定继续吗？"
+    },
+    {
+      "name": "settings_clear_done",
+      "value": "已清空 %d 条任务"
+    },
+    {
+      "name": "settings_clear_empty",
+      "value": "没有可清空的任务"
+    },
+    {
+      "name": "settings_cloud_off",
+      "value": "云端同步（未接入）"
+    },
+    {
+      "name": "picker_title_remind_lead",
+      "value": "设置提醒提前量"
+    },
+    {
+      "name": "picker_title_parse_mode",
+      "value": "设置解析方式"
     }
   ]
 }
