@@ -103,6 +103,23 @@ cd qqbot-backend
 .venv\Scripts\python.exe -X utf8 test_llm_e2e.py    # 需要本机 Ollama
 ```
 
+性能与标注相关脚本：
+
+```powershell
+.venv\Scripts\python.exe -X utf8 test_burst.py        # 50 条突发：优先级/降级/耗时
+.venv\Scripts\python.exe -X utf8 eval_prescreen.py    # 规则预筛 A/B（236 条，会调模型）
+```
+
+人工标注（约 40 分钟 / 300 段）：
+
+```powershell
+.venv\Scripts\python.exe -X utf8 make_labeling_kit.py --n 300
+# 双击 labeling\labeler.html 标注 → 导出 JSON
+.venv\Scripts\python.exe -X utf8 eval_labels.py labeling\labels_YYYY-MM-DD.json
+```
+
+`eval_labels.py` 输出 precision / recall / F1，并列出误报、漏报与「预筛会跳过的该提醒片段」。
+
 测试会写 `_tmp_test/`（已被 `.gitignore` 忽略）。
 
 ---
@@ -124,6 +141,18 @@ cd qqbot-backend
 | 系统消息拦下 | 18,137 条 |
 
 评测集 `eval_set.json`（56 条人工设计，六类齐全）。**动 `classify` 前后必须重跑基线**，别只看单测。
+
+### 5.1 性能与调优开关
+
+| 环境变量 | 默认 | 作用 |
+| --- | --- | --- |
+| `QQBOT_LLM_PRESCREEN` | `1` | 明显闲聊跳过模型（236 条实测：跳过 38%，无误伤可执行项） |
+| `QQBOT_LLM_WORKERS` | `1` | 解析工作线程数（Ollama 需 `OLLAMA_NUM_PARALLEL` 才有真并行） |
+| `QQBOT_PUSH_COOLDOWN` | `1800` | 同一 (设备, 候选) 的推送冷却秒数；`0` 关闭 |
+| `QQBOT_FEEDBACK_RANK` | `1` | 用 accept/dismiss 计数微调 priority、压掉反复被忽略的类型 |
+
+运行指标见 `/health` 的 `llm` / `push` 块（队列深度、调用数、降级数、最近耗时、推送成败）。
+
 
 > 真实语料抽样集 `eval_set_real.json`（180 条）**不入库**：它含聊天原文。
 > 需要时在本地用生成脚本重建，`eval_llm.py` 会自动把它拼进评测集。
@@ -157,6 +186,7 @@ $env:QQBOT_PUSH_PROJECT_ID = "<AGC 项目 ID>"
 3. `/parse` 与 `/profile` 是**无状态**的：只处理、不存储、不进窗口、不进候选流。
 4. `/attachment` 的附件字节 90 秒短缓存，不落盘。
 5. 唯一"内容交给第三方"的地方是 **Push 的 title/body**（经华为网关），可用开关关掉。
+6. 候选反馈计数（accept/dismiss）**只在内存**里，不落盘、不存正文；`DELETE /my/data` 时随进程退出即清。
 
 逐字段清单见 `机器人通道_交付文档/06_后端能力与AI-Kit分工.md` §6。
 
@@ -174,6 +204,10 @@ $env:QQBOT_PUSH_PROJECT_ID = "<AGC 项目 ID>"
 | `pypdf` | PDF 文本抽取（软依赖，缺失时该分支 501） | MIT |
 | `cryptography` | Push Kit JWT（PS256）签名 | Apache-2.0 OR BSD-3-Clause |
 | `httpx` / `aiohttp` / `aiosqlite` / `python-dotenv` | HTTP / 异步 / SQLite / .env | 各自见 PyPI |
+
+模型：默认 `qwen3.5:9b`，许可证 **Apache-2.0**（本机 `ollama show qwen3.5:9b --license` 实测）。
+完整清单见 [THIRD_PARTY_NOTICES.md](qqbot-backend/THIRD_PARTY_NOTICES.md)。App 在「设置 → 关于」
+标注「摘要与分类由我们服务器上的 Qwen 模型生成（Apache-2.0）」。
 
 ---
 
