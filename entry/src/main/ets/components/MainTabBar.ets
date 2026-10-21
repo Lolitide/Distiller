@@ -201,7 +201,10 @@ export struct MainTabBar {
   @Builder
   tabPill() {
     Row() {
-      this.tabItem(0, $r('sys.symbol.list_checkmark'), $r('sys.symbol.checkmark_circle_fill'),
+      // 未选中图标取的是「选中图标的未填充版」：与右侧设置页签同一套规则
+      // （`gearshape` / `gearshape_fill`），M3 的页签只靠「描边 → 实心」的形状差区分，
+      // 所以不再用另一个 glyph（原来这里是不成套的 `list_checkmark`）。
+      this.tabItem(0, $r('sys.symbol.checkmark_circle'), $r('sys.symbol.checkmark_circle_fill'),
         $r('app.string.tab_task_list'))
       this.tabItem(1, $r('sys.symbol.gearshape'), $r('sys.symbol.gearshape_fill'),
         $r('app.string.tab_settings'))
