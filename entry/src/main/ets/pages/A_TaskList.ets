@@ -1,10 +1,12 @@
 import { LengthMetrics } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
 import { Task } from '../model';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { TaskCard } from '../components/TaskCard';
 import { TaskSubCard } from '../components/TaskSubCard';
 import { TaskStep } from '../model';
 import { Theme, ThemeStore } from '../utils/Theme';
+import { WindowInsets } from '../utils/WindowInsets';
 import { GROUP_HEADER_LIST_PULL_UP_VP, TaskGroupHeader } from '../components/TaskGroupHeader';
 import { EmptyHint } from '../components/EmptyHint';
 import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
@@ -146,6 +148,22 @@ export struct A_TaskList {
   /** 列表当前滚动量（vp）：只用来判断"是否已经离开顶部"（见 `onDidScroll`） */
   @Local scrollVp: number = 0;
 
+  /**
+   * 状态栏高度（vp）：窗口全屏后页面铺到屏幕顶端，内容要让开这一截（见 utils/WindowInsets）。
+   * 首帧取不到就按 0 处理（下一帧补上，不会跳得很明显）。
+   */
+  @Local statusBarVp: number = 0;
+
+  aboutToAppear(): void {
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      return;
+    }
+    WindowInsets.topPx(context).then((px: number) => {
+      this.statusBarVp = px > 0 ? this.getUIContext().px2vp(px) : 0;
+    });
+  }
+
   /** 标题栏是否已收起（＝ HDS 把大标题收到 MINI 档的状态，实测是**状态驱动**，见 `CHIP_COLLAPSE_THRESHOLD_VP`） */
   @Local titleCollapsed: boolean = false;
 
@@ -160,9 +178,9 @@ export struct A_TaskList {
    */
   @Computed
   get chipsTopVp(): number {
-    return this.titleCollapsed
+    return (this.titleCollapsed
       ? TITLE_BAR_COLLAPSED_VP
-      : MainTitleBar.CONTENT_TOP_OFFSET_VP;
+      : MainTitleBar.CONTENT_TOP_OFFSET_VP) + this.statusBarVp;
   }
 
   /** 底部遮罩的两端色（`GradientDirection.Bottom`：第一项画在**上**边，所以上透下实） */
@@ -303,7 +321,7 @@ export struct A_TaskList {
   emptyState() {
     Column() {
       // 顶部让开标题栏（与列表首项同一段留白，保持一致）
-      Row().width('100%').height(MainTitleBar.CONTENT_TOP_OFFSET_VP)
+      Row().width('100%').height(MainTitleBar.CONTENT_TOP_OFFSET_VP + this.statusBarVp)
 
       // 顶部筛选 Chip 行（空态下也要在，否则回不去「全部」）
       TaskFilterChips({ store: this.store })
@@ -332,7 +350,7 @@ export struct A_TaskList {
       ListItem() {
         // `Blank` 只能放进 Row/Column/Flex，所以这里用一行空 `Row` 撑出这段高度。
         // 无障碍不上报这个空项（否则读屏会播报一个空列表项）
-        Row().width('100%').height(MainTitleBar.CONTENT_TOP_OFFSET_VP)
+        Row().width('100%').height(MainTitleBar.CONTENT_TOP_OFFSET_VP + this.statusBarVp)
       }
       .accessibilityLevel('no')
 
