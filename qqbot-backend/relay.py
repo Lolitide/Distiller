@@ -595,6 +595,26 @@ class RelayStore:
                     out.append(tk)
             return out
 
+    def push_targets_of_group(self, group_openid: str) -> list[tuple[str, str]]:
+        """订阅了该群的设备 `(device_id, token)` 列表。
+
+        与 `push_tokens_of_group` 的区别：这里带上 device_id，推送侧才能按
+        「设备 + 候选」做冷却去重（防止同一事项反复弹通知）。
+        """
+        with _lock:
+            self.reload()
+            out: list[tuple[str, str]] = []
+            seen: set[str] = set()
+            for device_id, subs in self._data["subscriptions"].items():
+                if group_openid not in subs:
+                    continue
+                item = self._data["push_tokens"].get(device_id) or {}
+                tk = str(item.get("token") or "")
+                if tk and tk not in seen:
+                    seen.add(tk)
+                    out.append((device_id, tk))
+            return out
+
     def forget_device(self, device_id: str) -> dict:
         """一键删除该设备在服务端的全部数据。"""
         with _lock:
@@ -907,7 +927,10 @@ class FeedbackStore:
     """候选反馈计数（契约 §2.3）：只统计 accept / dismiss 次数。
 
     **只存计数，不存任何正文/候选内容**——所以它是纯内存态、重启即清，
-    不触碰「正文不落盘」的红线。
+    不触碰「正文不落盘」的红线（AGENTS.md §3.1：不允许新增落盘数据）。
+    计数用于两处轻量调节：
+      * `/feedback` 之后，候选的 `priority` 会按该群该类型的 dismiss 率微调；
+      * 推送时跳过「几乎总被忽略」的类型，减少打扰。
     另外提供 `drop_words` 通道：把用户手动删掉的词转给按群词表（AGENTS.md §3.1 要求）。
     """
 
@@ -920,6 +943,17 @@ class FeedbackStore:
             g = self._data.setdefault(group_openid or "_", {})
             k = g.setdefault(kind or "_", {"accept": 0, "dismiss": 0})
             k[action] = int(k.get(action, 0)) + 1
+
+    def dismiss_rate(self, group_openid: str, kind: str, min_sample: int = 10) -> float | None:
+        """该群该类型的 dismiss 占比；样本不足返回 None（不做任何调整）。"""
+        with self._lock:
+            k = (self._data.get(group_openid or "_") or {}).get(kind or "_") or {}
+            acc = int(k.get("accept", 0))
+            dis = int(k.get("dismiss", 0))
+        total = acc + dis
+        if total < min_sample:
+            return None
+        return dis / total
 
     def stats(self) -> dict:
         with self._lock:

@@ -21,8 +21,10 @@ import functools
 import hmac
 import json
 import os
+import re
 import sqlite3
 import sys
+import threading
 import time
 from collections import OrderedDict, deque
 from datetime import datetime, timedelta
@@ -710,6 +712,24 @@ RELAY_PATHS = {
 # 随 30 分钟窗口一起过期）。/candidates 每次重建时只有「内容变了」的候选会带新 rev_seq。
 CANDIDATE_STREAM = candidate_engine.CandidateStream()
 
+# ---- 推送运行指标（供 /health 暴露；只有数字，不含消息内容）----
+PUSH_STATS: dict[str, int] = {"sent": 0, "failed": 0, "skipped": 0}
+_PUSH_STATS_LOCK = threading.Lock()
+
+
+def _push_stat(key: str, n: int = 1) -> None:
+    with _PUSH_STATS_LOCK:
+        PUSH_STATS[key] = PUSH_STATS.get(key, 0) + n
+
+
+def _push_snapshot() -> dict[str, object]:
+    with _PUSH_STATS_LOCK:
+        snap: dict[str, object] = dict(PUSH_STATS)
+    snap["ready"] = push_sender.configured()
+    snap["cooldown"] = PUSH_COOLDOWN
+    return snap
+
+
 # ---- POST /api/relay/parse（手动添加任务：文本/截图/文件）的约束 ----
 # 请求体总上限（base64 图片会放大 4/3，原来 1MB 不够一张截图）
 MAX_BODY_BYTES = 12 * 1024 * 1024
@@ -755,6 +775,110 @@ def _normalize_time(text: str) -> tuple[str, bool]:
 # 群领域词表的在线学习间隔（秒）。学到的词落盘、跨重启累积。
 LEXICON_INTERVAL = int(os.environ.get("QQBOT_LEXICON_INTERVAL", "300"))
 
+# 推送冷却：同一 (设备, 候选) 在这个窗口内只推一次。0 = 关闭冷却（排查用）。
+# 为什么需要：候选随新消息不断 `changed`，没有冷却时一个事项会连弹好几条横幅。
+PUSH_COOLDOWN = max(0, int(os.environ.get("QQBOT_PUSH_COOLDOWN", "1800") or 0))
+_PUSH_SENT_AT: dict[tuple[str, str], float] = {}
+_PUSH_SENT_MAX = 2000
+
+
+def _push_cooled(device_id: str, candidate_id: str, now: float) -> bool:
+    """这个 (设备, 候选) 是否还在冷却期。顺便清理过老的键。"""
+    if PUSH_COOLDOWN <= 0:
+        return False
+    key = (device_id, candidate_id)
+    last = _PUSH_SENT_AT.get(key)
+    if last is not None and now - last < PUSH_COOLDOWN:
+        return True
+    _PUSH_SENT_AT[key] = now
+    if len(_PUSH_SENT_AT) > _PUSH_SENT_MAX:
+        cutoff = now - PUSH_COOLDOWN
+        for k in [k for k, ts in _PUSH_SENT_AT.items() if ts < cutoff]:
+            _PUSH_SENT_AT.pop(k, None)
+    return False
+
+
+def _push_retryable(reason: str) -> bool:
+    """只有网络/服务端 5xx 值得重试；业务码与 4xx 重试也没用。"""
+    r = (reason or "").strip()
+    if not r:
+        return False
+    if r.startswith("HTTP 4") or r.startswith("未配置") or r.startswith("缺少"):
+        return False
+    if re.fullmatch(r"\d{8}", r):
+        return False
+    return True
+
+
+def _push_send_with_retry(token: str, title: str, body: str) -> tuple[bool, str]:
+    """发送 + 有限重试（最多 3 次，退避 1s / 3s）。永久错误不重试。"""
+    last: tuple[bool, str] = (False, "")
+    for attempt, wait in enumerate((0.0, 1.0, 3.0)):
+        if wait:
+            time.sleep(wait)
+        last = push_sender.send(token, title, body)
+        if last[0]:
+            return last
+        if not _push_retryable(last[1]):
+            return last
+        if attempt == 2:
+            break
+    return last
+
+
+# ---- 反馈驱动的轻量调节（纯内存计数，不落盘；QQBOT_FEEDBACK_RANK=0 可关闭）----
+FEEDBACK_RANK = (os.environ.get("QQBOT_FEEDBACK_RANK", "1") or "1").strip() != "0"
+FEEDBACK_MIN_SAMPLE = 10
+_PRIORITY_LADDER = ["later", "normal", "high", "urgent"]
+
+
+def _adjust_priority(priority: str, group_openid: str, kind: str) -> str:
+    """按该群该类型的 dismiss 率把 priority 挪一档（最多一档，样本不足不动）。"""
+    if not FEEDBACK_RANK:
+        return priority
+    rate = relay.FEEDBACK.dismiss_rate(group_openid, kind, FEEDBACK_MIN_SAMPLE)
+    if rate is None:
+        return priority
+    try:
+        idx = _PRIORITY_LADDER.index(priority)
+    except ValueError:
+        return priority
+    if rate >= 0.7:
+        idx = max(0, idx - 1)
+    elif rate <= 0.3:
+        idx = min(len(_PRIORITY_LADDER) - 1, idx + 1)
+    else:
+        return priority
+    return _PRIORITY_LADDER[idx]
+
+
+def _with_feedback(c: dict) -> dict:
+    """返回候选的**副本**并微调 priority。
+
+    必须复制：`c` 是 CandidateStream 里存着的对象，就地改会让下一次再挪一档。
+    """
+    if not FEEDBACK_RANK:
+        return c
+    gid = str((c.get("source") or {}).get("group_openid") or "")
+    kind = str(c.get("kind") or "")
+    p = str(c.get("priority") or "")
+    np = _adjust_priority(p, gid, kind)
+    if np == p:
+        return c
+    out = dict(c)
+    out["priority"] = np
+    return out
+
+
+def _feedback_quiets(group_openid: str, kind: str) -> bool:
+    """该群该类型被反复忽略（样本 ≥10 且 dismiss ≥80%）-> 不再推送。"""
+    if not FEEDBACK_RANK:
+        return False
+    rate = relay.FEEDBACK.dismiss_rate(group_openid, kind, FEEDBACK_MIN_SAMPLE)
+    return rate is not None and rate >= 0.8
+
+
+
 
 async def push_loop() -> None:
     """后台推送：窗口里出现**新增/变化**的候选时，给订阅了该群的设备发通知。
@@ -778,22 +902,49 @@ async def push_loop() -> None:
             changed = await _run_db(
                 lambda: CANDIDATE_STREAM.rebuild(relay.window_candidate_source())
             )
+            now = time.time()
+            pending: dict[str, list[dict]] = {}
             for c in changed:
                 if c.get("kind") not in candidate_engine._ACTIONABLE:
+                    _push_stat("skipped")
                     continue
                 gid = str((c.get("source") or {}).get("group_openid") or "")
                 if not gid:
+                    _push_stat("skipped")
                     continue
-                tokens = await _run_db(lambda g=gid: relay.STORE.push_tokens_of_group(g))
-                if not tokens:
+                if _feedback_quiets(gid, str(c.get("kind") or "")):
+                    # 这个群的这个类型被反复忽略，别再弹了（计数仍是内存态）
+                    _push_stat("skipped")
                     continue
-                if include_text:
-                    title = str(c.get("title") or "知了")[:32]
-                    body = str(c.get("summary") or "")[:80]
+                targets = await _run_db(lambda g=gid: relay.STORE.push_targets_of_group(g))
+                if not targets:
+                    _push_stat("skipped")
+                    continue
+                cid = str(c.get("candidate_id") or "")
+                for device_id, tk in targets[:200]:
+                    if _push_cooled(device_id, cid, now):
+                        _push_stat("skipped")
+                        continue
+                    pending.setdefault(device_id, []).append({"token": tk, "c": c})
+
+            for _device_id, items in pending.items():
+                first = items[0]
+                c0 = first["c"]
+                if len(items) > 1:
+                    # 同一轮里同一设备有多条：合并成一条，避免连续弹好几个横幅
+                    title, body = "知了", f"有 {len(items)} 条校园提醒更新"
+                elif include_text:
+                    title = str(c0.get("title") or "知了")[:32]
+                    body = str(c0.get("summary") or "")[:80]
                 else:
                     title, body = "知了", "有新的校园提醒，点开查看"
-                for tk in tokens[:200]:
-                    await _run_db(lambda t=tk, ti=title, bo=body: push_sender.send(t, ti, bo))
+                tk = str(first["token"])
+                ok, reason = await _run_db(
+                    lambda t=tk, ti=title, bo=body: _push_send_with_retry(t, ti, bo)
+                )
+                _push_stat("sent" if ok else "failed")
+                if not ok:
+                    print(f"[推送] 失败：{reason}")
         except Exception as exc:  # noqa: BLE001
             print(f"[推送] 本轮失败：{exc}")
 
@@ -1109,6 +1260,10 @@ async def handle_relay_api(
                 "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "bot_running": bot.running,
                 "window": relay.window_stats(),
+                # 运行指标：排障用（队列深度 / 模型耗时 / 推送成败）。
+                # 只读计数，不含任何消息内容。
+                "llm": llm_worker.stats(),
+                "push": _push_snapshot(),
             }
         )
 
@@ -1443,6 +1598,8 @@ async def handle_relay_api(
         changed = await _run_db(lambda: CANDIDATE_STREAM.rebuild(relay.window_candidate_source()))
         data = CANDIDATE_STREAM.since(after, 500)
         visible = [c for c in data["candidates"] if c["source"]["group_openid"] in groups][:limit]
+        # 反馈驱动的 priority 微调（只改下发的副本，不动流里的原对象）
+        visible = [_with_feedback(c) for c in visible]
         cursor = visible[-1]["rev_seq"] if visible else after
         return OK, _ok(
             {
