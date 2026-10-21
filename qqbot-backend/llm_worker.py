@@ -15,8 +15,12 @@
 from __future__ import annotations
 
 import logging
+import os
 import queue
+import re
 import threading
+import time
+from datetime import datetime
 from typing import Any, Callable
 
 import llm_parse
@@ -31,10 +35,74 @@ except Exception:  # noqa: BLE001
 log = logging.getLogger("zhiliao.worker")
 
 _QUEUE_MAX = 2000
-_q: "queue.Queue[dict]" = queue.Queue(maxsize=_QUEUE_MAX)
+# 出队优先级：0 = 可执行事项（待办/通知/活动/出行计划）先跑，1 = 其余。
+# 突发时先让用户真正会看到的东西出来，闲聊晚一点不影响体验。
+_PRIO_ACTIONABLE = 0
+_PRIO_OTHER = 1
+_q: "queue.PriorityQueue[tuple[int, int, dict]]" = queue.PriorityQueue(maxsize=_QUEUE_MAX)
+_seq_lock = threading.Lock()
+_seq = 0
+# 工作线程数：默认 1（8GB 显存下最稳）。Ollama 需 OLLAMA_NUM_PARALLEL>=N 才有真并行。
+_WORKERS = max(1, min(4, int(os.environ.get("QQBOT_LLM_WORKERS", "1") or "1")))
 _lock = threading.Lock()
 _started = False
 _enabled = False
+
+# 运行指标（只增不减，供 /health 暴露；纯计数，不含任何消息内容）
+_STATS: dict[str, int] = {
+    "processed": 0,     # 出队处理条数
+    "llm_calls": 0,     # 真正调用模型的次数
+    "llm_none": 0,      # 模型返回 None（校验不过/超时）的次数
+    "errors": 0,        # 解析抛异常次数
+    "degraded": 0,      # 队列满、直接按规则处理的次数
+    "prescreen_skipped": 0,  # 规则预筛直接判闲聊、没调模型的次数
+    "last_ms": 0,       # 最近一条的处理耗时（毫秒）
+}
+_STATS_LOCK = threading.Lock()
+
+# 规则预筛：明显闲聊直接跳过模型。默认开，`QQBOT_LLM_PRESCREEN=0` 一键关闭。
+# 判据刻意保守（见 prescreen_skip 的注释）——宁可多调一次模型，也不漏待办。
+_PRESCREEN_ON = (os.environ.get("QQBOT_LLM_PRESCREEN", "1") or "1").strip() != "0"
+# 超过这个长度就不当"明显闲聊"（长消息更可能夹带信息）
+_PRESCREEN_MAX_CHARS = 30
+
+# 预筛额外排除项：规则 classify 有时把它们当闲聊，但实际是事项/活动。
+# 例：「智慧社区签到签退码」「挑战网招新啦」「有无组队的，传智杯还缺一个人」。
+# 刻意放在 llm_worker 而不是 pipeline_proto.classify —— 不动分级基线。
+_PRESCREEN_ACTIONABLE_RE = re.compile(
+    r"签到|签退|招新|纳新|收人|缺人|组队|拼车|转让|出售|收购|"
+    r"讲座|宣讲|公开课|投票|问卷|填表|面试|培训|班会|集合|开会|领取|缴费|交费"
+)
+
+
+def _bump(**kw: int) -> None:
+    with _STATS_LOCK:
+        for k, v in kw.items():
+            _STATS[k] = _STATS.get(k, 0) + v
+
+
+def _set_stat(key: str, value: int) -> None:
+    """`last_ms` 这类「最新值」用 set，不能用累加。"""
+    with _STATS_LOCK:
+        _STATS[key] = value
+
+
+def stats() -> dict[str, Any]:
+    """/health 用的运行快照。**只读计数，不含消息内容**。"""
+    with _STATS_LOCK:
+        snap: dict[str, Any] = dict(_STATS)
+    snap["queue_depth"] = _q.qsize()
+    snap["queue_max"] = _QUEUE_MAX
+    snap["workers"] = _WORKERS
+    snap["prescreen_on"] = _PRESCREEN_ON
+    snap["available"] = llm_parse.available()
+    snap["enabled"] = _enabled
+    snap["model"] = llm_parse.MODEL
+    # 许可证事实（本机 `ollama show qwen3.5:9b --license` 实测为 Apache-2.0）。
+    # App「关于」页据此展示来源；不在这里猜测其它模型。
+    snap["license"] = "Apache-2.0"
+    return snap
+
 
 # 主题分类（用户画像载体），模型给不出时的关键词兜底
 _CATEGORY_HINTS: list[tuple[str, tuple[str, ...]]] = [
@@ -58,15 +126,42 @@ def start() -> None:
             return
         _started = True
         _enabled = True
-    threading.Thread(target=_run, daemon=True, name="llm-parse").start()
-    log.info("解析工作线程已启动（Ollama 可用=%s）", llm_parse.available())
+    # 预热单独一个线程：多 worker 时不能每个都预热一遍（会同时载入几份模型）
+    threading.Thread(target=_warmup, daemon=True, name="llm-warmup").start()
+    for i in range(_WORKERS):
+        threading.Thread(target=_run, daemon=True, name=f"llm-parse-{i}").start()
+    log.info("解析工作线程已启动（workers=%d，Ollama 可用=%s）", _WORKERS, llm_parse.available())
+
+
+def _warmup() -> None:
+    try:
+        if llm_parse.available():
+            llm_parse.warmup()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("模型预热失败：%s", exc)
+
+
+def _priority_of(payload: dict) -> int:
+    """入队时先粗判一次（复用规则分类），让可执行事项排在闲聊前面。"""
+    try:
+        kind = RULES.classify(RULES.normalize(payload.get("content") or ""))
+    except Exception:  # noqa: BLE001
+        return _PRIO_OTHER
+    if kind in (RULES.EVENT_TODO, RULES.EVENT_NOTICE, RULES.EVENT_ACTIVITY, RULES.EVENT_PLAN):
+        return _PRIO_ACTIONABLE
+    return _PRIO_OTHER
 
 
 def submit(payload: dict) -> None:
     """异步入队；队列满时直接按规则进窗口，保证不丢消息。"""
+    global _seq
+    with _seq_lock:
+        _seq += 1
+        seq = _seq
     try:
-        _q.put_nowait(payload)
+        _q.put_nowait((_priority_of(payload), seq, payload))
     except queue.Full:
+        _bump(degraded=1)
         log.warning("解析队列已满，本条按规则处理")
         _store(payload, _rules_parse(payload))
 
@@ -75,22 +170,19 @@ def submit(payload: dict) -> None:
 
 
 def _run() -> None:
-    # 预热放在线程里，避免拖慢服务启动
-    try:
-        if llm_parse.available():
-            llm_parse.warmup()
-    except Exception as exc:  # noqa: BLE001
-        log.warning("模型预热失败：%s", exc)
-
     while True:
-        payload = _q.get()
+        _prio, _n, payload = _q.get()
+        started = time.perf_counter()
         try:
             parse = _parse(payload)
         except Exception as exc:  # noqa: BLE001
+            _bump(errors=1)
             log.warning("解析异常，回退规则：%s", exc)
             parse = None
         try:
             _store(payload, parse if parse is not None else _rules_parse(payload))
+            _bump(processed=1)
+            _set_stat("last_ms", int((time.perf_counter() - started) * 1000))
         finally:
             _q.task_done()
 
@@ -123,6 +215,37 @@ def _places_of(payload: dict) -> list[str]:
         return []
 
 
+def prescreen_skip(text: str) -> bool:
+    """明显闲聊 -> 真接跳过模型，交给规则。
+
+    保守判据（四条全中才跳过）：
+      1. 短消息（≤30 字）；长消息更可能夹带信息；
+      2. 没有强任务词 / 任务搭配（记得、务必、提交作业…）；
+      3. 没有通知词 / 出行词（报名、截止、比赛、返校…）；
+      4. 规则解析不出时间（有时间表达就交给模型判断）。
+
+    为什么这么小心：语料里 97.7% 不是待办，但"漏掉真待办"比"多调一次模型"代价高得多。
+    预筛的收益必须用 `eval_prescreen.py` 在 236 条集上验证，`QQBOT_LLM_PRESCREEN=0` 可随时关闭。
+    """
+    if not _PRESCREEN_ON:
+        return False
+    t = (text or "").strip()
+    if not t or len(t) > _PRESCREEN_MAX_CHARS:
+        return False
+    if RULES._TASK_STRONG_RE.search(t) or RULES._TASK_COLLOC_RE.search(t):
+        return False
+    if RULES._NOTICE_RE.search(t) or RULES._PLAN_RE.search(t):
+        return False
+    if _PRESCREEN_ACTIONABLE_RE.search(t):
+        return False
+    try:
+        if RULES.parse_time(t, datetime.now()) is not None:
+            return False
+    except Exception:  # noqa: BLE001
+        return False
+    return RULES.classify(t) in (RULES.EVENT_CHAT, RULES.EVENT_IGNORE)
+
+
 def _parse(payload: dict) -> dict[str, Any] | None:
     content = payload.get("content") or ""
     if not content.strip():
@@ -133,12 +256,20 @@ def _parse(payload: dict) -> dict[str, Any] | None:
     # 系统消息/拍一拍不值得调模型，直接交给规则判为「忽略」
     if RULES._SYSTEM_RE.search(text):
         return None
+    # 明显闲聊也不值得调模型（预筛可关：QQBOT_LLM_PRESCREEN=0）。
+    # 模型本来就不在线时不做预筛——反正也是走规则，白算一遍分类。
+    model_ready = llm_parse.available()
+    if model_ready and prescreen_skip(text):
+        _bump(prescreen_skipped=1)
+        return None
     base = RULES._parse_ts(payload.get("timestamp") or "")
 
-    if llm_parse.available():
+    if model_ready:
+        _bump(llm_calls=1)
         obj = llm_parse.extract(text)
         if obj is not None:
             return _from_llm(obj, text, payload, base)
+        _bump(llm_none=1)
     return None
 
 
