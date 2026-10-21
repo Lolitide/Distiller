@@ -16,6 +16,7 @@
  * 写入时机：**失焦 / 离开页面**时提交（不是每次按键都写），空白则清成 `undefined`。
  */
 import { Task } from '../model';
+import { ThemeStore } from '../utils/Theme';
 
 /** 备注区左右内边距（vp）：官方 `padding_level8` */
 const NOTE_SIDE_PADDING_VP: number = 16;
@@ -34,6 +35,9 @@ const NOTE_INPUT_ID: string = 'noteInput';
 export struct TaskNoteCard {
   /** 要编辑的任务（`@ObservedV2`，改 `note` 后列表卡片也会跟着刷新） */
   @Require @Param task: Task;
+
+  /** 视觉个性化：卡片底与输入框背板都取 M3 容器色（见卡片上 `backgroundColor` 的说明） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
 
   /**
    * 备注草稿：进入页面时从任务里取一次，之后由输入框驱动。
@@ -76,8 +80,8 @@ export struct TaskNoteCard {
         .fontSize($r('sys.float.ohos_id_text_size_body1'))
         .fontColor($r('sys.color.ohos_id_color_text_primary'))
         .placeholderColor($r('sys.color.ohos_id_color_text_secondary'))
-        // 卡片是白的：输入框背板填卡片白，否则会露一条灰底（与标签卡同一条坑）
-        .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+        // 输入框背板填**卡片底色**（M3 `surface-container-low`），否则会露一条色带（与标签卡同一条坑）
+        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
         .borderWidth(0)
         .borderRadius(0)
         .padding(0)
@@ -95,8 +99,8 @@ export struct TaskNoteCard {
       top: NOTE_VERTICAL_PADDING_VP,
       bottom: NOTE_VERTICAL_PADDING_VP
     })
-    // 卡片白 + 官方圆角：与上面几张卡同一套外观
-    .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+    // 卡片底 = M3 `surface-container-low` + 官方圆角：与详情页其它卡片同一档（不再是系统纯白）
+    .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
     .borderRadius($r('sys.float.ohos_id_corner_radius_card'))
     .clip(true)
   }

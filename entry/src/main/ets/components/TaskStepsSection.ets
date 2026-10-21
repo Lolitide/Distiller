@@ -210,8 +210,9 @@ export struct TaskStepsSection {
             .fontSize($r('sys.float.ohos_id_text_size_body1'))
             .fontColor($r('sys.color.ohos_id_color_text_primary'))
             .style(TextInputStyle.Default)
-            // 背景不要纯白，与页面底色一致（需求方 2026-10-16）
-            .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
+            // 背景不要纯白，与**页面底色**一致（需求方 2026-10-16）。
+            // 2026-10-21：页面底色是 M3 `surface` 了，这里跟着换掉系统冷灰 `sub_background`。
+            .backgroundColor(this.themeStore.scheme.surface)
             .showUnderline(false)
             .borderWidth(0)
             .borderRadius(0)
@@ -299,9 +300,10 @@ export struct TaskStepsSection {
         .fontSize($r('sys.float.ohos_id_text_size_body1'))
         .fontColor($r('sys.color.ohos_id_color_text_primary'))
         .placeholderColor($r('sys.color.ohos_id_color_text_secondary'))
-        // 与"改名"同一个做法：内联样式（无背板、无下划线），不然会出现一道遮罩
+        // 与"改名"同一个做法：内联样式（无背板、无下划线），不然会出现一道遮罩；
+        // 底色取页面 `surface`，与周围一致（2026-10-21 换掉系统冷灰）
         .style(TextInputStyle.Default)
-        .backgroundColor($r('sys.color.ohos_id_color_sub_background'))
+        .backgroundColor(this.themeStore.scheme.surface)
         .showUnderline(false)
         .borderWidth(0)
         .borderRadius(0)

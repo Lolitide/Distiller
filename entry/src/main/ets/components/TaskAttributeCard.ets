@@ -647,8 +647,10 @@ export struct TaskAttributeCard {
       })
     }
     .width('100%')
-    // 卡片白：与列表页卡片同一个官方 token
-    .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+    // 卡片底 = M3 `surface-container-low`（2026-10-21 袁正锟：「详情页这些卡片的背景颜色都和设置页的卡片一样
+    // 用 md 取色，不要白色」）。原来取的是系统 `ohos_id_color_card_bg`，浅色主题下就是**纯白**，
+    // 与设置页 / 元信息卡的 M3 容器色系对不上。色值只从 `ThemeStore.scheme` 取，不写死。
+    .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
     .borderRadius($r('sys.float.ohos_id_corner_radius_card'))
     .clip(true)
   }

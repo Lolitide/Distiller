@@ -21,7 +21,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Task, TaskLevel, TaskPriority, TASK_CATEGORY_PRESETS } from '../model';
 import { SegmentRow } from './SegmentRow';
-import { Theme } from '../utils/Theme';
+import { Theme, ThemeStore } from '../utils/Theme';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'TaskInfoCard';
@@ -62,6 +62,9 @@ const CHIP_GAP_VP: number = 6;
 @ComponentV2
 export struct TaskInfoCard {
   @Require @Param task: Task;
+
+  /** 视觉个性化：卡片底取 M3 容器色（见卡片上 `backgroundColor` 的说明） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
 
   /** 类型选择器的草稿下标（-1 ＝ 未设置） */
 
@@ -455,7 +458,8 @@ export struct TaskInfoCard {
       }
     }
     .width('100%')
-    .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+    // 卡片底 = M3 `surface-container-low`：与设置页卡片、属性卡、元信息卡同一档（不再是系统纯白）
+    .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
     .borderRadius($r('sys.float.ohos_id_corner_radius_card'))
     .clip(true)
   }
