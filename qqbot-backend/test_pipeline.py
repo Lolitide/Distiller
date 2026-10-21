@@ -145,6 +145,16 @@ s = parse_time("下周交作业", base)
 check("只写'下周'不猜日期", s and s.unresolved and s.normalized == "", s and s.display)
 check("没写时间就不给时间", parse_time("去北京旅游", base) is None)
 
+# 点分日期 vs 版本号（实测「版本1.2」曾被解析成 1 月 2 日，生成假截止时间）
+s = parse_time("10.31 前交作业", base)
+check("10.31 -> 点分日期", s and s.normalized == "2026-10-31", s and s.normalized)
+check("版本1.2 不当日期", parse_time("版本1.2 已发布", base) is None,
+      parse_time("版本1.2 已发布", base))
+check("ver 2.0 不当日期", parse_time("升级到 ver 2.0", base) is None,
+      parse_time("升级到 ver 2.0", base))
+check("第1.2版 不当日期", parse_time("这是第1.2版", base) is None,
+      parse_time("这是第1.2版", base))
+
 # 「时」不能当时间分隔符：否则「一时/小时/同时/随时/暂时/何时」都会变成时间
 from pipeline_proto import _find_clock  # noqa: E402
 

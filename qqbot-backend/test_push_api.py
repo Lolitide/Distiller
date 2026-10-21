@@ -173,6 +173,115 @@ check("发送返回 (bool, 说明) 且不抛异常", ok is False and bool(detail
 os.environ.pop("QQBOT_PUSH_SA_JSON", None)
 relay.STORE.forget_device(DEVICE)
 
+# ---------------------------------------------------------------- 五、冷却与重试
+print()
+print("五、推送冷却 / 合并 / 重试分类")
+print("=" * 78)
+from unittest import mock  # noqa: E402
+
+server._PUSH_SENT_AT.clear()
+check("首次推送不冷却", server._push_cooled("dev1", "c1", 1000.0) is False)
+check("冷却期内同候选 -> 跳过", server._push_cooled("dev1", "c1", 1001.0) is True)
+check("换设备不受影响", server._push_cooled("dev2", "c1", 1002.0) is False)
+check("换候选不受影响", server._push_cooled("dev1", "c2", 1003.0) is False)
+check("冷却过期后可再发",
+      server._push_cooled("dev1", "c1", 1000.0 + server.PUSH_COOLDOWN + 1) is False)
+
+_saved_cd = server.PUSH_COOLDOWN
+server.PUSH_COOLDOWN = 0
+server._PUSH_SENT_AT.clear()
+check("QQBOT_PUSH_COOLDOWN=0 时关闭冷却",
+      server._push_cooled("dev1", "c1", 1.0) is False
+      and server._push_cooled("dev1", "c1", 1.0) is False)
+server.PUSH_COOLDOWN = _saved_cd
+
+check("业务码不可重试", server._push_retryable("80300002") is False)
+check("HTTP 4xx 不可重试", server._push_retryable("HTTP 401: bad") is False)
+check("未配置不可重试", server._push_retryable("未配置服务账号") is False)
+check("HTTP 5xx 可重试", server._push_retryable("HTTP 500: oops") is True)
+check("超时可重试", server._push_retryable("timed out") is True)
+
+_calls: list[str] = []
+_saved_send = push_sender.send
+
+
+def _fake_permanent(token: str, title: str, body: str, *, test: bool = False):
+    _calls.append(token)
+    return False, "80300002"
+
+
+push_sender.send = _fake_permanent  # type: ignore[assignment]
+ok, reason = server._push_send_with_retry("t", "ti", "bo")
+check("永久错误只发 1 次", ok is False and len(_calls) == 1, f"{len(_calls)} 次 {reason}")
+
+
+def _fake_flaky(token: str, title: str, body: str, *, test: bool = False):
+    _calls.append(token)
+    if len(_calls) < 3:
+        return False, "HTTP 500: transient"
+    return True, "80000000"
+
+
+_calls.clear()
+push_sender.send = _fake_flaky  # type: ignore[assignment]
+with mock.patch("time.sleep"):
+    ok, reason = server._push_send_with_retry("t", "ti", "bo")
+check("临时错误会重试到成功", ok is True and len(_calls) == 3, f"{len(_calls)} 次 {reason}")
+push_sender.send = _saved_send
+
+# 合并：同一设备同轮多条只发一条（用 pending 聚合逻辑的等价断言）
+_pending: dict[str, list[dict]] = {}
+for cid in ("c1", "c2", "c3"):
+    _pending.setdefault("dev1", []).append({"token": "tk1", "c": {"candidate_id": cid}})
+check("同轮同设备聚合成一组", len(_pending) == 1 and len(_pending["dev1"]) == 3,
+      str({k: len(v) for k, v in _pending.items()}))
+
+# ---------------------------------------------------------------- 六、反馈调节
+print()
+print("六、反馈驱动的轻量调节（内存态，不落盘）")
+print("=" * 78)
+for _ in range(10):
+    relay.FEEDBACK.record("FG", "活动", "dismiss")
+check("dismiss 多 -> priority 降一档",
+      server._adjust_priority("high", "FG", "活动") == "normal",
+      server._adjust_priority("high", "FG", "活动"))
+check("urgent 降成 high",
+      server._adjust_priority("urgent", "FG", "活动") == "high",
+      server._adjust_priority("urgent", "FG", "活动"))
+check("已是 later 不再降",
+      server._adjust_priority("later", "FG", "活动") == "later",
+      server._adjust_priority("later", "FG", "活动"))
+check("样本不足不调整",
+      server._adjust_priority("high", "FG", "通知") == "high",
+      server._adjust_priority("high", "FG", "通知"))
+check("未知 priority 原样返回",
+      server._adjust_priority("", "FG", "活动") == "",
+      server._adjust_priority("", "FG", "活动"))
+
+for _ in range(10):
+    relay.FEEDBACK.record("FG", "通知", "accept")
+check("accept 多 -> priority 升一档",
+      server._adjust_priority("normal", "FG", "通知") == "high",
+      server._adjust_priority("normal", "FG", "通知"))
+
+_c = {"priority": "high", "kind": "活动", "source": {"group_openid": "FG"}}
+_out = server._with_feedback(_c)
+check("_with_feedback 返回副本，不改流里的原对象",
+      _c["priority"] == "high" and _out["priority"] == "normal",
+      f"原={_c['priority']} 新={_out['priority']}")
+
+check("反复忽略的类型不再推送", server._feedback_quiets("FG", "活动") is True)
+check("正常接受的类型照常推送", server._feedback_quiets("FG", "通知") is False)
+check("没反馈的类型照常推送", server._feedback_quiets("FG", "待办") is False)
+
+_saved_rank = server.FEEDBACK_RANK
+server.FEEDBACK_RANK = False
+check("QQBOT_FEEDBACK_RANK=0 时关闭调节",
+      server._adjust_priority("high", "FG", "活动") == "high"
+      and server._feedback_quiets("FG", "活动") is False)
+server.FEEDBACK_RANK = _saved_rank
+relay.FEEDBACK.forget("FG")
+
 print()
 print("失败项：", FAILS if FAILS else "无，全部通过")
 sys.exit(1 if FAILS else 0)

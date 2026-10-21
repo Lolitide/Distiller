@@ -374,6 +374,50 @@ check("规则字段名与官方同名",
                                          "count", "expire", "dates"},
       str(rep_cases[0][1][0].keys()))
 
+# ---------------------------------------------------------------- 跨簇去重
+print()
+print("十二、跨簇去重：同群同时间同地点同标题只留一条")
+print("=" * 78)
+
+
+def _cand(cid: str, title: str, place: str, t: str, count: int, conf: float = 0.8) -> dict:
+    return {
+        "candidate_id": cid, "title": title, "place": place, "time_normalized": t,
+        "confidence": conf, "summary": title,
+        "source": {"group_openid": "G1", "count": count},
+    }
+
+
+_dup = CE._dedupe_candidates([
+    _cand("c1", "开班会", "教学楼", "2026-10-20", 1),
+    _cand("c2", "开班会", "教学楼", "2026-10-20", 3),   # 来源更多 -> 保留它
+])
+check("重复只留一条", len(_dup) == 1, str([c["candidate_id"] for c in _dup]))
+check("保留信息量更大的那条", _dup and _dup[0]["candidate_id"] == "c2",
+      _dup and _dup[0]["candidate_id"])
+
+_same_title_diff_day = CE._dedupe_candidates([
+    _cand("d1", "开班会", "教学楼", "2026-10-20", 1),
+    _cand("d2", "开班会", "教学楼", "2026-10-27", 1),
+])
+check("时间不同不合并", len(_same_title_diff_day) == 2,
+      str(len(_same_title_diff_day)))
+
+_diff_group = CE._dedupe_candidates([
+    _cand("g1", "开班会", "教学楼", "2026-10-20", 1),
+    {**_cand("g2", "开班会", "教学楼", "2026-10-20", 1),
+     "source": {"group_openid": "G2", "count": 1}},
+])
+check("不同群不合并", len(_diff_group) == 2, str(len(_diff_group)))
+
+_no_title = CE._dedupe_candidates([
+    {"candidate_id": "n1", "title": "", "place": "", "time_normalized": "",
+     "source": {"group_openid": "G1"}},
+    {"candidate_id": "n2", "title": "", "place": "", "time_normalized": "",
+     "source": {"group_openid": "G1"}},
+])
+check("没标题没地点不合并（没法判断）", len(_no_title) == 2, str(len(_no_title)))
+
 print()
 print("失败项：", FAILS if FAILS else "无，全部通过")
 sys.exit(1 if FAILS else 0)

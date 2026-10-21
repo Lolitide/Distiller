@@ -75,6 +75,15 @@ check("capabilities 含 parse（已实现）", "parse" in (health.get("capabilit
 check("模型不可用时不谎报 ocr", "ocr" not in (health.get("capabilities") or []),
       str(health.get("capabilities")))
 
+# 运行指标：只读计数（排障用），不许含消息内容
+llm = health.get("llm") or {}
+check("health 含 llm 指标", isinstance(llm, dict) and "queue_depth" in llm, str(llm))
+check("llm 指标带 model 名", str(llm.get("model") or "") != "", str(llm.get("model")))
+check("llm 指标有计数项", all(k in llm for k in ("processed", "llm_calls", "degraded")), str(llm))
+push = health.get("push") or {}
+check("health 含 push 指标", isinstance(push, dict) and "sent" in push, str(push))
+check("push 指标带 ready", "ready" in push, str(push))
+
 # ---------------------------------------------------------------- 空窗口
 print()
 print("二、空窗口返回空候选与回原游标")
