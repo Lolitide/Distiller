@@ -23,10 +23,31 @@ import { TaskListStore } from '../viewmodel/TaskListStore';
  * 再加一点呼吸 → 取 **80vp**。之前这里只有 `padding_level4`(8vp)，所以最后一张卡片会被压住。
  */
 /**
- * Chip 行悬浮层的高度（vp）：一行 chip（40）+ 上下呼吸。
- * 列表里留出同样高度的空档，第一张卡片才不会钻到 chip 底下。
+ * Chip 行悬浮层**实际占的高度**（vp）—— 列表里要留出同样高的空档，第一张卡片才不会钻到 Chip 底下。
+ *
+ * 2026-10-21 修正（袁正锟：「第一个 listGroup 和 ChipsGroup 之间的间隔有点大，调小一些」）：
+ * 原来写的是 **52**（注释记作「一行 chip 40 + 上下呼吸」），但官方 `ChipGroup` 的真实高度没有 40 ——
+ * 布局探针实测（模拟器，密度 3.5）：
+ *   · `chipGroupPadding.top` 8vp → Chip 行 158.9~186.9（**28vp**）→ `chipGroupPadding.bottom` 1vp；
+ *   · 合计 **37vp**，比 52 少了 15vp → 这 15vp 就变成"Chip 背板下面的一段死空档"，
+ *     观感正是"第一个分组离 Chips 太远"。
+ * 现在取 **38**（实测 37 向上取整 1vp 兜底，避免组头被背板圆角下沿压住）。
+ * ⚠️ 改这个值会同时改变「Chips ↔ 第一个分组」的间隔，且必须与下面的 `CHIPS_BAND_BOTTOM_GAP_VP` 一起看：
+ *    列表首项让位 = 本值 + 底边距，两者之和就是背板下沿的位置。
  */
-const CHIPS_BAND_HEIGHT_VP: number = 52;
+const CHIPS_BAND_HEIGHT_VP: number = 38;
+
+/**
+ * Chip 行**下方**的留白（vp）—— 2026-10-21 袁正锟：「给任务列表页的 Chips 组加上底边距吧」。
+ *
+ * 加在冻结层的 `padding.bottom` 上，**不是**给 Chip 组件自己加外边距：这块留白必须与上面同色，
+ * 卡片才算"从 Chip 组下方开始"；否则卡片会紧贴 Chip 的胶囊边，甚至从 Chip 底下钻出来。
+ *
+ * 取值官方 `padding_level4` = 8vp（Chip 行自身还有 1vp 的 `chipGroupPadding.bottom`，视觉合计约 9vp）。
+ * ⚠️ 它同时要加进列表首项的让位高度（`CHIPS_BAND_HEIGHT_VP + 本值`），两处必须一起改，
+ * 否则空档对不上：留少了第一张卡片会被背板压住，留多了会多出一条空隙。
+ */
+const CHIPS_BAND_BOTTOM_GAP_VP: number = 8;
 
 /**
  * Chip 行从「展开位」滑到「收起位」所对应的**滚动跨度**（vp）＝ 标题栏的高度差。
@@ -359,9 +380,10 @@ export struct A_TaskList {
 
       // 2026-10-19：Chip 行**不再作为普通列表项**（那样会随页面滑出屏幕）。
       // 改成 `build()` 里的**悬浮冻结层**，跟着标题一起上滑、标题收起后停住。
-      // 这里只留出与它等高的空档，让第一张卡片从 Chip 行下方开始、不会钻到它底下。
+      // 这里留出「Chip 行等高 + 它下方的 `CHIPS_BAND_BOTTOM_GAP_VP`」的空档，
+      // 让第一张卡片正好从背板下沿之下开始（少留＝被背板压住，多留＝多一条缝）。
       ListItem() {
-        Row().width('100%').height(CHIPS_BAND_HEIGHT_VP)
+        Row().width('100%').height(CHIPS_BAND_HEIGHT_VP + CHIPS_BAND_BOTTOM_GAP_VP)
       }
       .accessibilityLevel('no')
 
@@ -545,7 +567,9 @@ export struct A_TaskList {
           TaskFilterChips({ store: this.store })
         }
         .width('100%')
-        .padding({ top: this.chipsTopVp })
+        // 底边距加在**背板自己的 padding** 上：这块留白与背板同色，卡片从它下沿滚进去
+        //（见 `CHIPS_BAND_BOTTOM_GAP_VP`；列表首项的让位高度要同步加上这个值）
+        .padding({ top: this.chipsTopVp, bottom: CHIPS_BAND_BOTTOM_GAP_VP })
         .backgroundColor(this.themeStore.scheme.surface)
         .borderRadius({
           bottomLeft: CHIP_BAND_RADIUS_VP,
