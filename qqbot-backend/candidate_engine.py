@@ -716,6 +716,44 @@ def _build_candidate(cluster: _Cluster, now: datetime) -> dict[str, Any] | None:
 # ============================================================ 对外入口
 
 
+def _norm_key(text: str) -> str:
+    """去掉空白与标点，用于跨簇合并时的"同一个标题"判断。"""
+    return re.sub(r"[\s，。！？、,.!?:：；;《》“”‘’()（）\[\]【】…—\-]", "", text or "")
+
+
+def _richness(c: dict) -> tuple[int, float, int]:
+    """信息量：来源消息越多越可信；同分再看置信度与摘要长度。"""
+    src = c.get("source") or {}
+    return (int(src.get("count") or 0), float(c.get("confidence") or 0), len(str(c.get("summary") or "")))
+
+
+def _dedupe_candidates(items: list[dict]) -> list[dict]:
+    """同一群 + 同一时间 + 同一地点 + 同一标题的候选只留一条。
+
+    为什么需要：同一件事被拆到两个簇（比如隔了半小时又有人补一句），
+    会变成两张几乎一样的卡片。保留信息量更大（来源消息更多）的那条。
+    只看标题/地点都不够——「开会」每天都有，所以**时间必须相同**才合并。
+    """
+    best: dict[tuple[str, str, str, str], int] = {}
+    out: list[dict] = []
+    for c in items:
+        title = _norm_key(str(c.get("title") or ""))
+        place = _norm_key(str(c.get("place") or ""))
+        gid = str((c.get("source") or {}).get("group_openid") or "")
+        if not title and not place:
+            out.append(c)  # 没标题没地点，无法判断重复，保持原样
+            continue
+        key = (gid, title, str(c.get("time_normalized") or ""), place)
+        idx = best.get(key)
+        if idx is None:
+            best[key] = len(out)
+            out.append(c)
+            continue
+        if _richness(c) > _richness(out[idx]):
+            out[idx] = c
+    return out
+
+
 def build_candidates(messages: list[dict]) -> list[dict]:
     """把一批群消息（窗口内容）算成候选列表（未分配 rev_seq）。
 
@@ -732,6 +770,7 @@ def build_candidates(messages: list[dict]) -> list[dict]:
         cand = _build_candidate(c, now)
         if cand is not None:
             out.append(cand)
+    out = _dedupe_candidates(out)
     out.sort(key=lambda c: (c["source"]["first_ts"], c["candidate_id"]))
     return out
 

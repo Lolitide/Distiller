@@ -195,7 +195,13 @@ def parse_time(text: str, base: datetime) -> TimeSlot | None:
     m = re.search(r"(?<!\d)(\d{1,2})[.．](\d{1,2})(?!\d)", t)
     if m:
         mo, d = int(m.group(1)), int(m.group(2))
-        if 1 <= mo <= 12 and 1 <= d <= 31:
+        # 「版本1.2」「ver 2.0」「第 1.2 版」是版本号，不是日期。
+        # 实测：不加这道闸会把「版本1.2」解析成 1 月 2 日，进而生成假截止时间。
+        before = t[max(0, m.start() - 4):m.start()]
+        after = t[m.end():m.end() + 2]
+        is_version = bool(re.search(r"(版本|版\s*|ver\.?\s*|v\.?\s*|第\s*)$", before, re.I))
+        if (1 <= mo <= 12 and 1 <= d <= 31
+                and not is_version and not after.startswith("版")):
             y = base.year if mo >= base.month else base.year + 1
             return TimeSlot(m.group(0), f"{y:04d}-{mo:02d}-{d:02d}", source_date=_d(base))
 
