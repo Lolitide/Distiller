@@ -16,6 +16,8 @@ import { ThemeStore } from '../utils/Theme';
  */
 import { HdsNavigationMenuContentOptions, HdsNavDestination } from '@kit.UIDesignKit';
 import { ColorMetrics, KeyboardAvoidMode, LengthMetrics } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
+import { WindowInsets } from '../utils/WindowInsets';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { TaskStatusIcon } from '../components/TaskStatusIcon';
 import { TaskStepsSection } from '../components/TaskStepsSection';
@@ -27,9 +29,6 @@ import { TaskNoteCard } from '../components/TaskNoteCard';
 import { TaskAlarm, TaskStatus } from '../model';
 import { NAV_STACK_KEY, TaskDetailParam } from '../viewmodel/TaskNavParams';
 import { showDeleteConfirmDialog } from '../utils/DeleteConfirmDialog';
-
-/** 二级页标题栏高度（vp）：`HdsNavDestination.titleMode` 默认 MINI，官方写作「标题栏高度为 56vp」 */
-const DEST_TITLE_BAR_HEIGHT_VP: number = 56;
 
 /** 内容左右留白（vp）：官方 `padding_level8` = 16，与列表页一致 */
 const CONTENT_SIDE_PADDING_VP: number = 16;
@@ -59,6 +58,11 @@ export struct B_TaskDetail {
 
   /** 是否正在改任务名 */
   @Local editingName: boolean = false;
+  /**
+   * 状态栏高度（vp）：窗口全屏后内容区从窗口顶端起算，要先让开这一截（见 `syncStatusBarHeight`）。
+   * 首帧从缓存同步取，所以正常情况下不会有 0 → 39vp 的跳变。
+   */
+  @Local statusBarVp: number = 0;
   /** 改名时的草稿（提交前不写回任务） */
   @Local draftName: string = '';
   /** 改名输入框的控制器：进入编辑时把光标放到文本末尾（不默认全选） */
@@ -87,6 +91,36 @@ export struct B_TaskDetail {
 
   aboutToAppear(): void {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
+    this.syncStatusBarHeight();
+  }
+
+  /**
+   * 状态栏高度（vp）—— 内容顶部让白的**第一截**。
+   *
+   * 2026-10-21 修「任务详情导航栏和内容重合」：
+   * 窗口是**全屏**的（`EntryAbility` 里 `setWindowLayoutFullScreen(true)`），而 `HdsNavDestination`
+   * 只让**自己**（标题栏）避开状态栏，**内容区仍从窗口顶端 y=0 开始**。
+   * 之前这里只留了 `SUB_PAGE_TITLE_BAR_VP`(56vp)，于是内容整体上移了一个状态栏的高度，
+   * 大标题直接压在「任务详情」小标题上（袁正锟截图标注）。
+   *
+   * 布局探针实测（Mate 90 Pro 模拟器，密度 3.5）：
+   *  · `HdsTitleBar`       y=137 → 332px ＝ 状态栏 39.1vp ＋ 标题栏 56vp；
+   *  · 内容 `Scroll`       y=196px（＝只让了 56vp，少了 137px 那截）；
+   *  · 任务名 `Text`       y=252 → 375px，与标题文字 193→275px **重叠 23px**。
+   * 所以让白必须写「状态栏 + 标题栏」，与任务列表页 `A_TaskList.statusBarVp` 同一口径。
+   *
+   * 先读**同步缓存**（根页面启动时已查过一次）→ 首帧就落在正确位置，导航进场动画里不会跳；
+   * 再异步刷新一次兜底（转屏/折叠态变化后状态栏高度会变）。
+   */
+  private syncStatusBarHeight(): void {
+    this.statusBarVp = this.getUIContext().px2vp(WindowInsets.topPxCached());
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      return;
+    }
+    WindowInsets.topPx(context).then((px: number) => {
+      this.statusBarVp = px > 0 ? this.getUIContext().px2vp(px) : 0;
+    });
   }
 
   aboutToDisappear(): void {
@@ -279,8 +313,8 @@ export struct B_TaskDetail {
           .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
           .hitTestBehavior(HitTestMode.None)
 
-      Column() {        // 顶部让开**二级页自己的**标题栏（MINI = 56vp）
-        Row().width('100%').height(DEST_TITLE_BAR_HEIGHT_VP)
+      Column() {        // 顶部让开**状态栏 + 二级页自己的标题栏**（MINI = 56vp，两截都要补，见 statusBarVp）
+        Row().width('100%').height(MainTitleBar.SUB_PAGE_TITLE_BAR_VP + this.statusBarVp)
 
         // ⚠️ 正文必须能滚：详情页现在有四张卡（步骤 / 属性 / 元信息 / 标签），
         // 装不下是常态。之前这里是裸 `Column`，卡片一多「添加标签」那一行就被裁在屏幕外

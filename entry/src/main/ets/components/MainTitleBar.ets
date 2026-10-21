@@ -52,6 +52,21 @@ export class MainTitleBar {
   static readonly CONTENT_TOP_OFFSET_VP: number = 112;
 
   /**
+   * **二级页**（`HdsNavDestination`）标题栏的高度（vp）。
+   *
+   * 官方原文：`titleMode` 默认 `MINI`，「MINI：固定为小标题模式。标题栏高度为 56vp」。
+   * 与本文件上面那个 112 是两回事：那是主页 `HdsNavigation` 的 FREE 档。
+   *
+   * ⚠️ 这只是**标题栏自己**的高度，**不含状态栏**。窗口是全屏的
+   * （`EntryAbility.setupWindow` → `setWindowLayoutFullScreen(true)`），而 `HdsNavDestination` 只把
+   * 标题栏自己让开状态栏、**内容区仍从窗口顶端开始** —— 所以页面里内容顶部让白必须写成
+   * 「状态栏高度 + 本值」，见 `B_TaskDetail` / `B_Search` 的 `statusBarVp`。
+   * 2026-10-21 实测证据（Mate 90 Pro 模拟器，密度 3.5）：`HdsTitleBar` y=137→332px
+   * （=状态栏 39.1vp + 标题栏 56vp），而内容 `Scroll` y=196px（=只让了 56vp）→ 大标题压在小标题上。
+   */
+  static readonly SUB_PAGE_TITLE_BAR_VP: number = 56;
+
+  /**
    * 标题栏「从透明过渡到实色背板」的滚动距离（vp）。
    *
    * 官方 `blurEffectiveEndOffset` 的默认值（SDK `@hms.hds.hdsBaseComponent.d.ets` L1353-1354 原文）是
