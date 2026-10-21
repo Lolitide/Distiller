@@ -15,9 +15,9 @@
  * 只做内存里的增删；真落库要走 `repository/`（见 `deleteSelected` 的 TODO）。
  */
 import { Task, TaskAlarm, TaskPriority, TaskStatus, TaskStep } from '../model';
-import { MOCK_TASKS } from '../mock/MockTasks';
 import { TaskDayGroup, TaskListViewModel } from './TaskListViewModel';
 import { SettingsRepository } from '../repository/SettingsRepository';
+import { TaskRepository } from '../repository/TaskRepository';
 import { common } from '@kit.AbilityKit';
 
 /** 固定筛选项的键（与文案分开：以后"设置里让用户选固定哪几个"就是让用户勾这几个 key） */
@@ -63,8 +63,21 @@ const FIXED_CHIPS: TaskFilterChip[] = [
 
 @ObservedV2
 export class TaskListStore {
-  /** 按天分好组的任务 */
-  @Trace groups: TaskDayGroup[] = TaskListViewModel.groupByDay(MOCK_TASKS, new Date());
+  /** 全局唯一实例：列表页、同步服务、设置页都读同一份内存态 */
+  private static shared: TaskListStore | undefined = undefined;
+
+  static instance(): TaskListStore {
+    if (TaskListStore.shared === undefined) {
+      TaskListStore.shared = new TaskListStore();
+    }
+    return TaskListStore.shared;
+  }
+
+  /** 落盘/读取用的上下文（`init` 里缓存） */
+  private dataContext: common.Context | undefined = undefined;
+
+  /** 按天分好组的任务（真实数据；首次启动为空，由 `SyncService` 拉取候选填充） */
+  @Trace groups: TaskDayGroup[] = TaskListViewModel.groupByDay([], new Date());
   /** 是否处于编辑（多选）模式 */
   @Trace editing: boolean = false;
   /** 已勾选的任务 id */
@@ -120,6 +133,104 @@ export class TaskListStore {
       group.tasks.forEach((task: Task) => tasks.push(task));
     });
     return tasks;
+  }
+
+  /**
+   * 冷启动：从本机仓储读任务并分组（**不联网**；联网由 `SyncService.start()` 负责）。
+   * 读不到就是空列表 —— 不再用 MOCK 数据，避免「演示数据混进真实候选」。
+   */
+  init(context: common.Context): void {
+    this.dataContext = context;
+    this.rebuildGroups(TaskRepository.load(context));
+  }
+
+  /** 落盘：所有改内存态的动作末尾调它。失败只影响下次启动，不影响本次交互。 */
+  private persist(): void {
+    const ctx: common.Context | undefined = this.dataContext;
+    if (ctx === undefined) {
+      return;
+    }
+    TaskRepository.save(ctx, this.allTasks());
+  }
+
+  /**
+   * 按 `clientTaskId`（= 后端 `candidate_id`）把候选 upsert 进列表。
+   *
+   * 幂等：同一个候选重复拉取只更新内容；**用户自己的状态不动**
+   * （`status` / `alarm` / `remindAt` / `finishedAt` / `reminderId`）——
+   * 否则每次轮询都会把「已完成」刷回「未完成」。
+   *
+   * @returns 本机原来没有的条数
+   */
+  upsertAll(incoming: Task[]): number {
+    const all: Task[] = this.allTasks();
+    const byClient: Map<string, Task> = new Map<string, Task>();
+    all.forEach((task: Task) => {
+      const key: string | undefined = task.clientTaskId;
+      if (key !== undefined && key.length > 0) {
+        byClient.set(key, task);
+      }
+    });
+
+    let added: number = 0;
+    let maxId: number = this.maxIdOf(all);
+    for (let i = 0; i < incoming.length; i++) {
+      const next: Task = incoming[i];
+      const key: string | undefined = next.clientTaskId;
+      const existed: Task | undefined = (key !== undefined && key.length > 0)
+        ? byClient.get(key) : undefined;
+      if (existed !== undefined) {
+        TaskListStore.mergeIncoming(existed, next);
+        continue;
+      }
+      maxId++;
+      next.id = maxId;
+      all.push(next);
+      if (key !== undefined && key.length > 0) {
+        byClient.set(key, next);
+      }
+      added++;
+    }
+
+    if (added > 0 || incoming.length > 0) {
+      this.rebuildGroups(all);
+      this.persist();
+    }
+    return added;
+  }
+
+  /** 把后端的新内容并进已存在的任务，但保留用户态字段 */
+  private static mergeIncoming(target: Task, src: Task): void {
+    target.name = src.name;
+    target.note = src.note;
+    target.dueAt = src.dueAt;
+    target.dueText = src.dueText;
+    target.place = src.place;
+    target.who = src.who;
+    target.priority = src.priority;
+    target.level = src.level;
+    target.category = src.category;
+    target.tags = src.tags;
+    target.steps = src.steps;
+    target.repeat = src.repeat;
+    target.repeatText = src.repeatText;
+    target.certainty = src.certainty;
+    target.missingFields = src.missingFields;
+    target.originDetail = src.originDetail;
+    target.rawJson = src.rawJson;
+    if (src.rawText !== undefined && src.rawText.length > 0) {
+      target.rawText = src.rawText;
+    }
+  }
+
+  private maxIdOf(list: Task[]): number {
+    let maxId: number = 0;
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].id > maxId) {
+        maxId = list[i].id;
+      }
+    }
+    return maxId;
   }
 
   /**
@@ -202,7 +313,12 @@ export class TaskListStore {
    * 附带好处：各组的展开/收起状态天然保留，不用再像上一版那样建 map 搬来搬去。
    */
   refreshGroups(expandTaskId?: number): void {
-    const rebuilt: TaskDayGroup[] = TaskListViewModel.groupByDay(this.allTasks(), new Date());
+    this.rebuildGroups(this.allTasks(), expandTaskId);
+  }
+
+  /** `refreshGroups` / `addTask` / `upsertAll` 共用的「分组 + 就地复用同一天对象」 */
+  private rebuildGroups(all: Task[], expandTaskId?: number): void {
+    const rebuilt: TaskDayGroup[] = TaskListViewModel.groupByDay(all, new Date());
     const merged: TaskDayGroup[] = [];
     rebuilt.forEach((fresh: TaskDayGroup) => {
       const kept: TaskDayGroup | undefined = this.findGroup(fresh.sortValue, fresh.hasDate);
@@ -248,22 +364,8 @@ export class TaskListStore {
   addTask(task: Task): void {
     const all: Task[] = this.allTasks();
     all.push(task);
-    const rebuilt: TaskDayGroup[] = TaskListViewModel.groupByDay(all, new Date());
-    const merged: TaskDayGroup[] = [];
-    rebuilt.forEach((fresh: TaskDayGroup) => {
-      const kept: TaskDayGroup | undefined = this.findGroup(fresh.sortValue, fresh.hasDate);
-      if (kept === undefined) {
-        this.expandIfContains(fresh, task.id);
-        // 同 `refreshGroups`：新组也要套用记住的展开状态
-        this.applyExpandOverride(fresh);
-        merged.push(fresh);
-        return;
-      }
-      kept.tasks = fresh.tasks;
-      this.expandIfContains(kept, task.id);
-      merged.push(kept);
-    });
-    this.groups = merged;
+    this.rebuildGroups(all, task.id);
+    this.persist();
     // 新任务的标签可能带出新的筛选芯片：这里不用做别的，`chips` 是 `@Computed` 派生的
   }
 
@@ -311,6 +413,7 @@ export class TaskListStore {
     found.alarm = TaskAlarm.OFF;
     found.reminderId = undefined;
     this.refreshGroups();
+    this.persist();
     return true;
   }
 
@@ -524,6 +627,7 @@ export class TaskListStore {
       if (task.remindAt !== undefined) {
         task.alarm = TaskAlarm.ON;
       }
+      this.persist();
       return;
     }
     this.statusBeforeCompleted.set(task.id, task.status);
@@ -532,6 +636,7 @@ export class TaskListStore {
     // 完成时自动关掉响铃提醒：用户意图置 OFF，已发布句柄一并撤销
     task.alarm = TaskAlarm.OFF;
     task.reminderId = undefined;
+    this.persist();
   }
 
   /**
@@ -560,6 +665,7 @@ export class TaskListStore {
       return;
     }
     task.remindAt = due - this.remindLeadMinutes * MINUTE_MS;
+    this.persist();
   }
 
   /**
@@ -590,6 +696,7 @@ export class TaskListStore {
     updated.done = old.done === 1 ? 0 : 1;
     next[index] = updated;
     task.steps = next;
+    this.persist();
   }
 
   /** 进入编辑（多选）模式：每次进来都从「一条没勾」开始 */
@@ -662,6 +769,7 @@ export class TaskListStore {
       }
     });
     this.groups = kept;
+    this.persist();
     // 删掉的如果是**最后一个带某标签的任务**，那个标签芯片会跟着消失 → 把筛选键也收回「全部」，
     // 免得界面回到「全部」、列表却还按那个不存在的标签筛（见 `effectiveFilter` 的说明）。
     // 这里顺手把状态写正，`effectiveFilter` 只是兜底。

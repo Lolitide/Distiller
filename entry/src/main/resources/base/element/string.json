@@ -619,6 +619,10 @@
     {
       "name": "picker_title_parse_mode",
       "value": "设置解析方式"
+    },
+    {
+      "name": "permission_calendar_reason",
+      "value": "用于把任务写成系统日历日程，并在到期前提醒你"
     }
   ]
 }

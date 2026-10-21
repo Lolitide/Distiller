@@ -22,8 +22,6 @@ const TAG: string = 'SettingsRepository';
 const STORE_NAME: string = 'distiller_settings';
 /** 提醒提前量（分钟）：0 ＝ 不提前，即按截止时刻提醒 */
 const KEY_REMIND_LEAD: string = 'remind_lead_minutes';
-/** 解析方式：见 `ParseMode` */
-const KEY_PARSE_MODE: string = 'parse_mode';
 /** 主题色档位（`ACCENT_OPTIONS` 的下标）：2026-10-19 起持久化 */
 const KEY_THEME_ACCENT: string = 'theme_accent_index';
 /** 卡片密度（`DENSITY_STANDARD` / `DENSITY_COMPACT`）：2026-10-19 起持久化 */
@@ -38,21 +36,9 @@ const KEY_GROUP_EXPANDED: string = 'task_group_expanded';
 /** 默认提醒提前量：0 分钟（到点提醒） */
 export const DEFAULT_REMIND_LEAD: number = 0;
 
-/**
- * 解析方式。
- *   · `AUTO`   —— 端侧优先，端侧抽不动再走服务端（默认）
- *   · `LOCAL`  —— 只用端侧（不外发任何文本）
- *   · `SERVER` —— 只用服务端（解析质量好，但文本会离开手机）
- * 三档对应开题报告「权限克制 + 用户可见的数据边界」；具体哪条链路由 `service/ai` 与 `service/cloud` 落实。
- */
-export enum ParseMode {
-  AUTO = 0,
-  LOCAL = 1,
-  SERVER = 2
-}
-
-/** 默认解析方式：自动 */
-export const DEFAULT_PARSE_MODE: number = ParseMode.AUTO;
+// 注：原 `ParseMode`（端侧优先 / 仅本机 / 服务端）已移除。
+// 本工程没有端侧解析——群消息的标题/摘要全部由后端 `/candidates` 产出
+// （Qwen 模型，失败回退规则拼接）。保留三档会让设置页显示一个不存在的选项。
 
 export class SettingsRepository {
   /** 缓存句柄：`getPreferences` 每次都会回到文件，缓存一次即可 */
@@ -105,38 +91,6 @@ export class SettingsRepository {
     }
   }
 
-  /** 读解析方式 */
-  static async getParseMode(context: common.Context): Promise<number> {
-    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
-    if (store === undefined) {
-      return DEFAULT_PARSE_MODE;
-    }
-    try {
-      const value: preferences.ValueType = await store.get(KEY_PARSE_MODE, DEFAULT_PARSE_MODE);
-      return typeof value === 'number' ? value : DEFAULT_PARSE_MODE;
-    } catch (error) {
-      const err = error as BusinessError;
-      hilog.error(DOMAIN, TAG, 'getParseMode failed: %{public}s', err.message);
-      return DEFAULT_PARSE_MODE;
-    }
-  }
-
-  /** 写解析方式 */
-  static async setParseMode(context: common.Context, mode: number): Promise<boolean> {
-    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
-    if (store === undefined) {
-      return false;
-    }
-    try {
-      await store.put(KEY_PARSE_MODE, mode);
-      await store.flush();
-      return true;
-    } catch (error) {
-      const err = error as BusinessError;
-      hilog.error(DOMAIN, TAG, 'setParseMode failed: %{public}s', err.message);
-      return false;
-    }
-  }
 
   /* ── 视觉个性化：主题色与卡片密度（2026-10-19 起持久化）── */
 
