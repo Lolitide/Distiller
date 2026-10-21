@@ -10,6 +10,7 @@ import { MainTitleBar } from '../components/MainTitleBar';
 import { NAV_STACK_KEY, ROUTE_SEARCH } from '../viewmodel/TaskNavParams';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 import { SettingsRepository } from '../repository/SettingsRepository';
+import { SyncService } from '../service/cloud/SyncService';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'A_Main';
@@ -35,7 +36,7 @@ struct A_Main {
    * 编辑态要同时被导航栏（取消/全选）、底部悬浮栏（添加↔删除）、每张卡片（圆圈↔方框勾选框）读到，
    * 挂在页面这一层最省事，也不用把状态在几层组件之间来回搬。
    */
-  private store: TaskListStore = new TaskListStore();
+  private store: TaskListStore = TaskListStore.instance();
   @Local currentIndex: number = 0;
   /**
    * 「添加任务」半模态（`bindSheet`）的显隐（袁正锟 2026-10-17：「点击底部页签的添加按钮后
@@ -65,6 +66,28 @@ struct A_Main {
     this.syncRemindLead();
     this.syncTheme();
     this.syncGroupExpand();
+    this.startBackend();
+  }
+
+  /**
+   * 接后端：读本机任务 → 启动同步（每 5 秒拉一次候选）。
+   *
+   * 顺序不能反：`store.init` 先把上次落盘的任务读回来（离线也有内容），
+   * 再由 `SyncService` 增量 upsert —— 直接等网络会让首帧空列表闪一下。
+   */
+  private startBackend(): void {
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      return;
+    }
+    this.store.init(context);
+    SyncService.init(context);
+    SyncService.start();
+    SyncService.syncOnce();
+  }
+
+  aboutToDisappear(): void {
+    SyncService.stop();
   }
 
   /**
