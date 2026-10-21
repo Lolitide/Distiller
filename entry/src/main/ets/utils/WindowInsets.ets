@@ -23,16 +23,36 @@ const DOMAIN: number = 0x0000;
 const TAG: string = 'WindowInsets';
 
 export class WindowInsets {
-  /** 状态栏高度（px）；取不到返回 0 */
+  /**
+   * 上一次查到的状态栏高度（px）——**同步缓存**。
+   *
+   * 为什么要缓存：`getWindowAvoidArea` 是异步的，而页面里"内容顶部让开多少"要在**首帧**就是对的。
+   * 二级页（`B_TaskDetail` / `B_Search`）是导航 push 进来的，等 async 回来再补 39vp，
+   * 会看到内容"先压着标题、再往下跳一下"。
+   * 根页面 `A_TaskList` 启动时已经查过一次并写进这里，所以二级页能直接同步读到。
+   */
+  private static cachedTopPx: number = 0;
+
+  /** 状态栏高度（px）；取不到返回 0（同时会刷新同步缓存） */
   static async topPx(context: common.Context): Promise<number> {
     try {
       const win: window.Window = await window.getLastWindow(context);
-      return win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM).topRect.height;
+      const height: number = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM).topRect.height;
+      WindowInsets.cachedTopPx = height;
+      return height;
     } catch (error) {
       const err = error as BusinessError;
       hilog.warn(DOMAIN, TAG, 'topPx failed: %{public}s', err.message);
       return 0;
     }
+  }
+
+  /**
+   * 已缓存的状态栏高度（px）；还没查过就是 0。
+   * 给"首帧就要落在正确位置"的页面用（见 `B_TaskDetail` / `B_Search` 的 `statusBarVp`）。
+   */
+  static topPxCached(): number {
+    return WindowInsets.cachedTopPx;
   }
 
   /** 底部手势条（三键导航时是导航栏）高度（px）；取不到返回 0 */
