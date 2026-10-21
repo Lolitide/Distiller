@@ -10,6 +10,9 @@
     "deliveryWithInstall": true,
     "installationFree": false,
     "pages": "$profile:main_pages",
+    // 二级页路由表（官方 Navigation 系统路由表）：HdsNavDestination 子页在这里注册，
+    // 页面里用 navPathStack.pushPathByName('SearchPage', ...) 跳转（见 pages/B_Search.ets 的 SearchPageBuilder）
+    "routerMap": "$profile:router_map",
     "abilities": [
       {
         "name": "EntryAbility",

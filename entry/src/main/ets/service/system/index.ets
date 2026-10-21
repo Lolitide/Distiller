@@ -6,8 +6,11 @@
  *   NotificationService 通知授权（requestEnableNotification）
  *   PermissionService   权限申请与状态查询
  *
+ * 已落地成员：
+ *   MediaPickService    相册选图（系统 picker，**不需要权限**）；「添加任务 · 截图」用它
+ *
  * 纪律：提醒有两条实现路径（代理提醒 / 日历）。ReminderService 对外只暴露
  * 「发布、撤销、查询」三个动作，内部走哪条路径由它自己决定——页面与 ViewModel 里
  * 不许出现 `if (用了日历)` 这类分支。
  */
-export {};
+export { MediaPickResult, pickSingleImage } from './MediaPickService';
