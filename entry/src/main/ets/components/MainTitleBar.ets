@@ -28,8 +28,21 @@
  * 于是滚动初期，底下的卡片会以「幽灵文字」从标题栏透出来，再往下又是 Chip 行**实色**背板 →
  * 一段虚一段实。现在：过渡窗口收到 8vp（`PLATE_SOLID_OFFSET_VP`）、背板改**完全不透明**的 `surface`，
  * 滚动一开始顶部就是实色，与 Chip 行背板接成一整块（同系统「设置 / 备忘录」的做法）。
+ *
+ * ── 2026-10-21 去掉「顶部导航栏下边那道模糊」（袁正锟，任务列表 + 设置页都报）──
+ * 症状：内容上滑一段距离后，标题栏下沿出现一条糊边，底下的卡片文字被磨砂化。
+ * 根因是 `GRADIENT_BLUR` 那套动态模糊的两个旋钮：
+ *  1. `backgroundStyle.maskExtraHeight` —— 官方定义「标题栏**模糊蒙层超出标题栏的额外高度**」，
+ *     也就是那道糊边**就是它**。默认 32vp，这里原来照抄官方示例写成了 **56vp** → 糊得更长。
+ *     现在归零：糊边不再超出标题栏本体。
+ *  2. `blurStrategy` —— 官方专门用来关模糊的字段（`TitleBarStyleOptions.blurStrategy`，
+ *     「ENABLE 使能模糊效果 / DISABLE 不使能模糊效果」，默认 ADAPTIVE，`@since 6.0.0(20)`，
+ *     本项目 target 6.0.2(22) 可用）→ 直接 `DISABLE`。
+ * 关掉之后标题栏就是一块**实色 `surface`**：与页面底、Chip 行背板连成一体，
+ * 滚动内容该被挡住的都被挡住（本项目自己那层不透明背板横铺到屏幕顶端），不再有磨砂过渡带。
  */
 import {
+  BlurStrategy,
   HdsNavigationIconItemStyle,
   HdsNavigationMenuContentOptions,
   HdsNavigationMenuItemOptions,
@@ -109,18 +122,26 @@ export class MainTitleBar {
       textColor: onSurface
     };
     return {
+      // 2026-10-21（袁正锟：「内容上滑一段距离后顶部导航栏有下边模糊，把这个效果去掉」）：
+      // **整条标题栏不要任何模糊**。这是官方为此准备的字段
+      // （`TitleBarStyleOptions.blurStrategy`：ENABLE 使能 / DISABLE 不使能，默认 ADAPTIVE，
+      //  `@since 6.0.0(20)`，本项目 target 6.0.2(22) 可用）。
+      // 关掉后标题栏只是一块实色 `surface`：滚动内容被本项目自己那层不透明背板挡住，
+      // 不再出现"内容在标题栏下沿被磨砂化"的过渡带。
+      blurStrategy: BlurStrategy.DISABLE,
       // 2026-10-20 取消全屏沉浸后换成 `GRADIENT_BLUR`：
       //  · 官方对它的定位原文是「渐变模糊……**此方式适用于列表型非沉浸式场景**」，正是本页；
       //  · `IMMERSIVE_GRADIENT_BLUR` 是给沉浸图文场景的，实测在**非沉浸布局**下只出模糊、**背板不填色**
       //    （截图可见标题后面透出模糊的卡片文字），而且它是 6.1.0(23) 的 API，本来就超 target 22。
       //  · `GRADIENT_BLUR` 起始 6.0.0(20)，在 target 6.0.2(22) 内，风险表里那一行 🔴 也一并消掉。
+      //  · 保留这套配置只是为了**标题随滚动收缩**（FREE 模式的驱动）；模糊本身已被上面的
+      //    `blurStrategy: DISABLE` 关掉，`maskExtraHeight` 也归零，见下面两处标注。
       //
       // ⚠️ `enableScrollEffect` 必须为 **true**（2026-10-20 晚回滚）：
       // 它是「标题随滚动跟手收缩」的驱动。关掉之后实测标题栏**一动就瞬间收到 56vp**
-      //（滚动 ~16vp 时标题栏已经是 55.7vp，而 Chip 行还在按 1:1 往下滑到 ~60vp），
-      // 于是 Chip 行和标题的滑动动画完全对不上 —— 正是袁正锟 2026-10-20 第 1 条反馈。
-      // 背板透明度不再是问题：滚动区上方那块不透明底色由 `A_TaskList` 的 Chip 冻结层负责
-      //（它一路铺到屏幕顶端），HDS 自己的背板画不画都无所谓了。
+      //（滚动 ~16vp 时标题栏已经是 55.7vp），于是与 Chip 行的跟手位移对不上
+      // —— 正是袁正锟 2026-10-20 第 1 条反馈。背板透明度不再是问题：滚动区上方那块不透明底色
+      // 由 `A_TaskList` 的 Chip 冻结层负责（它一路铺到屏幕顶端），HDS 自己的背板画不画都无所谓了。
       scrollEffectOpts: {
         scrollEffectType: ScrollEffectType.GRADIENT_BLUR,
         enableScrollEffect: true,
@@ -132,7 +153,10 @@ export class MainTitleBar {
       originalStyle: {
         backgroundStyle: {
           backgroundColor: surface,
-          maskExtraHeight: 56.0
+          // 2026-10-21：`maskExtraHeight` 的官方定义是「标题栏**模糊蒙层超出标题栏的额外高度**」
+          //（默认 32vp，仅 `GRADIENT_BLUR` 生效）—— 那道"下边模糊"就是它。
+          // 这里原来照抄官方示例写成了 56vp，糊边正好铺到 Chip 行上方；归零后不再外溢。
+          maskExtraHeight: 0
         },
         contentStyle: {
           titleStyle: { mainTitleColor: onSurface },
@@ -140,11 +164,11 @@ export class MainTitleBar {
           backIconStyle: { backgroundColor: plate, iconColor: onSurface }
         }
       },
-      // `scrollEffectStyle` 留一份同样的配置：万一以后有人把 `enableScrollEffect` 打开，两态也不会打架
+      // `scrollEffectStyle` 与 `originalStyle` 给同一份配置：滚动前后观感一致，不出现两套色
       scrollEffectStyle: {
         backgroundStyle: {
           backgroundColor: surface,
-          maskExtraHeight: 56.0
+          maskExtraHeight: 0
         },
         contentStyle: {
           titleStyle: { mainTitleColor: onSurface },
