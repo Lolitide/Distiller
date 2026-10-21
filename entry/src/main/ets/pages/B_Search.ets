@@ -20,6 +20,8 @@ import { ThemeStore } from '../utils/Theme';
  */
 import { HdsNavDestination } from '@kit.UIDesignKit';
 import { KeyboardAvoidMode } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
+import { WindowInsets } from '../utils/WindowInsets';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { EmptyHint } from '../components/EmptyHint';
 import { SearchField } from '../components/SearchField';
@@ -31,8 +33,8 @@ import { NAV_STACK_KEY, ROUTE_TASK_DETAIL, TaskDetailParam } from '../viewmodel/
 import { SearchState, TaskSearchViewModel } from '../viewmodel/TaskSearchViewModel';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 
-/**
- * 二级页标题栏高度（vp）。
+/*
+ * 二级页标题栏高度（vp）—— 数值现归 `MainTitleBar.SUB_PAGE_TITLE_BAR_VP`（详情页也用它，一处真值源）。
  *
  * `HdsNavDestination` 的 `titleMode` **默认就是 MINI**（官方原文：「默认值：HdsNavDestinationTitleMode.MINI。」），
  * MINI 的高度官方写作「**MINI：固定为小标题模式。标题栏高度为 56vp**」。
@@ -40,8 +42,11 @@ import { TaskListStore } from '../viewmodel/TaskListStore';
  * 🔴 不能照抄主页的 `MainTitleBar.CONTENT_TOP_OFFSET_VP`(112) —— 那是 `HdsNavigation`（主页）
  * FREE 模式的高度，二级页只有 56vp；用 112 会让整页内容凭空低 56vp
  * （袁正锟 2026-10-16：「为什么这么靠下」）。
+ *
+ * 🔴 **56vp 只是标题栏自己**，还不含状态栏：窗口全屏后二级页内容区从窗口顶端起算，
+ * 标题栏却已被 HDS 让开状态栏 → 只留 56vp 会让搜索框压到标题文字上。
+ * 让白要写「`SUB_PAGE_TITLE_BAR_VP` + `statusBarVp`」（2026-10-21 布局探针实测，见 `syncStatusBarHeight`）。
  */
-const DEST_TITLE_BAR_HEIGHT_VP: number = 56;
 
 /** 搜索框与标题栏之间的额外间距（vp）：**故意留 0**，间距交给组件自己的内边距（与 List 页面同一约定） */
 const SEARCH_FIELD_TOP_GAP_VP: number = 0;
@@ -67,6 +72,12 @@ export struct B_Search {
   @Local query: string = '';
 
   /**
+   * 状态栏高度（vp）：窗口全屏后内容区从窗口顶端起算，要先让开这一截（见 `syncStatusBarHeight`）。
+   * 首帧从缓存同步取，所以正常情况下不会有 0 → 39vp 的跳变。
+   */
+  @Local statusBarVp: number = 0;
+
+  /**
    * 让**软键盘压缩页面**而不是只把页面上抬。
    *
    * 官方把页面避让模式分成三种（`KeyboardAvoidMode`，默认 `OFFSET`）：OFFSET 是「页面上抬」，
@@ -80,6 +91,27 @@ export struct B_Search {
    */
   aboutToAppear(): void {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
+    this.syncStatusBarHeight();
+  }
+
+  /**
+   * 状态栏高度（vp）—— 内容顶部让白的**第一截**（2026-10-21 修「搜索页导航栏和内容重合」）。
+   *
+   * 与详情页**同一个坑、同一套解法**，证据也在那边记着（`B_TaskDetail.syncStatusBarHeight`）：
+   * 窗口全屏（`setWindowLayoutFullScreen(true)`），`HdsNavDestination` 只让标题栏自己避开状态栏，
+   * 内容区仍从窗口顶端 y=0 起算 → 只让 56vp 时搜索框会压到「搜索」小标题上。
+   *
+   * 先读同步缓存（首帧就正确、进场动画不跳），再异步刷新兜底（转屏/折叠态会变）。
+   */
+  private syncStatusBarHeight(): void {
+    this.statusBarVp = this.getUIContext().px2vp(WindowInsets.topPxCached());
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      return;
+    }
+    WindowInsets.topPx(context).then((px: number) => {
+      this.statusBarVp = px > 0 ? this.getUIContext().px2vp(px) : 0;
+    });
   }
 
   aboutToDisappear(): void {
@@ -188,8 +220,9 @@ export struct B_Search {
           .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
           .hitTestBehavior(HitTestMode.None)
 
-      Column() {        // 顶部让开**二级页自己的**标题栏（MINI = 56vp，不是主页的 112）
-        Row().width('100%').height(DEST_TITLE_BAR_HEIGHT_VP + SEARCH_FIELD_TOP_GAP_VP)
+      Column() {        // 顶部让开**状态栏 + 二级页自己的标题栏**（MINI = 56vp，两截都要补）
+        Row().width('100%')
+          .height(MainTitleBar.SUB_PAGE_TITLE_BAR_VP + SEARCH_FIELD_TOP_GAP_VP + this.statusBarVp)
 
         // 左右留白放在**外层容器**上（与页面其它内容同一档：官方 `padding_level8` = 16vp）。
         // ⚠️ 不能给 `Search` 自己配 `.margin()`：它是 width('100%')，100% + 边距会溢出、边距被吃掉
