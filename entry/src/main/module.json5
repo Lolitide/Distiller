@@ -10,6 +10,28 @@
     "deliveryWithInstall": true,
     "installationFree": false,
     "pages": "$profile:main_pages",
+    // 连自己的后端（/api/relay/*）需要网络权限；仅用于用户自己配置的服务器地址
+    "requestPermissions": [
+      {
+        "name": "ohos.permission.INTERNET"
+      },
+      {
+        "name": "ohos.permission.READ_CALENDAR",
+        "reason": "$string:permission_calendar_reason",
+        "usedScene": {
+          "abilities": ["EntryAbility"],
+          "when": "inuse"
+        }
+      },
+      {
+        "name": "ohos.permission.WRITE_CALENDAR",
+        "reason": "$string:permission_calendar_reason",
+        "usedScene": {
+          "abilities": ["EntryAbility"],
+          "when": "inuse"
+        }
+      }
+    ],
     // 二级页路由表（官方 Navigation 系统路由表）：HdsNavDestination 子页在这里注册，
     // 页面里用 navPathStack.pushPathByName('SearchPage', ...) 跳转（见 pages/B_Search.ets 的 SearchPageBuilder）
     "routerMap": "$profile:router_map",
