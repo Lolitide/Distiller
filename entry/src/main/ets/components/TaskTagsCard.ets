@@ -203,9 +203,10 @@ export struct TaskTagsCard {
         .placeholderColor($r('sys.color.ohos_id_color_text_secondary'))
         // 与「改名 / 步骤」同一个做法：否则会留一道输入框背板
         .style(TextInputStyle.Default)
-        // ⚠️ 这里填**卡片白**而不是页面灰：步骤那块输入框落在页面灰底上才用 sub_background，
-        // 这张卡是白卡，用页面灰会露出一条灰带（袁正锟 2026-10-17 截图可见）
-        .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+        // ⚠️ 这里必须填**卡片自身的底色**而不是页面底色：填页面色会在卡里露出一条色带
+        //（袁正锟 2026-10-17 截图可见）。2026-10-21 起卡片底色是 M3 `surface-container-low`，
+        // 所以输入框也跟着取同一个色，二者永远一致。
+        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
         .showUnderline(false)
         .borderWidth(0)
         .borderRadius(0)
@@ -293,8 +294,8 @@ export struct TaskTagsCard {
                 .fontSize($r('sys.float.ohos_id_text_size_body1'))
                 .fontColor($r('sys.color.ohos_id_color_text_primary'))
                 .style(TextInputStyle.Default)
-                // 卡片是白的，输入框也填卡片白，否则会露一条灰带（踩过）
-                .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+                // 输入框填卡片底色（M3 `surface-container-low`），否则会露一条色带（踩过）
+                .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
                 .showUnderline(false)
                 .borderWidth(0)
                 .borderRadius(0)
@@ -355,8 +356,8 @@ export struct TaskTagsCard {
       }
     }
     .width('100%')
-    // 卡片白：与另两张卡、列表卡片同一个官方 token
-    .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
+    // 卡片底 = M3 `surface-container-low`：与设置页卡片、元信息卡、属性卡同一档（别再退回系统纯白）
+    .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
     .borderRadius($r('sys.float.ohos_id_corner_radius_card'))
     .clip(true)
   }
