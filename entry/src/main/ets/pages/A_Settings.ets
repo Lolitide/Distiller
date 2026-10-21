@@ -38,6 +38,7 @@ import { PopupSelector } from '../components/PopupSelector';
 import { ToggleSlider } from '../components/ToggleSlider';
 import { Task } from '../model';
 import { TaskListStore } from '../viewmodel/TaskListStore';
+import { WindowInsets } from '../utils/WindowInsets';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'A_Settings';
@@ -125,6 +126,11 @@ export struct A_Settings {
     return colors;
   }
 
+  /**
+   * 状态栏高度（vp）：窗口全屏后页面铺到屏幕顶端，内容要让开这一截（见 utils/WindowInsets）。
+   */
+  @Local statusBarVp: number = 0;
+
   @Local remindLead: number = DEFAULT_REMIND_LEAD;
   @Local parseMode: number = DEFAULT_PARSE_MODE;
 
@@ -136,6 +142,13 @@ export struct A_Settings {
 
   aboutToAppear(): void {
     this.loadSettings();
+    // 窗口全屏后页面铺到屏幕顶端，顶部让位要补上状态栏高度（见 utils/WindowInsets）
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context !== undefined) {
+      WindowInsets.topPx(context).then((px: number) => {
+        this.statusBarVp = px > 0 ? this.getUIContext().px2vp(px) : 0;
+      });
+    }
   }
 
   private hostContext(): common.Context | undefined {
@@ -474,7 +487,7 @@ export struct A_Settings {
       // 原来这段占位是 Scroll 的**内容首项**，滚动时它会带着正文一起上移，
       // 正文就钻到标题栏/状态栏区域、与「设置」叠字（实测状态栏变成  8:1提醒提前量）。
       // 放到外面后，**滚动视口本身**从标题栏下方开始，正文永远进不了标题区。
-      Row().width('100%').height(TITLE_CLEARANCE_VP)
+      Row().width('100%').height(TITLE_CLEARANCE_VP + this.statusBarVp)
 
       Scroll() {
       Column() {

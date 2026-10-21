@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 底部页签栏 —— **自绘**的悬浮胶囊 + 右下角悬浮「＋」（2026-10-20 重写）。
  *
  * ── 为什么不再用官方 `HdsTabs`（袁正锟 2026-10-20：「把 hdstsbs 的底部页签弃用并让页签支持主题取色」）──
@@ -21,6 +21,8 @@
  * 对外只暴露三个事件：页签切换、点「＋」（普通态＝添加 / 编辑态＝删除）、删除完成回调。
  */
 import { curves } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
+import { WindowInsets } from '../utils/WindowInsets';
 import { ThemeStore } from '../utils/Theme';
 import { Theme } from '../utils/Theme';
 import { A_TaskList } from '../pages/A_TaskList';
@@ -82,6 +84,22 @@ export struct MainTabBar {
 
   /** 「＋」按下时的整体缩放（弹性反馈用） */
   @Local fabScale: number = 1;
+
+  /**
+   * 底部手势条/导航栏高度（vp）。
+   * 窗口全屏后页面铺到屏幕物理底，悬浮层要自己让开这一截，否则又会贴住手势条。
+   */
+  @Local bottomInsetVp: number = 0;
+
+  aboutToAppear(): void {
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      return;
+    }
+    WindowInsets.bottomPx(context).then((px: number) => {
+      this.bottomInsetVp = px > 0 ? this.getUIContext().px2vp(px) : 0;
+    });
+  }
 
   /**
    * 当前页签下标：**由本组件自己持有**。
@@ -307,7 +325,7 @@ export struct MainTabBar {
       }
       .width('100%')
       .alignItems(VerticalAlign.Bottom)
-      .padding({ left: BAR_MARGIN, right: BAR_MARGIN, bottom: BAR_MARGIN })
+      .padding({ left: BAR_MARGIN, right: BAR_MARGIN, bottom: BAR_MARGIN + this.bottomInsetVp })
       // 中间那段空白**不能挡列表滚动**：只在两个实体控件上接事件，别处穿透给下面的列表
       .hitTestBehavior(HitTestMode.Transparent)
     }

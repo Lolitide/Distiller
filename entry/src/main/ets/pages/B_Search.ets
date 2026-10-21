@@ -177,8 +177,18 @@ export struct B_Search {
 
   build() {
     HdsNavDestination() {
-      Column() {
-        // 顶部让开**二级页自己的**标题栏（MINI = 56vp，不是主页的 112）
+      // 2026-10-21 与详情页同一处修：`HdsNavDestination` 内容区让开底部安全区，
+      // 它自己那层默认白底铺到窗口最底 → 手势条那一带露白条。
+      // 补一层**只负责颜色**的底色（expandSafeArea 铺进安全区），内容层保持让开。
+      Stack({ alignContent: Alignment.TopStart }) {
+        Column()
+          .width('100%')
+          .height('100%')
+          .backgroundColor(this.themeStore.scheme.surface)
+          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+          .hitTestBehavior(HitTestMode.None)
+
+      Column() {        // 顶部让开**二级页自己的**标题栏（MINI = 56vp，不是主页的 112）
         Row().width('100%').height(DEST_TITLE_BAR_HEIGHT_VP + SEARCH_FIELD_TOP_GAP_VP)
 
         // 左右留白放在**外层容器**上（与页面其它内容同一档：官方 `padding_level8` = 16vp）。
@@ -216,12 +226,15 @@ export struct B_Search {
       // 换成 M3 `surface` —— 与任务列表 / 设置 / 详情页同一套色系
       //（原先这里是为了跟主页 HdsTabs 容器那层灰对齐，现在主页也走 M3 了）。
       .backgroundColor(this.themeStore.scheme.surface)
-    }
-    // 标题栏沿用主页面那套官方风格（`MainTitleBar.style`），观感与首页一致
+      }
+      .width('100%')
+      .height('100%')
+    }    // 标题栏沿用主页面那套官方风格（`MainTitleBar.style`），观感与首页一致
     // 2026-10-21：入参从「#F2+surface 半透背板」改成「surface 实色背板」（背板与图标圆底在 style() 内推导），
     // 这样滚动时标题栏与 Chip 行接成一整块实色，内容不再从顶部透出。
     .titleBar({
-      avoidLayoutSafeArea: false,
+      // 2026-10-21 窗口改回全屏：必须 `true`，否则二级页标题栏会顶到状态栏底下（与主页同一口径）
+      avoidLayoutSafeArea: true,
       style: MainTitleBar.style(this.themeStore.scheme.surface, this.themeStore.scheme.onSurface),
       content: {
         title: { mainTitle: $r('app.string.title_search') }

@@ -65,7 +65,6 @@ struct A_Main {
     this.syncRemindLead();
     this.syncTheme();
     this.syncGroupExpand();
-    this.applyWindowTheme();
   }
 
   /**
@@ -81,40 +80,6 @@ struct A_Main {
       return;
     }
     await this.store.syncGroupExpand(context);
-  }
-
-  /**
-   * 系统栏底色跟随主题（2026-10-19 起；2026-10-20 取消沉浸后改成**系统栏背景色**）。
-   *
-   * 历史：沉浸时代这里调的是 `setWindowBackgroundColor`（把窗口底色设成 `surface`，
-   * 让布局伸进系统栏时那两块不露白）—— 但那条 API 在手机上会打 `unavailable to phone` 警告，形同没设。
-   *
-   * 现在取消了全屏沉浸（`setWindowLayoutFullScreen(false)`，见 `EntryAbility.setupWindow`），
-   * 系统栏有自己的区域，颜色由 `setWindowSystemBarProperties` 给：刷成同一个 `surface`，
-   * 顶部就不会出现「暖色页面 + 白状态栏」的拼色。主题色一变也跟着刷。
-   */
-  private async applyWindowTheme(): Promise<void> {
-    const context: common.Context | undefined = this.getUIContext().getHostContext();
-    if (context === undefined) {
-      return;
-    }
-    try {
-      const win: window.Window = await window.getLastWindow(context);
-      win.setWindowSystemBarProperties({
-        statusBarColor: this.themeStore.scheme.surface,
-        navigationBarColor: this.themeStore.scheme.surface,
-        statusBarContentColor: Theme.STATUS_BAR_CONTENT,
-        navigationBarContentColor: Theme.STATUS_BAR_CONTENT
-      });
-    } catch (error) {
-      // 设不上就算了：只是系统栏露出系统默认色，不影响功能
-    }
-  }
-
-  /** 主题色一变，窗口底色跟着换（否则切主题后系统栏处还是旧色） */
-  @Monitor('themeStore.accentIndex')
-  onAccentChanged(): void {
-    this.applyWindowTheme();
   }
 
   /**
@@ -274,10 +239,10 @@ struct A_Main {
     .titleMode(this.currentIndex === 0 ? HdsNavigationTitleMode.FREE : HdsNavigationTitleMode.MINI)
     .hideBackButton(true)
     .titleBar({
-      // 2026-10-20 取消全屏沉浸后必须从 `true` 改成 `false`：
-      // 布局区本身已经让开了状态栏，再 `true` 会让标题栏**把状态栏高度叠第二遍**
-      //（实测 TitleBar 变成 151vp ≈ 112+39，大标题被压到 Chip 行上、两者重叠）。
-      avoidLayoutSafeArea: false,
+      // 2026-10-21 窗口改回**全屏**（见 EntryAbility.setupWindow），所以这里必须恢复 `true`：
+      // 让 HDS 自己把标题栏让开状态栏高度，内容区也随之从状态栏下方开始。
+      //（反例记在这：非全屏布局下写 `true` 会把状态栏高度叠第二遍 —— TitleBar 变成 151vp、大标题压到 Chip 行上。）
+      avoidLayoutSafeArea: true,
       style: MainTitleBar.style(this.themeStore.scheme.surface, this.themeStore.scheme.onSurface),
       content: {
         title: { mainTitle: this.navTitle },
@@ -295,9 +260,14 @@ struct A_Main {
     // M3（2026-10-19）：页面底色 = `surface` —— 很淡、带一丝主题色；
     // 卡片用 `surface-container-low`（tone 更低一档），层次靠色调表达而不是描边/重阴影。
     .backgroundColor(this.themeStore.scheme.surface)
-    // 2026-10-20 取消全屏沉浸：这里原有一行 `.expandSafeArea([SYSTEM], [BOTTOM])`
-    // （让 surface 铺到手势条底下），现在**删掉** —— 页面布局区不再伸进系统栏，
-    // 底部导航条区域的底色交给 `applyWindowTheme()` 刷的系统栏背景色。
+    // 2026-10-21（袁正锟：「状态栏色块能去掉吗」）：系统栏那片底色改由**页面自己画**。
+    // `expandSafeArea` 把这一层的**绘制区域**铺进状态栏/导航条，于是：
+    //  · 它跟着页面一起出现（不会在首帧之前"凭空空一块色"）；
+    //  · 弹半模态/弹窗时它和页面一起被蒙层压暗（不再是"周围都暗、就那一条亮"）；
+    //  · 颜色本来就跟主题 `surface` 走。
+    // 代价：这一层也铺到了系统栏底下（布局随之扩展），所以内容要让开 —— 顶部交给
+    // `titleBar.avoidLayoutSafeArea: true`，底部由 `MainTabBar` 的悬浮层留 16vp + 安全区。
+    .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     .width('100%')
     .height('100%')
   }

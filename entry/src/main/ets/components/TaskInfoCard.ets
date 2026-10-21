@@ -21,8 +21,6 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Task, TaskLevel, TaskPriority, TASK_CATEGORY_PRESETS } from '../model';
 import { SegmentRow } from './SegmentRow';
-import { PopupSelector } from './PopupSelector';
-import { OptionPickerBody } from './OptionPickerBody';
 import { Theme } from '../utils/Theme';
 
 const DOMAIN: number = 0x0000;
@@ -34,6 +32,15 @@ const ROW_HEIGHT_VP: number = 56;
 const ROW_SIDE_PADDING_VP: number = 16;
 /** 左列标签宽度（vp）：八行对齐成一条竖线 */
 const LABEL_WIDTH_VP: number = 88;
+/**
+ * 标签与「值」之间的间距（vp）—— **所有行统一用它**，值（文字 / 按钮 / 输入框）的左边缘才会对齐。
+ *
+ * 2026-10-21（袁正锟：「文字、按钮左边缘均对齐，尤其是地点的文字未对齐」）：
+ * 之前一半的行是 `Row({ space: Theme.GAP_M })`、另一半是裸 `Row()`，值分别从 116vp / 104vp 起；
+ * 地点的 `TextInput` 还带默认内边距，又往右偏了一截。
+ * 现在统一：值一律从 `16 + 88 + 12 = 116vp` 开始，输入框用 `.padding(0)` 抹掉自己的内边距。
+ */
+const VALUE_GAP_VP: number = 12;
 /** 分隔线宽（vp） */
 const DIVIDER_WIDTH_VP: number = 0.5;
 
@@ -56,10 +63,7 @@ const CHIP_GAP_VP: number = 6;
 export struct TaskInfoCard {
   @Require @Param task: Task;
 
-  /** 类型选择器是否打开 */
-  @Local categorySheetOpen: boolean = false;
   /** 类型选择器的草稿下标（-1 ＝ 未设置） */
-  @Local categoryDraft: number = -1;
 
   /* ── 文案 ── */
 
@@ -219,33 +223,23 @@ export struct TaskInfoCard {
     }
   }
 
-  /* ── 类型选择器（5 档一行放不下，按作者裁定改用弹窗）── */
+  /* ── 类型（改为按钮组：与难易程度同一套分段按钮，超宽横向滑动）── */
 
-  private openCategorySheet(): void {
-    const current: string | undefined = this.task.category;
-    const index: number = current === undefined ? -1 : TASK_CATEGORY_PRESETS.indexOf(current);
-    this.categoryDraft = index;
-    this.categorySheetOpen = true;
+  /** 当前类型在 `TASK_CATEGORY_PRESETS` 里的下标；没设置 → -1（一颗都不选中） */
+  @Computed
+  get categoryIndex(): number {
+    const value: string | undefined = this.task.category;
+    if (value === undefined || value === '') {
+      return -1;
+    }
+    return TASK_CATEGORY_PRESETS.indexOf(value);
   }
 
-  @Builder
-  categorySheet() {
-    OptionPickerBody({
-      options: TASK_CATEGORY_PRESETS,
-      selectedIndex: this.categoryDraft,
-      onSelectedIndexChange: (index: number) => {
-        this.categoryDraft = index;
-      },
-      onCancel: () => {
-        this.categorySheetOpen = false;
-      },
-      onConfirm: () => {
-        if (this.categoryDraft >= 0 && this.categoryDraft < TASK_CATEGORY_PRESETS.length) {
-          this.task.category = TASK_CATEGORY_PRESETS[this.categoryDraft];
-        }
-        this.categorySheetOpen = false;
-      }
-    })
+  /** 点某一颗类型按钮：直接写回 `task.category`（`Task` 是 `@ObservedV2`，卡片会跟着刷新） */
+  private applyCategory(index: number): void {
+    if (index >= 0 && index < TASK_CATEGORY_PRESETS.length) {
+      this.task.category = TASK_CATEGORY_PRESETS[index];
+    }
   }
 
   /* ── 行（**值一律在 build 里直接读 `@Computed`**）── */
@@ -270,22 +264,19 @@ export struct TaskInfoCard {
 
   build() {
     Column() {
-      // ① 重要性（可改）—— 与难易程度**同一张卡、同一行式**（2026-10-19 作者要求：
-      //    「任务重要性、难易程度这俩放一块」，并且**不要**再与"来源"混在一张卡里）。
-      //    标题 + 三档按钮**并排一行**，不再"上面显示当前值、下面再来一排按钮"。
-      //    2026-10-19 第二次调整：三档不再铺成按钮，改成**锚定浮窗**
-      //    （作者：「信息重要性的选项，改成图二所示的浮窗组件」）—— 点这一行弹选项、当前项打勾。
-      Row({ space: Theme.GAP_M }) {
+      // ① 重要性（可改）—— 与难易程度**同一张卡、同一行式**。
+      //    2026-10-21（袁正锟：「重要性、类型使用按钮」）：从锚定浮窗改回**三档按钮**，
+      //    与难易程度长得一样，扫一眼就能看出"现在选的是哪一档"。
+      Row({ space: VALUE_GAP_VP }) {
         this.rowLabel($r('app.string.info_priority'))
-        PopupSelector({
-          label: '',
-          value: PRIORITY_OPTIONS[this.priorityIndex],
+        SegmentRow({
           options: PRIORITY_OPTIONS,
           selectedIndex: this.priorityIndex,
           onSelect: (index: number) => {
             this.applyPriority(index);
           }
         })
+        Blank()
       }
       .width('100%')
       .height(ROW_HEIGHT_VP)
@@ -295,7 +286,7 @@ export struct TaskInfoCard {
       this.rowDivider()
 
       // ② 难易程度（可改）：同样"标题 + 三档按钮"一行
-      Row({ space: Theme.GAP_M }) {
+      Row({ space: VALUE_GAP_VP }) {
         this.rowLabel($r('app.string.info_level'))
         SegmentRow({
           options: LEVEL_OPTIONS,
@@ -313,33 +304,35 @@ export struct TaskInfoCard {
 
       this.rowDivider()
 
-      // ③ 类型：**点一行弹选择器**（2026-10-19 作者裁定：
-      //    「类型」5 档一行放不下，改成弹窗选择；并且不再重复显示当前值 + 胶囊两遍）
-      Row() {
+      // ③ 类型：**按钮组**（2026-10-21 袁正锟：「类型的按钮超出则横向滑动」）。
+      //    5 档（作业/考试/活动/通知/其他）在 360vp 宽度下放不下，所以外面套一层横向 `Scroll`：
+      //    能放下时左对齐贴着标签，放不下时用户左右滑——和任务名、步骤、链接同一套做法。
+      Row({ space: VALUE_GAP_VP }) {
         this.rowLabel($r('app.string.info_category'))
-        Text(this.categoryLabel)
-          .fontSize($r('sys.float.ohos_id_text_size_body2'))
-          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-          .layoutWeight(1)
-          .maxLines(1)
-          .textAlign(TextAlign.End)
-        SymbolGlyph($r('sys.symbol.chevron_right'))
-          .fontSize(Theme.FONT_CAPTION)
-          .fontColor([$r('sys.color.icon_tertiary')])
-          .margin({ left: Theme.GAP_S })
+        Scroll() {
+          SegmentRow({
+            options: TASK_CATEGORY_PRESETS,
+            selectedIndex: this.categoryIndex,
+            onSelect: (index: number) => {
+              this.applyCategory(index);
+            }
+          })
+        }
+        .scrollable(ScrollDirection.Horizontal)
+        .scrollBar(BarState.Off)
+        .edgeEffect(EdgeEffect.Spring)
+        .layoutWeight(1)
+        .align(Alignment.Start)
       }
       .width('100%')
       .height(ROW_HEIGHT_VP)
       .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
       .alignItems(VerticalAlign.Center)
-      .onClick(() => {
-        this.openCategorySheet();
-      })
 
       this.rowDivider()
 
-      // ③ 地点（可改）
-      Row() {
+      // ④ 地点（可改）
+      Row({ space: VALUE_GAP_VP }) {
         this.rowLabel($r('app.string.info_place'))
         // 地点：**行内输入框**（2026-10-19：「多数字段可直接点击文本进行编辑」）。
         // 原来点一行开半模态再输入，两步变一步。
@@ -350,6 +343,9 @@ export struct TaskInfoCard {
           .placeholderColor($r('sys.color.ohos_id_color_text_secondary'))
           .backgroundColor(Color.Transparent)
           .borderRadius(0)
+          // 输入框自带默认内边距，会把文字往右推 → 抹成 0，值才和上面几行左缘对齐（2026-10-21）
+          .padding(0)
+          .margin(0)
           .layoutWeight(1)
           .height(ROW_HEIGHT_VP)
           .maxLines(1)
@@ -368,7 +364,7 @@ export struct TaskInfoCard {
       this.rowDivider()
 
       // ⑤ 链接（只读，本轮不做增删）
-      Row() {
+      Row({ space: VALUE_GAP_VP }) {
         this.rowLabel($r('app.string.info_urls'))
         Scroll() {
           Text(this.urlsLabel)
@@ -392,7 +388,7 @@ export struct TaskInfoCard {
       this.rowDivider()
 
       // ⑥ 置信度（只读：来自解析）
-      Row() {
+      Row({ space: VALUE_GAP_VP }) {
         this.rowLabel($r('app.string.info_certainty'))
         Scroll() {
           Text(this.certaintyLabel)
@@ -416,7 +412,7 @@ export struct TaskInfoCard {
       this.rowDivider()
 
       // ⑦ 创建于（只读：系统写）
-      Row() {
+      Row({ space: VALUE_GAP_VP }) {
         this.rowLabel($r('app.string.info_created'))
         Scroll() {
           Text(this.createdAtLabel)
@@ -438,7 +434,7 @@ export struct TaskInfoCard {
       // ⑧ 完成于（只读：只有已完成的任务才有值）
       if (this.finishedVisible) {
         this.rowDivider()
-        Row() {
+        Row({ space: VALUE_GAP_VP }) {
           this.rowLabel($r('app.string.info_finished'))
           Scroll() {
             Text(this.finishedAtLabel)
@@ -462,16 +458,5 @@ export struct TaskInfoCard {
     .backgroundColor($r('sys.color.ohos_id_color_card_bg'))
     .borderRadius($r('sys.float.ohos_id_corner_radius_card'))
     .clip(true)
-    // 类型选择器：5 档一行放不下，按作者裁定改用弹窗
-    .bindSheet(this.categorySheetOpen, this.categorySheet(), {
-      title: { title: $r('app.string.info_category') },
-      preferType: SheetType.CENTER,
-      height: SheetSize.FIT_CONTENT,
-      showClose: false,
-      dragBar: false,
-      onDisappear: () => {
-        this.categorySheetOpen = false;
-      }
-    })
   }
 }

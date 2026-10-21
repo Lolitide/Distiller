@@ -208,6 +208,41 @@ export class SettingsRepository {
     }
   }
 
+  /* ── 冷启动同预读（2026-10-21 修「冷启动主题色从默认闪到个性化」）── */
+
+  /**
+   * **同步**读主题色档位 —— 只在 `EntryAbility.onCreate`（UI 还没创建）里用。
+   *
+   * 为什么必须同步：异步版 `getThemeAccent` 走 `await`，等它回来时首帧已经按默认色画完了，
+   * 于是冷启动会"先默认蓝、再跳橙"闪一下（袁正锟 2026-10-21 报的 bug）。
+   * `preferences.getPreferencesSync` + `Preferences.getSync`（均 @since 10）能在**首帧之前**读到值。
+   * 读失败/没存过 → 返回 `fallback`，调用方传当前值即可。
+   */
+  static getThemeAccentSync(context: common.Context, fallback: number): number {
+    try {
+      const store: preferences.Preferences = preferences.getPreferencesSync(context, { name: STORE_NAME });
+      const value: preferences.ValueType = store.getSync(KEY_THEME_ACCENT, fallback);
+      return typeof value === 'number' ? value : fallback;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'getThemeAccentSync failed: %{public}s', err.message);
+      return fallback;
+    }
+  }
+
+  /** **同步**读卡片密度（同上，只给冷启动用） */
+  static getDensitySync(context: common.Context, fallback: number): number {
+    try {
+      const store: preferences.Preferences = preferences.getPreferencesSync(context, { name: STORE_NAME });
+      const value: preferences.ValueType = store.getSync(KEY_DENSITY, fallback);
+      return typeof value === 'number' ? value : fallback;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'getDensitySync failed: %{public}s', err.message);
+      return fallback;
+    }
+  }
+
   /* ── 任务列表分组展开状态（2026-10-20 起持久化）── */
 
   /**

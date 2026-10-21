@@ -266,8 +266,20 @@ export struct B_TaskDetail {
 
   build() {
     HdsNavDestination() {
-      Column() {
-        // 顶部让开**二级页自己的**标题栏（MINI = 56vp）
+      // 2026-10-21 修「详情页底部导航条颜色未跟随页面」：
+      // `HdsNavDestination` 的内容区只到 2758（让开了 28vp 底部安全区），
+      // 而它自己那层**默认白底**铺到窗口最底 ⇒ 手势条那一带露出白条。
+      // 这里补一层**只负责颜色**的底色（用 expandSafeArea 铺进安全区），
+      // 内容层保持原样、仍然让开安全区 —— 观感上就是"底部不露白、但内容不沉浸"。
+      Stack({ alignContent: Alignment.TopStart }) {
+        Column()
+          .width('100%')
+          .height('100%')
+          .backgroundColor(this.themeStore.scheme.surface)
+          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.BOTTOM])
+          .hitTestBehavior(HitTestMode.None)
+
+      Column() {        // 顶部让开**二级页自己的**标题栏（MINI = 56vp）
         Row().width('100%').height(DEST_TITLE_BAR_HEIGHT_VP)
 
         // ⚠️ 正文必须能滚：详情页现在有四张卡（步骤 / 属性 / 元信息 / 标签），
@@ -373,11 +385,15 @@ export struct B_TaskDetail {
       // 2026-10-19 全局 MD3：底色从系统浅蓝 `ohos_id_color_sub_background` 换成 M3 `surface`，
       // 与任务列表 / 设置页同一套色系（作者：「详情页的背景底色也没加」）。
       .backgroundColor(this.themeStore.scheme.surface)
+      }
+      .width('100%')
+      .height('100%')
     }
     // 标题栏与搜索页同一套官方风格；**标题固定写「任务详情」**，不显示任务名
     // （袁正锟 2026-10-16：「任务详情顶部栏不是显示任务名称 就显示任务详情」）
     .titleBar({
-      avoidLayoutSafeArea: false,
+      // 2026-10-21 窗口改回全屏：必须 `true`，否则二级页标题栏会顶到状态栏底下（与主页同一口径）
+      avoidLayoutSafeArea: true,
       // 2026-10-21：入参改成 M3 `surface`（实色背板），图标圆底由 `MainTitleBar.style()` 内部推导
       style: MainTitleBar.style(this.themeStore.scheme.surface, this.themeStore.scheme.onSurface),
       content: {
