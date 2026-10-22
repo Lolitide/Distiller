@@ -20,3 +20,19 @@ Thumbs.db
 # 其余原始转储与临时产物不进仓库（全量 dump 留在 Distiller-DOC\_调查\_tmp\）
 docs/_调查/_tmp/**
 !docs/_调查/_tmp/docs-submission.txt
+
+# ===== 公开仓库安全线（2026-10-21）=====
+# 华为 AGC 应用凭据（含 client_secret / api_key，绝不入库）
+**/agconnect-services.json
+# 签名与密钥材料
+**/*.p12
+**/*.jks
+**/*.keystore
+**/*.pem
+**/*.key
+**/*.cer
+**/*.csr
+# 环境变量
+**/.env
+**/.env.*
+!**/.env.example
