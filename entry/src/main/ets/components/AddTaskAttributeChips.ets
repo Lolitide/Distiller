@@ -109,6 +109,11 @@ export struct AddTaskAttributeChips {
    * 也没有"组件内一份、页面一份"的漂移（`@ObservedV2` + `@Trace` 会自己驱动刷新）。
    */
   @Require @Param draft: AddTaskDraft;
+  /** AI 预填是否正在跑（按钮显示「识别中…」并忽略重复点击） */
+  @Param aiBusy: boolean = false;
+  /** 语音页签还没接 ASR，不显示 AI 预填 */
+  @Param showAi: boolean = true;
+  @Event onAiFill: () => void = () => {};
   /** 标签输入面板的草稿 */
   @Local tagDraft: string = '';
   /** 打开的是哪个面板：`PICKER_NONE` / `PICKER_DUE` / `PICKER_REMIND` / `PICKER_REPEAT` / `PICKER_PRIORITY` / `PICKER_SOURCE` */
@@ -984,7 +989,8 @@ export struct AddTaskAttributeChips {
   }
 
   build() {
-    // 官方 Flex 换行：一行装不下自动开下一行（需求方 2026-10-17 的要求）
+    // 回到最初的「一个 Flex 自动换行」：芯片按内容自然折行（常见是 2~3 行）。
+    // 之前试过写死两行 + 横向滚动，观感不如自动换行，已回退。
     Flex({
       wrap: FlexWrap.Wrap,
       justifyContent: FlexAlign.Start,
@@ -1004,25 +1010,44 @@ export struct AddTaskAttributeChips {
       // ⑥ 已添加的标签（每个一颗 chip，点 × 删掉）
       this.tagChips()
 
-      // ⑦「＋ 添加标签」：动作型芯片 —— 强调容器浅底 ＋ 强调色文字，点它弹输入框
-      Chip({
-        label: {
-          text: this.labelText($r('app.string.chip_add_tag')),
-          fontColor: this.themeStore.scheme.primary
-        },
-        prefixSymbol: {
-          normal: new SymbolGlyphModifier($r('sys.symbol.plus')).fontColor([this.themeStore.scheme.primary])
-        },
-        size: ChipSize.SMALL,
-        allowClose: false,
-        backgroundColor: this.themeStore.scheme.primaryContainer,
-        onClicked: () => {
-          this.openTagPicker();
+      // ⑦「＋ 添加标签」＋ ⑧「AI 预填」：包成一个 Row，保证两者并排、不会被拆开
+      Row({ space: CHIP_GAP_VP }) {
+        Chip({
+          label: {
+            text: this.labelText($r('app.string.chip_add_tag')),
+            fontColor: this.themeStore.scheme.primary
+          },
+          prefixSymbol: {
+            normal: new SymbolGlyphModifier($r('sys.symbol.plus'))
+              .fontColor([this.themeStore.scheme.primary])
+          },
+          size: ChipSize.SMALL,
+          allowClose: false,
+          backgroundColor: this.themeStore.scheme.primaryContainer,
+          onClicked: () => {
+            this.openTagPicker();
+          }
+        })
+
+        if (this.showAi) {
+          Chip({
+            label: {
+              text: this.aiBusy ? '识别中…' : 'AI 预填',
+              fontColor: this.themeStore.scheme.onPrimaryContainer
+            },
+            size: ChipSize.SMALL,
+            allowClose: false,
+            backgroundColor: this.themeStore.scheme.primaryContainer,
+            onClicked: () => {
+              if (!this.aiBusy) {
+                this.onAiFill();
+              }
+            }
+          })
         }
-      })
+      }
+      .alignItems(VerticalAlign.Center)
     }
     .width('100%')
-    // 2026-10-19：面板已改成 `openCustomDialog` 的 **M3 居中弹窗**（见 `onPickerKindChanged`），
-    // 不再用 `bindSheet` —— 后者在手机上只能是底部面板，做不出参考图那种居中浮层。
   }
 }
