@@ -27,6 +27,7 @@ import { ThemeStore } from '../utils/Theme';
 import { Theme } from '../utils/Theme';
 import { A_TaskList } from '../pages/A_TaskList';
 import { A_Settings } from '../pages/A_Settings';
+import { C_Banban } from '../pages/C_Banban';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 import { showDeleteConfirmDialog } from '../utils/DeleteConfirmDialog';
 
@@ -154,7 +155,7 @@ export struct MainTabBar {
           y: this.bounceIndex === tabIndex ? this.bounceScale : 1
         })
     }
-    .width(BAR_WIDTH / 2)
+    .width(BAR_WIDTH / 3)
     .height(BAR_HEIGHT)
     .justifyContent(FlexAlign.Center)
     .accessibilityText(label)
@@ -197,7 +198,7 @@ export struct MainTabBar {
     ]);
   }
 
-  /** 悬浮胶囊（两个页签） */
+  /** 悬浮胶囊（三个页签：任务列表 / 板板 / 设置） */
   @Builder
   tabPill() {
     Row() {
@@ -206,7 +207,10 @@ export struct MainTabBar {
       // 所以不再用另一个 glyph（原来这里是不成套的 `list_checkmark`）。
       this.tabItem(0, $r('sys.symbol.checkmark_circle'), $r('sys.symbol.checkmark_circle_fill'),
         $r('app.string.tab_task_list'))
-      this.tabItem(1, $r('sys.symbol.gearshape'), $r('sys.symbol.gearshape_fill'),
+      // 板板：带 ddl 任务的甘特视图（放在任务与设置之间）
+      this.tabItem(1, $r('sys.symbol.calendar'), $r('sys.symbol.calendar'),
+        $r('app.string.tab_banban'))
+      this.tabItem(2, $r('sys.symbol.gearshape'), $r('sys.symbol.gearshape_fill'),
         $r('app.string.tab_settings'))
     }
     .width(BAR_WIDTH)
@@ -302,6 +306,10 @@ export struct MainTabBar {
       Tabs({ barPosition: BarPosition.End, index: this.index }) {
         TabContent() {
           A_TaskList({ scroller: this.scroller, store: this.store })
+        }
+
+        TabContent() {
+          C_Banban({ store: this.store })
         }
 
         TabContent() {

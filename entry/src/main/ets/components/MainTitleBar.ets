@@ -220,6 +220,11 @@ export class MainTitleBar {
   }
 
   /** 设置页的右上角：**单个「关于」图标按钮**（官方 Symbol `info_circle`），同样不是下拉 */
+  /** 空菜单：板板页没有右上角动作（不借设置页的「关于」） */
+  static emptyMenu(): HdsNavigationMenuContentOptions {
+    return { value: [] };
+  }
+
   static settingsMenu(onAbout: () => void): HdsNavigationMenuContentOptions {
     return {
       value: [
