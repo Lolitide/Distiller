@@ -2,15 +2,15 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "module description"
+      "value": "知了 · 校园信息助手"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "description"
+      "value": "知了 · 校园信息助手"
     },
     {
       "name": "EntryAbility_label",
-      "value": "label"
+      "value": "知了"
     },
     {
       "name": "tab_task_list",
