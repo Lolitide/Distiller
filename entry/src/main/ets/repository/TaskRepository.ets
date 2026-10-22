@@ -27,6 +27,13 @@ const DOMAIN: number = 0x0000;
 const TAG: string = 'TaskRepository';
 const STORE_NAME: string = 'distiller_tasks';
 const K_TASKS: string = 'tasks_json';
+const K_SCHEMA: string = 'tasks_schema';
+/**
+ * 本机任务存储版本。
+ * 字段结构变化（或发现旧测试数据是空壳）时 +1 —— 升级后第一次启动会**清空旧数据**，
+ * 避免旧 schema 的半截任务被 revive 成空卡片。
+ */
+const SCHEMA_VERSION: number = 2;
 
 export class TaskRepository {
   private static store: preferences.Preferences | undefined = undefined;
@@ -50,6 +57,26 @@ export class TaskRepository {
     if (store === undefined) {
       return [];
     }
+
+    // ① 版本闸：旧 schema 的数据直接清掉（这次就是为了解决「重装后残留空壳日程」）
+    let version: number = 0;
+    try {
+      const v: preferences.ValueType = store.getSync(K_SCHEMA, 0);
+      version = typeof v === 'number' ? v : 0;
+    } catch (error) {
+      version = 0;
+    }
+    if (version !== SCHEMA_VERSION) {
+      try {
+        store.putSync(K_TASKS, '[]');
+        store.putSync(K_SCHEMA, SCHEMA_VERSION);
+        store.flushSync();
+      } catch (error) {
+        // 清不掉也不阻塞启动
+      }
+      return [];
+    }
+
     let raw: string = '[]';
     try {
       const value: preferences.ValueType = store.getSync(K_TASKS, '[]');
@@ -61,13 +88,26 @@ export class TaskRepository {
       const list: Task[] = JSON.parse(raw) as Task[];
       const out: Task[] = [];
       for (let i = 0; i < list.length; i++) {
-        out.push(TaskRepository.revive(list[i]));
+        const task: Task = TaskRepository.revive(list[i]);
+        // ② 扔掉空壳：没有名称、没有备注、没有原文、也没有 ddl 的，一律不加载
+        if (TaskRepository.isUsable(task)) {
+          out.push(task);
+        }
       }
       return out;
     } catch (error) {
       hilog.error(DOMAIN, TAG, 'tasks_json 解析失败，按空列表处理');
       return [];
     }
+  }
+
+  /** 空壳判定：至少要有「名称 / 备注 / 原文 / ddl」之一，否则就是没信息的残留 */
+  private static isUsable(task: Task): boolean {
+    const name: string = task.name !== undefined ? task.name.trim() : '';
+    const note: string = task.note !== undefined ? task.note.trim() : '';
+    const raw: string = task.rawText !== undefined ? task.rawText.trim() : '';
+    const hasDue: boolean = task.dueAt !== undefined && task.dueAt > 0;
+    return name.length > 0 || note.length > 0 || raw.length > 0 || hasDue;
   }
 
   static save(context: common.Context, tasks: Task[]): void {
@@ -77,6 +117,7 @@ export class TaskRepository {
     }
     try {
       store.putSync(K_TASKS, JSON.stringify(tasks));
+      store.putSync(K_SCHEMA, SCHEMA_VERSION);
       store.flushSync();
     } catch (error) {
       const err = error as BusinessError;
@@ -124,6 +165,7 @@ export class TaskRepository {
     if (raw.urls !== undefined) {
       task.urls = raw.urls.slice();
     }
+    task.linkUrl = raw.linkUrl;
     if (raw.missingFields !== undefined) {
       task.missingFields = raw.missingFields.slice();
     }

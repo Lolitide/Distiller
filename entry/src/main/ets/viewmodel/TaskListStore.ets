@@ -176,6 +176,12 @@ export class TaskListStore {
     let maxId: number = this.maxIdOf(all);
     for (let i = 0; i < incoming.length; i++) {
       const next: Task = incoming[i];
+      // 没有名称也没有备注的候选不入库，避免本机出现「空壳日程」
+      const nm: string = next.name !== undefined ? next.name.trim() : '';
+      const nt: string = next.note !== undefined ? next.note.trim() : '';
+      if (nm.length === 0 && nt.length === 0) {
+        continue;
+      }
       const key: string | undefined = next.clientTaskId;
       const existed: Task | undefined = (key !== undefined && key.length > 0)
         ? byClient.get(key) : undefined;
