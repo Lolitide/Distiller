@@ -231,6 +231,12 @@ export interface CandidatesData {
   changed?: number;
 }
 
+/** POST /parse 的返回：一条候选 + 抽取用的合并文本（文本/OCR/文件抽取后的结果） */
+export interface ParseData {
+  candidate: CandidateItem;
+  text: string;
+}
+
 // ---------------------------------------------------------------- 其它
 
 export interface MyData {

@@ -10,4 +10,5 @@
  * 所以对它们的引用一律走动态引入（import()），不要在这里做顶层 import。
  * 页面不直接引用本目录下的实现文件，只引用本桶文件。
  */
-export {};
+export { OcrService } from './OcrService';
+export { SpeechCallbacks, SpeechService } from './SpeechService';

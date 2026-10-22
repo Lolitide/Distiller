@@ -15,6 +15,7 @@ import {
   HealthData,
   MessagesData,
   MyData,
+  ParseData,
   PushTokenData,
   RegisterData,
   SubscribeData
@@ -61,6 +62,25 @@ export class RelayApi {
   static async candidates(after: number, limit: number): Promise<ApiResult<CandidatesData>> {
     return await ApiClient.get<CandidatesData>(
       BASE + '/candidates?after=' + after + '&limit=' + limit);
+  }
+
+  /**
+   * 手动添加：文本 → 候选（无状态，不落盘）。
+   * `source` 只用于后端标记通道（manual / screenshot…），不参与解析。
+   */
+  static async parseText(text: string, source: string): Promise<ApiResult<ParseData>> {
+    return await ApiClient.post<ParseData>(BASE + '/parse', {
+      'text': text,
+      'source': source
+    });
+  }
+
+  /** 手动添加：截图 → 后端多模态 OCR → 候选（`capabilities` 不含 `ocr` 时返回 501） */
+  static async parseImage(imageB64: string, source: string): Promise<ApiResult<ParseData>> {
+    return await ApiClient.post<ParseData>(BASE + '/parse', {
+      'image_b64': imageB64,
+      'source': source
+    });
   }
 
   static async feedback(body: FeedbackBody): Promise<ApiResult<Record<string, Object>>> {
