@@ -101,7 +101,7 @@ export struct B_TaskDetail {
    * 窗口是**全屏**的（`EntryAbility` 里 `setWindowLayoutFullScreen(true)`），而 `HdsNavDestination`
    * 只让**自己**（标题栏）避开状态栏，**内容区仍从窗口顶端 y=0 开始**。
    * 之前这里只留了 `SUB_PAGE_TITLE_BAR_VP`(56vp)，于是内容整体上移了一个状态栏的高度，
-   * 大标题直接压在「任务详情」小标题上（袁正锟截图标注）。
+   * 大标题直接压在「任务详情」小标题上（需求方截图标注）。
    *
    * 布局探针实测（Mate 90 Pro 模拟器，密度 3.5）：
    *  · `HdsTitleBar`       y=137 → 332px ＝ 状态栏 39.1vp ＋ 标题栏 56vp；

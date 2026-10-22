@@ -25,7 +25,7 @@ import { TaskListStore } from '../viewmodel/TaskListStore';
 /**
  * Chip 行悬浮层**实际占的高度**（vp）—— 列表里要留出同样高的空档，第一张卡片才不会钻到 Chip 底下。
  *
- * 2026-10-21 修正（袁正锟：「第一个 listGroup 和 ChipsGroup 之间的间隔有点大，调小一些」）：
+ * 2026-10-21 修正（需求方：「第一个 listGroup 和 ChipsGroup 之间的间隔有点大，调小一些」）：
  * 原来写的是 **52**（注释记作「一行 chip 40 + 上下呼吸」），但官方 `ChipGroup` 的真实高度没有 40 ——
  * 布局探针实测（模拟器，密度 3.5）：
  *   · `chipGroupPadding.top` 8vp → Chip 行 158.9~186.9（**28vp**）→ `chipGroupPadding.bottom` 1vp；
@@ -38,7 +38,7 @@ import { TaskListStore } from '../viewmodel/TaskListStore';
 const CHIPS_BAND_HEIGHT_VP: number = 38;
 
 /**
- * Chip 行**下方**的留白（vp）—— 2026-10-21 袁正锟：「给任务列表页的 Chips 组加上底边距吧」。
+ * Chip 行**下方**的留白（vp）—— 2026-10-21 需求方：「给任务列表页的 Chips 组加上底边距吧」。
  *
  * 加在冻结层的 `padding.bottom` 上，**不是**给 Chip 组件自己加外边距：这块留白必须与上面同色，
  * 卡片才算"从 Chip 组下方开始"；否则卡片会紧贴 Chip 的胶囊边，甚至从 Chip 底下钻出来。
