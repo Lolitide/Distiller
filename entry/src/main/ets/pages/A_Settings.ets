@@ -34,6 +34,8 @@ import { OptionPickerBody } from '../components/OptionPickerBody';
 import { SettingsNavRow } from '../components/SettingsNavRow';
 import { PopupSelector } from '../components/PopupSelector';
 import { ToggleSlider } from '../components/ToggleSlider';
+// 开关统一走 M3 取色的组件（`Toggle` 默认取系统蓝，见 M3Switch 顶部注释）
+import { M3Switch } from '../components/M3Switch';
 import { Task } from '../model';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 import { WindowInsets } from '../utils/WindowInsets';
@@ -734,10 +736,12 @@ export struct A_Settings {
                 .layoutWeight(1)
                 .alignItems(HorizontalAlign.Start)
 
-                Toggle({ type: ToggleType.Switch, isOn: g.subscribed })
-                  .onChange((isOn: boolean) => {
+                M3Switch({
+                  isOn: g.subscribed,
+                  onToggle: (isOn: boolean) => {
                     this.toggleGroup(g, isOn);
-                  })
+                  }
+                })
               }
               .width('100%')
               .height(56)
@@ -960,7 +964,7 @@ export struct A_Settings {
     Column() {
       // **让位放在 Scroll 外面**（2026-10-19 修「滚动后内容压在标题上」）：
       // 原来这段占位是 Scroll 的**内容首项**，滚动时它会带着正文一起上移，
-      // 正文就钻到标题栏/状态栏区域、与「设置」叠字（实测状态栏变成  8:1提醒提前量）。
+      // 正文就钻到标题栏/状态栏区域、与「设置」叠字（实测状态栏变成 8:1提醒提前量）。
       // 放到外面后，**滚动视口本身**从标题栏下方开始，正文永远进不了标题区。
       Row().width('100%').height(TITLE_CLEARANCE_VP + this.statusBarVp)
 
@@ -1133,10 +1137,12 @@ export struct A_Settings {
             .layoutWeight(1)
             .alignItems(HorizontalAlign.Start)
 
-            Toggle({ type: ToggleType.Switch, isOn: this.skipSelf })
-              .onChange((isOn: boolean) => {
+            M3Switch({
+              isOn: this.skipSelf,
+              onToggle: (isOn: boolean) => {
                 this.setSkipSelf(isOn);
-              })
+              }
+            })
           }
           .width('100%')
           .height(64)
