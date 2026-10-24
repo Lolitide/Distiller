@@ -145,8 +145,13 @@ export struct C_Banban {
     return start === Number.MAX_SAFE_INTEGER ? Date.now() : start;
   }
 
-  /** 标题右侧显示的可动轴时间：时间刻：MM:DD HH:MM（没有 ddl / 不显示图表时为空） */
-  /** 把当前可动轴时间同步到标题行（只在文本变化时才写 @Local，避免无谓重绘） */
+  /** 可动轴时间文案：时间刻：MM:DD HH:MM（没有 ddl / 不显示图表时为空） */
+  /**
+   * 把当前可动轴时间同步进 `cursorLabelStr`（只在文本变化时才写 `@Local`，避免无谓重绘）。
+   *
+   * 这个值的去处：**详情区顶部那一行右对齐的小字**（原来是画在自绘标题行右侧的，
+   * 标题栏改用 HDS 之后搬到内容区，见 `build()` 里那段注释）。
+   */
   private syncCursorLabel(): void {
     const next: string = this.dueTasks().length === 0 ? '' : this.cursorLabelText();
     if (next !== this.cursorLabelStr) {
@@ -849,6 +854,24 @@ export struct C_Banban {
       Column() {
         // ── 上 70%：简要详情 ──
         Column() {
+          // **可动轴时间**（2026-10-25 搬家）：原来画在本页**自绘标题行**的右侧；
+          // 标题栏改用 HDS 之后（与设置页一致，见 `A_Main` 那条注释），标题区归 HDS 管，
+          // 这行文字就挪到这里 —— 放在它描述的这块内容（时间轴穿过的事件）正上方、右对齐。
+          // 显示规则不变：没有 ddl / 不显示图表时 `cursorLabelStr` 为空，整行不渲染。
+          if (this.cursorLabelStr.length > 0) {
+            Row() {
+              Blank()
+              Text(this.cursorLabelStr)
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor(this.themeStore.scheme.onSurfaceVariant)
+                .maxLines(1)
+            }
+            .width('100%')
+            .padding({ left: 16, right: 16, top: 4, bottom: 2 })
+            // 纯展示：不挡下面卡片的点击
+            .hitTestBehavior(HitTestMode.None)
+          }
+
           if (this.dueTasks().length === 0) {
             // 空态提示统一由下面的覆盖层负责
             Column()
@@ -998,27 +1021,11 @@ export struct C_Banban {
       // 底部悬浮导航（胶囊 56 + 边距 16 + 安全区）会盖住内容，这里让出来
       .padding({ top: this.statusBarVp + 64, bottom: 112 })
       .backgroundColor(this.themeStore.scheme.surface)
-      // 本页标题行（HDS 标题栏已隐藏）：左侧「板板」，右侧可动轴时间
-      Row() {
-        Text('板板')
-          .fontSize(28)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.themeStore.scheme.onSurface)
-        Blank()
-        // 只有存在 ddl（图表出现）时才显示可动轴时间
-        if (this.dueTasks().length > 0) {
-          Text(this.cursorLabelStr)
-            .fontSize(14)
-            .fontColor(this.themeStore.scheme.onSurfaceVariant)
-            .maxLines(1)
-        }
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: 20, right: 20 })
-      .position({ x: 0, y: this.statusBarVp + 4 })
-      // 只显示文字，不挡住下面的内容
-      .hitTestBehavior(HitTestMode.Transparent)
+      // 2026-10-25：本页自绘的标题行（「板板」+ 右侧可动轴时间）**已删除** ——
+      // 标题栏改由 `A_Main` 的 HDS 标题栏统一画，与设置页同一个组件、同一套样式。
+      // 原来那行是 `.position({ y: statusBarVp + 4 })` 的浮层，字号 28 / 左右 20vp 都是手写的，
+      // 与 HDS 的 MINI 标题栏对不齐，这正是作者说的「和设置页面的不一样」。
+      // 内容顶部让白保留 `statusBarVp + 64`（与 `A_Settings` 的 `TITLE_CLEARANCE_VP + statusBarVp` 同档）。
 
       // 空态：整屏正中的灰字提示
       if (this.dueTasks().length === 0) {
