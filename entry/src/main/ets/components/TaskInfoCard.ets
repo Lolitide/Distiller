@@ -366,30 +366,6 @@ export struct TaskInfoCard {
 
       this.rowDivider()
 
-      // ⑤ 链接（只读，本轮不做增删）
-      Row({ space: VALUE_GAP_VP }) {
-        this.rowLabel($r('app.string.info_urls'))
-        Scroll() {
-          Text(this.urlsLabel)
-            .fontSize($r('sys.float.ohos_id_text_size_body1'))
-            .fontColor(this.urlsSet
-              ? $r('sys.color.ohos_id_color_text_primary')
-              : $r('sys.color.ohos_id_color_text_secondary'))
-            .maxLines(1)
-            .textAlign(TextAlign.Start)
-        }
-        .scrollable(ScrollDirection.Horizontal)
-        .scrollBar(BarState.Off)
-        .layoutWeight(1)
-        .align(Alignment.Start)
-      }
-      .width('100%')
-      .height(ROW_HEIGHT_VP)
-      .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-      .alignItems(VerticalAlign.Center)
-
-      this.rowDivider()
-
       // ⑥ 置信度（只读：来自解析）
       Row({ space: VALUE_GAP_VP }) {
         this.rowLabel($r('app.string.info_certainty'))

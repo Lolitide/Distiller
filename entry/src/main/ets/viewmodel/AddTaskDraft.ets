@@ -16,7 +16,17 @@
  *   · `repeatIndex` / `priorityIndex` / `sourceIndex` —— 档位下标，`-1` ＝ 该字段未设置（来源可空）
  *   · `tags` / `rawText` / `imageUri` / `recordSeconds` —— 标签、原文、截图、录音时长
  */
-import { RepeatFrequency, RepeatRule, Task, TaskAlarm, TaskPriority, TaskSource, TaskStatus } from '../model';
+import {
+  RepeatFrequency,
+  RepeatRule,
+  Task,
+  TaskAlarm,
+  TaskPriority,
+  TaskSource,
+  TaskStatus,
+  TaskStep
+} from '../model';
+import { CandidateItem, RepeatRuleDto } from '../service/backend/BackendTypes';
 
 /** 「未设置」的哨兵（时间戳不可能为 0；档位取不到就是 -1） */
 const UNSET_NUMBER: number = 0;
@@ -39,6 +49,48 @@ const SOURCE_VALUES: TaskSource[] = [
   TaskSource.VOICE,
   TaskSource.MANUAL
 ];
+
+/** 草稿快照（落盘用；字段与表单一一对应，不含任何后端数据） */
+interface DraftStepSnapshot {
+  content: string;
+  done: number;
+}
+
+interface DraftRepeatSnapshot {
+  frequency: number;
+  interval?: number;
+  daysOfWeek?: number[];
+  daysOfMonth?: number[];
+  monthsOfYear?: number[];
+  weeksOfMonth?: number[];
+  count?: number;
+  expire?: number;
+  dates?: number[];
+}
+
+interface DraftSnapshot {
+  name: string;
+  sourceTab: number;
+  dueAt: number;
+  remindAt: number;
+  repeatIndex: number;
+  repeatDaysOfWeek: number[];
+  repeatInterval: number;
+  priorityIndex: number;
+  sourceIndex: number;
+  tags: string[];
+  rawText: string;
+  imageUri: string;
+  recordSeconds: number;
+  place: string;
+  who: string;
+  category: string;
+  dueText: string;
+  repeatText: string;
+  linkUrl: string;
+  steps: DraftStepSnapshot[];
+  repeat?: DraftRepeatSnapshot;
+}
 
 @ObservedV2
 export class AddTaskDraft {
@@ -81,6 +133,16 @@ export class AddTaskDraft {
   @Trace imageUri: string = '';
   /** 录音时长（秒，目前只是 UI 计时，音频还没真录） */
   @Trace recordSeconds: number = 0;
+
+  /* ── AI 预填带来的字段（表单上没有输入框，但 Task 里有，别丢） ── */
+  @Trace place: string = '';
+  @Trace who: string = '';
+  @Trace category: string = '';
+  @Trace dueText: string = '';
+  @Trace repeatText: string = '';
+  /** 扫码得到的直达链接（二维码/条形码是 URL 时） */
+  @Trace linkUrl: string = '';
+  @Trace steps: TaskStep[] = [];
 
   /** 名称非空才能保存（「保存」按钮的灰/亮看它） */
   get canSave(): boolean {
@@ -125,6 +187,27 @@ export class AddTaskDraft {
     if (this.tags.length > 0) {
       task.tags = this.tags;
     }
+    if (this.place.length > 0) {
+      task.place = this.place;
+    }
+    if (this.who.length > 0) {
+      task.who = this.who;
+    }
+    if (this.category.length > 0) {
+      task.category = this.category;
+    }
+    if (this.dueText.length > 0) {
+      task.dueText = this.dueText;
+    }
+    if (this.repeatText.length > 0) {
+      task.repeatText = this.repeatText;
+    }
+    if (this.linkUrl.length > 0) {
+      task.linkUrl = this.linkUrl;
+    }
+    if (this.steps.length > 0) {
+      task.steps = this.steps;
+    }
     const urls: string[] = [];
     if (this.imageUri.length > 0) {
       urls.push(this.imageUri);
@@ -139,13 +222,101 @@ export class AddTaskDraft {
     if (task.source === undefined) {
       missing.push('source');
     }
+    if (this.place.length === 0) {
+      missing.push('place');
+    }
+    if (this.who.length === 0) {
+      missing.push('who');
+    }
     task.missingFields = missing;
     return task;
   }
 
+  /**
+   * 用后端 `/parse` 的候选**预填**表单。只填能确认的字段，不覆盖用户已输入的标签。
+   *
+   * @param remindLeadMinutes 用户设置的提醒提前量（来自设置页）；AI 给了到期时间时，
+   *   按这个提前量落「提醒我」芯片，而不是写死 30 分钟。
+   */
+  applyParsed(c: CandidateItem, remindLeadMinutes: number = 30): void {
+    const title: string = c.title.length > 0 ? c.title : c.summary;
+    if (title.length > 0) {
+      this.name = title;
+    }
+    if (c.due_at !== undefined && c.due_at > 0) {
+      this.dueAt = c.due_at;
+      const leadMs: number = Math.max(0, remindLeadMinutes) * 60 * 1000;
+      this.remindAt = c.due_at - leadMs;
+    }
+    if (c.due_text !== undefined && c.due_text.length > 0) {
+      this.dueText = c.due_text;
+    } else if (c.time_text.length > 0) {
+      this.dueText = c.time_text;
+    }
+    this.priorityIndex = c.priority === 'urgent' ? 2 : (c.priority === 'high' ? 1 : 0);
+
+    if (c.place.length > 0) {
+      this.place = c.place;
+    }
+    if (c.who.length > 0) {
+      this.who = c.who;
+    }
+    if (c.category !== undefined && c.category.length > 0) {
+      this.category = c.category;
+    }
+
+    const mergedTags: string[] = this.tags.slice();
+    for (let i = 0; i < c.tags.length; i++) {
+      if (mergedTags.indexOf(c.tags[i]) < 0) {
+        mergedTags.push(c.tags[i]);
+      }
+    }
+    this.tags = mergedTags;
+
+    if (c.steps !== undefined && c.steps.length > 0) {
+      const steps: TaskStep[] = [];
+      for (let i = 0; i < c.steps.length; i++) {
+        const step: TaskStep = new TaskStep();
+        step.content = c.steps[i].content;
+        step.done = 0;
+        steps.push(step);
+      }
+      this.steps = steps;
+    }
+
+    if (c.repeat !== undefined && c.repeat.length > 0) {
+      const dto: RepeatRuleDto = c.repeat[0];      const rule: RepeatRule = new RepeatRule();
+      rule.frequency = dto.frequency as RepeatFrequency;
+      rule.interval = dto.interval !== undefined ? dto.interval : 1;
+      if (dto.daysOfWeek !== undefined) {
+        rule.daysOfWeek = dto.daysOfWeek;
+        this.repeatDaysOfWeek = dto.daysOfWeek;
+      }
+      if (dto.daysOfMonth !== undefined) {
+        rule.daysOfMonth = dto.daysOfMonth;
+      }
+      if (dto.monthsOfYear !== undefined) {
+        rule.monthsOfYear = dto.monthsOfYear;
+      }
+      this.repeatRule = rule;
+      // 芯片上的档位文案与规则对齐（顺序：0 不重复 / 1 每天 / 2 每周 / 3 每月 / 4 每年）
+      if (dto.frequency === RepeatFrequency.DAILY) {
+        this.repeatIndex = 1;
+      } else if (dto.frequency === RepeatFrequency.WEEKLY) {
+        this.repeatIndex = 2;
+      } else if (dto.frequency === RepeatFrequency.MONTHLY) {
+        this.repeatIndex = 3;
+      } else {
+        this.repeatIndex = 4;
+      }
+    }
+    if (c.repeat_text !== undefined && c.repeat_text.length > 0) {
+      this.repeatText = c.repeat_text;
+    }
+  }
+
   /** 草稿归零（保存成功后调用，下次打开半模态是干净的） */
-  reset(): void {
-    this.name = '';
+  reset(): void {    this.name = '';
     this.sourceTab = 0;
     this.dueAt = UNSET_NUMBER;
     this.remindAt = UNSET_NUMBER;
@@ -158,6 +329,124 @@ export class AddTaskDraft {
     this.rawText = '';
     this.imageUri = '';
     this.recordSeconds = 0;
+    this.place = '';
+    this.who = '';
+    this.category = '';
+    this.dueText = '';
+    this.repeatText = '';
+    this.linkUrl = '';
+    this.steps = [];
+    this.repeatRule = undefined;
+  }
+
+  /** 序列化草稿（落盘用）：只存表单字段，不含任何后端数据/身份信息 */
+  toJson(): string {
+    const steps: DraftStepSnapshot[] = [];
+    for (let i = 0; i < this.steps.length; i++) {
+      steps.push({ content: this.steps[i].content, done: this.steps[i].done });
+    }
+    let repeat: DraftRepeatSnapshot | undefined = undefined;
+    const rule: RepeatRule | undefined = this.repeatRule;
+    if (rule !== undefined) {
+      repeat = {
+        frequency: rule.frequency,
+        interval: rule.interval,
+        daysOfWeek: rule.daysOfWeek,
+        daysOfMonth: rule.daysOfMonth,
+        monthsOfYear: rule.monthsOfYear,
+        weeksOfMonth: rule.weeksOfMonth,
+        count: rule.count,
+        expire: rule.expire,
+        dates: rule.dates
+      };
+    }
+    const snapshot: DraftSnapshot = {
+      name: this.name,
+      sourceTab: this.sourceTab,
+      dueAt: this.dueAt,
+      remindAt: this.remindAt,
+      repeatIndex: this.repeatIndex,
+      repeatDaysOfWeek: this.repeatDaysOfWeek,
+      repeatInterval: this.repeatInterval,
+      priorityIndex: this.priorityIndex,
+      sourceIndex: this.sourceIndex,
+      tags: this.tags,
+      rawText: this.rawText,
+      imageUri: this.imageUri,
+      recordSeconds: this.recordSeconds,
+      place: this.place,
+      who: this.who,
+      category: this.category,
+      dueText: this.dueText,
+      repeatText: this.repeatText,
+      linkUrl: this.linkUrl,
+      steps: steps,
+      repeat: repeat
+    };
+    return JSON.stringify(snapshot);
+  }
+
+  /**
+   * 从落盘的 JSON 恢复草稿。
+   * 解析失败（旧版本/文件损坏）返回 false，调用方按空草稿处理，不阻塞添加。
+   */
+  loadJson(raw: string): boolean {
+    if ((raw || '').length === 0) {
+      return false;
+    }
+    try {
+      const s: DraftSnapshot = JSON.parse(raw) as DraftSnapshot;
+      this.name = s.name !== undefined ? s.name : '';
+      this.sourceTab = s.sourceTab !== undefined ? s.sourceTab : 0;
+      this.dueAt = s.dueAt !== undefined ? s.dueAt : UNSET_NUMBER;
+      this.remindAt = s.remindAt !== undefined ? s.remindAt : UNSET_NUMBER;
+      this.repeatIndex = s.repeatIndex !== undefined ? s.repeatIndex : REPEAT_NONE_INDEX;
+      this.repeatDaysOfWeek = s.repeatDaysOfWeek !== undefined ? s.repeatDaysOfWeek : [];
+      this.repeatInterval = s.repeatInterval !== undefined ? s.repeatInterval : 1;
+      this.priorityIndex = s.priorityIndex !== undefined ? s.priorityIndex : PRIORITY_NORMAL_INDEX;
+      this.sourceIndex = s.sourceIndex !== undefined ? s.sourceIndex : UNSET_INDEX;
+      this.tags = s.tags !== undefined ? s.tags : [];
+      this.rawText = s.rawText !== undefined ? s.rawText : '';
+      this.imageUri = s.imageUri !== undefined ? s.imageUri : '';
+      this.recordSeconds = s.recordSeconds !== undefined ? s.recordSeconds : 0;
+      this.place = s.place !== undefined ? s.place : '';
+      this.who = s.who !== undefined ? s.who : '';
+      this.category = s.category !== undefined ? s.category : '';
+      this.dueText = s.dueText !== undefined ? s.dueText : '';
+      this.repeatText = s.repeatText !== undefined ? s.repeatText : '';
+      this.linkUrl = s.linkUrl !== undefined ? s.linkUrl : '';
+
+      const steps: TaskStep[] = [];
+      if (s.steps !== undefined) {
+        for (let i = 0; i < s.steps.length; i++) {
+          const step: TaskStep = new TaskStep();
+          step.content = s.steps[i].content;
+          step.done = s.steps[i].done === 1 ? 1 : 0;
+          steps.push(step);
+        }
+      }
+      this.steps = steps;
+
+      const r: DraftRepeatSnapshot | undefined = s.repeat;
+      if (r !== undefined) {
+        const rule: RepeatRule = new RepeatRule();
+        rule.frequency = r.frequency as RepeatFrequency;
+        rule.interval = r.interval;
+        rule.daysOfWeek = r.daysOfWeek;
+        rule.daysOfMonth = r.daysOfMonth;
+        rule.monthsOfYear = r.monthsOfYear;
+        rule.weeksOfMonth = r.weeksOfMonth;
+        rule.count = r.count;
+        rule.expire = r.expire;
+        rule.dates = r.dates;
+        this.repeatRule = rule;
+      } else {
+        this.repeatRule = undefined;
+      }
+      return true;
+    } catch (error) {
+      return false;
+    }
   }
 
   /** 档位 → `TaskPriority`（显式分支，不拿枚举当数组下标） */

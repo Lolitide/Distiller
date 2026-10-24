@@ -17,6 +17,10 @@
       "value": "任务列表"
     },
     {
+      "name": "tab_banban",
+      "value": "板板"
+    },
+    {
       "name": "tab_settings",
       "value": "设置"
     },
@@ -322,7 +326,7 @@
     },
     {
       "name": "chip_remind_set",
-      "value": "在 %d月%d日 %s 提醒我"
+      "value": "%d月%d日 %s 提醒"
     },
     {
       "name": "chip_repeat",
@@ -623,6 +627,10 @@
     {
       "name": "permission_calendar_reason",
       "value": "用于把任务写成系统日历日程，并在到期前提醒你"
+    },
+    {
+      "name": "permission_mic_reason",
+      "value": "用于把你说的话转成文字，再整理成任务"
     }
   ]
 }

@@ -116,8 +116,11 @@ export function candidateToTask(c: CandidateItem, id: number, rawText: string): 
   task.clientTaskId = c.candidate_id;
   // 没有「确认页」的版本里直接进已确认，否则列表会按待确认态显示
   task.status = TaskStatus.CONFIRMED;
-  task.name = c.title.length > 0 ? c.title : c.summary;
-  task.note = c.summary;
+  // 三档兜底：title → summary → 占位名，避免存进本机后变成没有名称的空壳卡片
+  const title: string = typeof c.title === 'string' ? c.title.trim() : '';
+  const summary: string = typeof c.summary === 'string' ? c.summary.trim() : '';
+  task.name = title.length > 0 ? title : (summary.length > 0 ? summary : '未命名事项');
+  task.note = summary;
   task.rawText = rawText;
   task.rawJson = JSON.stringify(c);
   task.createdAt = parseBackendTime(c.created_at) || Date.now();

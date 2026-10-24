@@ -172,6 +172,11 @@ export class Task {
   @Trace steps?: TaskStep[];
   /** 26. 链接：文档 / 图片 / 网址统一放这里，详情页展示 */
   @Trace urls?: string[];
+  /**
+   * 26b. 扫码得到的直达链接（二维码/条形码内容是 URL 时写入）。
+   * 与 `urls` 分开：`urls` 存本机图片/文件，这个用于详情页「打开链接」。
+   */
+  @Trace linkUrl?: string;
   /** 27. 置信度（0~100 整数）：后端给 0~1 浮点，由映射层换算成整数 */
   @Trace certainty?: number;
   /** 28. 缺失字段名：由 `place` / `who` / `dueAt` 是否为空推出（「缺失不猜测」的工程形式） */

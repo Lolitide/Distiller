@@ -26,6 +26,7 @@ import { TaskMetaCard } from '../components/TaskMetaCard';
 import { TaskInfoCard } from '../components/TaskInfoCard';
 import { TaskTagsCard } from '../components/TaskTagsCard';
 import { TaskNoteCard } from '../components/TaskNoteCard';
+import { TaskMediaCard } from '../components/TaskMediaCard';
 import { TaskAlarm, TaskStatus } from '../model';
 import { NAV_STACK_KEY, TaskDetailParam } from '../viewmodel/TaskNavParams';
 import { showDeleteConfirmDialog } from '../utils/DeleteConfirmDialog';
@@ -323,7 +324,12 @@ export struct B_TaskDetail {
         Scroll() {
           Column() {
             // 第一块正文：状态圆圈 + 可编辑任务名
-            this.nameRow()
+            // 与顶部标题栏拉开一点距离（2026-10-22：「任务详情一行与标题离得太近」）
+            Column() {
+              this.nameRow()
+            }
+            .width('100%')
+            .padding({ top: 24 })
 
             // 第二块：步骤（需求方 2026-10-16 的 4 张交互图，见 `TaskStepsSection` 顶部注释）
             Column() {
@@ -335,6 +341,20 @@ export struct B_TaskDetail {
               right: CONTENT_SIDE_PADDING_VP,
               top: CONTENT_GAP_VP
             })
+
+            // 第二块之后：图片 / 文件 / 扫码链接（步骤下方、提醒上方）
+            if ((this.param.task.urls !== undefined && this.param.task.urls.length > 0)
+              || (this.param.task.linkUrl !== undefined && this.param.task.linkUrl.length > 0)) {
+              Column() {
+                TaskMediaCard({ task: this.param.task })
+              }
+              .width('100%')
+              .padding({
+                left: CONTENT_SIDE_PADDING_VP,
+                right: CONTENT_SIDE_PADDING_VP,
+                top: CONTENT_GAP_VP
+              })
+            }
 
             // 第三块：属性编辑卡（提醒 / 到期 / 重复，照官方设置页造型）
             // 需求方 2026-10-16：「这个卡片放到步骤下方」

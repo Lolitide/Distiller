@@ -1,6 +1,6 @@
 import { LengthMetrics } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
-import { Task } from '../model';
+import { Task, TaskPriority, TaskStatus } from '../model';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { TaskCard } from '../components/TaskCard';
 import { TaskSubCard } from '../components/TaskSubCard';
@@ -341,6 +341,52 @@ export struct A_TaskList {
    *   （实测踩到过：筛「已完成」再删掉那条 → Chip 行消失 → 卡在空筛选里）。
    *   所以这里自己拼「标题栏让位 + Chip 行 + 余下空间居中」，而不是整个列表都不渲染。
    */
+  /** 一键加入演示任务：4 种 tag（通知 ×2 / 作业 / 考试 / 活动），创建时间与 ddl 都错开 */
+  private addSampleTasks(): void {
+    const now: number = Date.now();
+    const hour: number = 3600000;
+    const list: Task[] = [];
+    list.push(this.makeSampleTask('sample-notice-library', '图书馆临时闭馆通知',
+      '因设备检修，今晚 18:00 后闭馆，请提前借还书', '通知', '通知',
+      now - 19 * hour, now + 3 * hour));
+    list.push(this.makeSampleTask('sample-notice-course', '选课系统维护通知',
+      '选课系统本周六 00:00-06:00 维护，期间无法选课', '通知', '通知',
+      now - 15 * hour, now + 26 * hour));
+    list.push(this.makeSampleTask('sample-homework-practice', '提交社会实践材料',
+      '把实践报告和照片打包交给辅导员', '作业', '作业',
+      now - 11 * hour, now + 50 * hour));
+    list.push(this.makeSampleTask('sample-exam-math', '复习高等数学',
+      '重点看极限、导数和积分应用，做两套真题', '考试', '考试',
+      now - 7 * hour, now + 74 * hour));
+    list.push(this.makeSampleTask('sample-activity-club', '社团招新摆摊',
+      '下午三点到东广场集合，带好宣传物料', '活动', '活动',
+      now - 3 * hour, now + 98 * hour));
+    this.store.upsertAll(list);
+  }
+
+  private makeSampleTask(key: string, name: string, note: string, tag: string, category: string,
+    createdAt: number, dueAt: number): Task {
+    const task: Task = new Task();
+    task.clientTaskId = key;
+    task.name = name;
+    task.note = note;
+    task.category = category;
+    task.tags = [tag];
+    task.status = TaskStatus.CONFIRMED;
+    task.priority = TaskPriority.NORMAL;
+    task.createdAt = createdAt;
+    task.dueAt = dueAt;
+    task.dueText = this.sampleDueText(dueAt);
+    return task;
+  }
+
+  private sampleDueText(ms: number): string {
+    const d: Date = new Date(ms);
+    const hh: string = d.getHours() < 10 ? `0${d.getHours()}` : `${d.getHours()}`;
+    const mm: string = d.getMinutes() < 10 ? `0${d.getMinutes()}` : `${d.getMinutes()}`;
+    return `${d.getMonth() + 1}月${d.getDate()}日 ${hh}:${mm}`;
+  }
+
   @Builder
   emptyState() {
     Column() {
@@ -576,6 +622,29 @@ export struct A_TaskList {
           bottomRight: CHIP_BAND_RADIUS_VP
         })
       }
+
+      // 样例入口：右下角小胶囊，一键塞演示任务（4 种 tag、创建时间与 ddl 都错开）。
+      // 反复点击按 `clientTaskId` 幂等合并，不会堆出重复卡片。
+      Column() {
+        Button({ type: ButtonType.Capsule, stateEffect: true }) {
+          Text('样例')
+            .fontSize(12)
+            .fontColor(this.themeStore.scheme.onSecondaryContainer)
+        }
+        .height(28)
+        .padding({ left: 14, right: 14 })
+        .backgroundColor(this.themeStore.scheme.secondaryContainer)
+        .id('sampleTasksButton')
+        .onClick(() => {
+          this.addSampleTasks();
+        })
+      }
+      .width('100%')
+      .height('100%')
+      .justifyContent(FlexAlign.End)
+      .alignItems(HorizontalAlign.End)
+      .padding({ right: 20, bottom: 96 })
+      .hitTestBehavior(HitTestMode.Transparent)
     }
     .width('100%')
     .height('100%')

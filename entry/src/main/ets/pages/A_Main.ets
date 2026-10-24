@@ -9,6 +9,8 @@ import { MainTabBar } from '../components/MainTabBar';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { NAV_STACK_KEY, ROUTE_SEARCH } from '../viewmodel/TaskNavParams';
 import { TaskListStore } from '../viewmodel/TaskListStore';
+import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
+import { DraftRepository } from '../repository/DraftRepository';
 import { SettingsRepository } from '../repository/SettingsRepository';
 import { SyncService } from '../service/cloud/SyncService';
 
@@ -52,6 +54,8 @@ struct A_Main {
    * 这个变量才会自动回到 `false` —— 否则会出现"界面关了、变量还是 true，再点一次拉不起来"。
    */
   @Local addSheetShown: boolean = false;
+  /** 「添加任务」的草稿：由页面持有，关闭半模态时落盘、下次点「＋」恢复 */
+  private addDraft: AddTaskDraft = new AddTaskDraft();
 
   /** 视觉个性化：M3 色系（页面底色取 surface） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
@@ -145,7 +149,13 @@ struct A_Main {
 
   @Computed
   get navTitle(): ResourceStr {
-    return this.currentIndex === 0 ? $r('app.string.tab_task_list') : $r('app.string.tab_settings');
+    if (this.currentIndex === 0) {
+      return $r('app.string.tab_task_list');
+    }
+    if (this.currentIndex === 1) {
+      return $r('app.string.tab_banban');
+    }
+    return $r('app.string.tab_settings');
   }
 
   /**
@@ -170,6 +180,9 @@ struct A_Main {
       }, () => {
         this.onSearch();
       });
+    }
+    if (this.currentIndex === 1) {
+      return MainTitleBar.emptyMenu();
     }
     return MainTitleBar.settingsMenu(() => {
       this.onAbout();
@@ -208,6 +221,11 @@ struct A_Main {
    * 原来这里是一句 toast 占位，本轮被真正的半模态取代。
    */
   private onAdd(): void {
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context !== undefined) {
+      // 恢复上次没填完的草稿（没有/损坏就保持空表单）
+      DraftRepository.load(context, this.addDraft);
+    }
     this.addSheetShown = true;
   }
 
@@ -221,8 +239,13 @@ struct A_Main {
   addTaskSheet() {
     AddTaskSheet({
       store: this.store,
+      draft: this.addDraft,
       onSaved: () => {
-        // 保存成功：收起半模态 + 给一条反馈（列表那边会自己重分组刷新）
+        // 保存成功：清掉本机草稿 → 收起半模态 + 给一条反馈
+        const context: common.Context | undefined = this.getUIContext().getHostContext();
+        if (context !== undefined) {
+          DraftRepository.clear(context);
+        }
         this.addSheetShown = false;
         this.toast($r('app.string.task_saved'));
       },
@@ -251,6 +274,8 @@ struct A_Main {
         }
       })
     }
+    // 板板页的标题行画在页面内部（右侧要显示可动轴时间），这一页隐藏 HDS 标题栏
+    .hideTitleBar(this.currentIndex === 1)
     // —— 标题栏跟手：官方要求把导航组件与可滚动容器绑起来 ——
     // 官方原文：「6.0.0(20)及以上版本，推荐使用 bindToScrollable、bindToNestedScrollable 属性绑定导航组件和
     // 可滚动容器组件后，再使用导航组件滚动相关的功能，从而获得更优的体验」；
@@ -279,7 +304,14 @@ struct A_Main {
     // 本页的宿主是常驻的导航根节点，不存在这个问题。
     // **内容与选项都不在这里**：`AddTaskSheet()` 是内容、`addTaskSheetOptions()` 是挡位/标题/关闭按钮，
     // 两者都在 `components/AddTaskSheet.ets` 里（组件化约定见 `references/02-编码规约.md` §10 规则 5）。
-    .bindSheet(this.addSheetShown!!, this.addTaskSheet(), addTaskSheetOptions())
+    .bindSheet(this.addSheetShown!!, this.addTaskSheet(), addTaskSheetOptions(() => {
+      // 半模态收起（划掉 / 关闭 / 保存后）都落一次草稿：
+      // 保存成功时草稿已被 reset + clear，这里存的是空表单，不影响下次。
+      const context: common.Context | undefined = this.getUIContext().getHostContext();
+      if (context !== undefined) {
+        DraftRepository.save(context, this.addDraft);
+      }
+    }))
     // M3（2026-10-19）：页面底色 = `surface` —— 很淡、带一丝主题色；
     // 卡片用 `surface-container-low`（tone 更低一档），层次靠色调表达而不是描边/重阴影。
     .backgroundColor(this.themeStore.scheme.surface)

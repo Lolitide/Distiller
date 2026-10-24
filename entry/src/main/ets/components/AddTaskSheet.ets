@@ -22,6 +22,10 @@ import { ThemeStore } from '../utils/Theme';
  */
 import { LengthMetrics } from '@kit.ArkUI';
 import { Task } from '../model';
+import { CandidateItem } from '../service/backend/BackendTypes';
+import { ManualParseResult, ManualParseService } from '../service/cloud/ManualParseService';
+import { DraftRepository } from '../repository/DraftRepository';
+import { common } from '@kit.AbilityKit';
 import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 import { AddTaskAttributeChips } from './AddTaskAttributeChips';
@@ -66,8 +70,41 @@ export struct AddTaskSheet {
   /**
    * 表单草稿（**唯一真源**）：来源页签、名称、日期/提醒/重复/重要程度/来源、标签、原文、截图、录音时长
    * 全在这里；子组件按引用读写它，保存按钮直接读它判断灰/亮并拼 `Task`。
+   *
+   * 2026-10-22：草稿改由 `A_Main` 持有（`@Param draft`），这样关闭半模态时
+   * 页面层可以把它落盘，下次点「＋」继续编辑。
    */
-  private draft: AddTaskDraft = new AddTaskDraft();
+  @Require @Param draft: AddTaskDraft;
+
+  aboutToDisappear(): void {
+    // 划掉半模态 / 切页导致销毁：把当前填写内容存起来（保存成功后会 clear）
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context !== undefined) {
+      DraftRepository.save(context, this.draft);
+    }
+  }
+
+  /** 点「重置」：二次确认后清空表单与本机草稿 */
+  private confirmReset(): void {
+    this.getUIContext().getPromptAction().showDialog({
+      title: '重置表单',
+      message: '会清空当前填写的内容（包括本机保存的草稿）。',
+      buttons: [
+        { text: $r('app.string.action_cancel'), color: $r('sys.color.ohos_id_color_text_primary') },
+        { text: '重置', color: $r('sys.color.ohos_id_color_warning') }
+      ]
+    }).then((result) => {
+      if (result.index !== 1) {
+        return;
+      }
+      this.draft.reset();
+      const context: common.Context | undefined = this.getUIContext().getHostContext();
+      if (context !== undefined) {
+        DraftRepository.clear(context);
+      }
+      this.toast('已重置');
+    });
+  }
 
   /**
    * 标题行：标题 ＋ 「保存」 ＋ 圆形关闭。
@@ -93,6 +130,22 @@ export struct AddTaskSheet {
         .fontWeight(FontWeight.Bold)
         .fontColor($r('sys.color.ohos_id_color_text_primary'))
         .layoutWeight(1)
+
+      // 重置：清空当前表单（红色，放在保存左边）
+      Text('重置')
+        .fontSize($r('sys.float.ohos_id_text_size_button1'))
+        .fontColor($r('sys.color.ohos_id_color_warning'))
+        .padding({
+          left: SAVE_SIDE_PADDING_VP,
+          right: SAVE_SIDE_PADDING_VP,
+          top: $r('sys.float.padding_level2'),
+          bottom: $r('sys.float.padding_level2')
+        })
+        .margin({ right: 4 })
+        .onClick(() => {
+          this.confirmReset();
+        })
+        .accessibilityText('重置')
 
       // 保存：名称非空才亮（灰的时候点击无效）
       Text($r('app.string.action_save'))
@@ -160,6 +213,52 @@ export struct AddTaskSheet {
     this.onSaved();
   }
 
+  @Local aiBusy: boolean = false;
+
+  /**
+   * AI 预填：文本/截图 → 后端 `/parse` → 把名称/时间/优先级/标签/地点填进草稿。
+   * **只预填、不保存**；用户看过再点「保存」。
+   */
+  private async aiFill(): Promise<void> {
+    if (this.aiBusy) {
+      return;
+    }
+    this.aiBusy = true;
+    try {
+      let result: ManualParseResult;
+      if (this.draft.sourceTab === AddTaskSource.SCREENSHOT) {
+        result = await ManualParseService.parseImage(this.draft.imageUri);
+      } else {
+        result = await ManualParseService.parseText(this.draft.rawText);
+      }
+      if (!result.ok || result.candidate === undefined) {
+        this.toast(result.message.length > 0 ? result.message : '没解析出内容，请手动填写');
+        return;
+      }
+      const candidate: CandidateItem = result.candidate;
+      this.draft.applyParsed(candidate, this.store.remindLeadMinutes);
+      if (result.link !== undefined && result.link.length > 0) {
+        this.draft.linkUrl = result.link;
+      }
+      // 截图/文件来源：把 OCR/抽取后的文字补成原文，便于详情页「原文对照」
+      if (result.text.length > 0 && this.draft.rawText.trim().length === 0) {
+        this.draft.rawText = result.text;
+      }
+      const where: string = result.localOcr === true ? '已在手机本地识别文字，' : '';
+      this.toast(where + '已自动填写，请确认后保存');
+    } finally {
+      this.aiBusy = false;
+    }
+  }
+
+  private toast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: message });
+    } catch (error) {
+      // toast 失败不影响主流程
+    }
+  }
+
   build() {
     Column() {
       // 标题行：「添加任务」＋「保存」＋「关闭」（**固定**在顶部、不跟着滚）
@@ -205,10 +304,18 @@ export struct AddTaskSheet {
           AddTaskNameInput({ draft: this.draft })
             .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
 
-          // —— 属性芯片行：截止日期 / 提醒我 / 重复 / 重要程度 / 来源 / ＋添加标签 ——
+          // —— 属性芯片行：截止日期 / 提醒我 / 重复 / 重要程度 / 来源 / ＋添加标签 / AI 预填 ——
+          // AI 预填与「＋ 添加标签」同一行、同一种动作芯片（不再单独占一行）。
           // 一行装不下由组件内部的 `Flex(wrap)` 自动换行；这里只留 16vp 上间距。
-          AddTaskAttributeChips({ draft: this.draft })
-            .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
+          AddTaskAttributeChips({
+            draft: this.draft,
+            aiBusy: this.aiBusy,
+            showAi: true,
+            onAiFill: () => {
+              this.aiFill();
+            }
+          })
+          .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
         }
         .width('100%')
         // 滚动内容的留白：左右/下 `padding_level8`(16vp)，上 8vp（标题行自己带了下留白）。
@@ -248,11 +355,17 @@ export struct AddTaskSheet {
  *    见上面 `sheetHeader()` 的注释；系统关闭按钮会和自绘的那颗重复，所以关掉；
  *  · **不设 `backgroundColor`** —— 用官方默认底色（浅色近白）。
  */
-export function addTaskSheetOptions(): SheetOptions {
+export function addTaskSheetOptions(onDismiss?: () => void): SheetOptions {
   return {
     height: SheetSize.MEDIUM,
     preferType: SheetType.BOTTOM,
     dragBar: true,
-    showClose: false
+    showClose: false,
+    // 划掉 / 关闭都会走到这里：页面在这一刻把草稿落盘
+    onDisappear: () => {
+      if (onDismiss !== undefined) {
+        onDismiss();
+      }
+    }
   };
 }
