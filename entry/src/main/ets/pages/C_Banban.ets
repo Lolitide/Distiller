@@ -16,6 +16,7 @@ import { WindowInsets } from '../utils/WindowInsets';
 import { Task, TaskPriority, TaskStep } from '../model';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 import { NAV_STACK_KEY, ROUTE_TASK_DETAIL, TaskDetailParam } from '../viewmodel/TaskNavParams';
+import { EmptyHint } from '../components/EmptyHint';
 
 /** 甘特图左侧轨道名列宽（vp） */
 const GANTT_LABEL_W_VP: number = 64;
@@ -1027,13 +1028,13 @@ export struct C_Banban {
       // 与 HDS 的 MINI 标题栏对不齐，这正是作者说的「和设置页面的不一样」。
       // 内容顶部让白保留 `statusBarVp + 64`（与 `A_Settings` 的 `TITLE_CLEARANCE_VP + statusBarVp` 同档）。
 
-      // 空态：整屏正中的灰字提示
+      // 空态（2026-10-25，作者：「板板页面无任务的时候，也像任务列表页面一样显示一个图标再加文字」）：
+      // **复用 `EmptyHint`** —— 任务列表的空态和搜索页的两种空态用的就是它（图示 + 一句灰字），
+      // 三个页面的空态从此是同一个组件、同一套观感（组件化约定：长得像的块必须复用同一个组件）。
+      // 它自己 `width/height 100%` + 居中，所以放在这个 `Stack` 里就是**整屏正中**，
+      // 原来那句裸 `Text` 的 `padding({left/right: 32})` 也就不需要了。
       if (this.dueTasks().length === 0) {
-        Text('还没有带 ddl 的任务。去群消息里收几条，或手动添加一个。')
-          .fontSize($r('sys.float.ohos_id_text_size_body1'))
-          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-          .textAlign(TextAlign.Center)
-          .padding({ left: 32, right: 32 })
+        EmptyHint({ message: $r('app.string.empty_banban') })
       }
     }
     .width('100%')
