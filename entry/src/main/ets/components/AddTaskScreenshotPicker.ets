@@ -19,6 +19,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { MediaPickResult, pickSingleImage } from '../service/system';
 import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
 import { ADD_TASK_CONTENT_HEIGHT_VP } from './AddTaskContentMetrics';
+import { ThemeStore } from '../utils/Theme';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'AddTaskScreenshotPicker';
@@ -35,8 +36,10 @@ const PICK_AREA_HEIGHT_VP: number = ADD_TASK_CONTENT_HEIGHT_VP;
 export struct AddTaskScreenshotPicker {
   /** 表单草稿：选中的图片 URI 存 `draft.imageUri`（保存时作为任务的 `urls` 落进去） */
   @Require @Param draft: AddTaskDraft;
-  /** 防止连点重复拉起 picker（拉起时页面会被系统页盖住，连点会造成两次 select） */
+  /** 防连点重复拉起 picker（拉起时页面会被系统页盖住，连点会造成两次 select） */
   @Local picking: boolean = false;
+  /** 视觉个性化：M3 色系（占位区底色取 `scheme.surfaceContainerLow`，与任务卡片同色） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
 
   /** 拉起系统相册选一张图；取消不动、失败给一次可见反馈 */
   private async pick(): Promise<void> {
@@ -77,10 +80,11 @@ export struct AddTaskScreenshotPicker {
     .width('100%')
     .height(PICK_AREA_HEIGHT_VP)
     .justifyContent(FlexAlign.Center)
-    // 需求方 2026-10-17：「内容区背景太灰了 和 button 那个背景灰一样吧」——
-    // 原来用 `comp_background_secondary`（比页面灰还深一档），改成**来源按钮那条胶囊轨道的灰**
-    // （`segment_button_v2_capsule_button_background`），两块观感统一。
-    .backgroundColor($r('sys.color.segment_button_v2_capsule_button_background'))
+    // 2026-10-25：底色改 M3 容器色（作者：「添加任务 bindSheet 背景没有 md 取色」）。
+    // 历史：`comp_background_secondary`（太深）→ 系统胶囊轨道的冷灰 → M3 容器色 →
+    // 2026-10-25 定稿：**与任务卡片同色** `scheme.surfaceContainerLow`
+    // （作者：「这几个的 bg 颜色改成列表页面 card 的 bg 取色」）。
+    .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
     .borderRadius($r('sys.float.corner_radius_level8'))
     .onClick(() => {
       this.pick();

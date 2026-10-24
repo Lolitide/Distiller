@@ -563,7 +563,7 @@ export struct AddTaskAttributeChips {
       right: $r('sys.float.chip_small_text_padding')
     })
     .alignItems(VerticalAlign.Center)
-    .backgroundColor($r('sys.color.segment_button_v2_capsule_button_background'))
+    .backgroundColor(this.themeStore.scheme.surfaceContainerHighest)
     .borderRadius($r('sys.float.chip_border_radius_small'))
     .onClick(() => {
       this.openDuePicker();
@@ -604,7 +604,7 @@ export struct AddTaskAttributeChips {
       right: $r('sys.float.chip_small_text_padding')
     })
     .alignItems(VerticalAlign.Center)
-    .backgroundColor($r('sys.color.segment_button_v2_capsule_button_background'))
+    .backgroundColor(this.themeStore.scheme.surfaceContainerHighest)
     .borderRadius($r('sys.float.chip_border_radius_small'))
     .onClick(() => {
       this.openRemindPicker();
@@ -640,7 +640,7 @@ export struct AddTaskAttributeChips {
       right: $r('sys.float.chip_small_text_padding')
     })
     .alignItems(VerticalAlign.Center)
-    .backgroundColor($r('sys.color.segment_button_v2_capsule_button_background'))
+    .backgroundColor(this.themeStore.scheme.surfaceContainerHighest)
     .borderRadius($r('sys.float.chip_border_radius_small'))
     .onClick(() => {
       this.openRepeatPicker();
@@ -673,7 +673,7 @@ export struct AddTaskAttributeChips {
       right: $r('sys.float.chip_small_text_padding')
     })
     .alignItems(VerticalAlign.Center)
-    .backgroundColor($r('sys.color.segment_button_v2_capsule_button_background'))
+    .backgroundColor(this.themeStore.scheme.surfaceContainerHighest)
     .borderRadius($r('sys.float.chip_border_radius_small'))
     .onClick(() => {
       // 2026-10-19：改成**锚定浮窗**（图二样式），不再开居中弹窗
@@ -723,7 +723,7 @@ export struct AddTaskAttributeChips {
       right: $r('sys.float.chip_small_text_padding')
     })
     .alignItems(VerticalAlign.Center)
-    .backgroundColor($r('sys.color.segment_button_v2_capsule_button_background'))
+    .backgroundColor(this.themeStore.scheme.surfaceContainerHighest)
     .borderRadius($r('sys.float.chip_border_radius_small'))
     .onClick(() => {
       this.sourcePopupShown = true;
@@ -846,7 +846,7 @@ export struct AddTaskAttributeChips {
         right: $r('sys.float.chip_small_text_padding')
       })
       .alignItems(VerticalAlign.Center)
-      .backgroundColor($r('sys.color.segment_button_v2_capsule_button_background'))
+      .backgroundColor(this.themeStore.scheme.surfaceContainerHighest)
       .borderRadius($r('sys.float.chip_border_radius_small'))
       .accessibilityText(tag)
     }, (tag: string) => tag)
@@ -1011,19 +1011,28 @@ export struct AddTaskAttributeChips {
       this.tagChips()
 
       // ⑦「＋ 添加标签」＋ ⑧「AI 预填」：包成一个 Row，保证两者并排、不会被拆开
+      //
+      // ⚠️ 取色口径（2026-10-25，作者：「这两个 chips 的颜色改成任务列表 chipGroup 里面
+      // 选中 chip 的取色，不要用这个亮色」）：
+      // 这两颗原来用 `primaryContainer`（蓝主题下是一块很亮的蓝），比同表单里其它 chip 抢眼太多。
+      // 现在与 `TaskFilterChips` 的**选中 chip 同一套 M3 角色** ——
+      // `secondaryContainer` 底 + `onSecondaryContainer` 字（见 TaskFilterChips.ets 的
+      // `itemStyle.selectedBackgroundColor / selectedFontColor`），两处从此不会漂移。
+      // 语义上也更对：这两颗是**动作**（添加标签 / 让 AI 预填），不是被选中的选项，
+      // 用「安静一档的容器色 + 主题色可读文字」比亮块更合适。
       Row({ space: CHIP_GAP_VP }) {
         Chip({
           label: {
             text: this.labelText($r('app.string.chip_add_tag')),
-            fontColor: this.themeStore.scheme.primary
+            fontColor: this.themeStore.scheme.onSecondaryContainer
           },
           prefixSymbol: {
             normal: new SymbolGlyphModifier($r('sys.symbol.plus'))
-              .fontColor([this.themeStore.scheme.primary])
+              .fontColor([this.themeStore.scheme.onSecondaryContainer])
           },
           size: ChipSize.SMALL,
           allowClose: false,
-          backgroundColor: this.themeStore.scheme.primaryContainer,
+          backgroundColor: this.themeStore.scheme.secondaryContainer,
           onClicked: () => {
             this.openTagPicker();
           }
@@ -1033,11 +1042,11 @@ export struct AddTaskAttributeChips {
           Chip({
             label: {
               text: this.aiBusy ? '识别中…' : 'AI 预填',
-              fontColor: this.themeStore.scheme.onPrimaryContainer
+              fontColor: this.themeStore.scheme.onSecondaryContainer
             },
             size: ChipSize.SMALL,
             allowClose: false,
-            backgroundColor: this.themeStore.scheme.primaryContainer,
+            backgroundColor: this.themeStore.scheme.secondaryContainer,
             onClicked: () => {
               if (!this.aiBusy) {
                 this.onAiFill();

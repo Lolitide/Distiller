@@ -233,7 +233,8 @@ export struct AddTaskRecorder {
       top: LengthMetrics.resource($r('sys.float.padding_level8')),
       bottom: LengthMetrics.resource($r('sys.float.padding_level8'))
     })
-    .backgroundColor($r('sys.color.segment_button_v2_capsule_button_background'))
+    // 录音区底色：与半模态里其它内容块、以及任务卡片同色（`surfaceContainerLow`）
+    .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
     .borderRadius($r('sys.float.corner_radius_level8'))
   }
 }

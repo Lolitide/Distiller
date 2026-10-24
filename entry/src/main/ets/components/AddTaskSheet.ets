@@ -173,7 +173,9 @@ export struct AddTaskSheet {
       .width(CLOSE_BUTTON_SIZE_VP)
       .height(CLOSE_BUTTON_SIZE_VP)
       .padding(0)
-      .backgroundColor($r('sys.color.comp_background_secondary'))
+      // 2026-10-25：圆底从系统冷灰 `comp_background_secondary` 换成 M3 `surfaceContainerHigh`
+      //（面板已是暖色 `scheme.surface`，冷灰圆底在暖底上偏蓝）。
+      .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
       // 视觉 32vp、热区 40vp（官方最小可点尺寸）
       .responseRegion({
         x: -(CLOSE_HIT_SIZE_VP - CLOSE_BUTTON_SIZE_VP) / 2,
@@ -340,6 +342,11 @@ export struct AddTaskSheet {
     }
     .width('100%')
     .height('100%')
+    // 2026-10-25（作者：「添加任务 bindSheet 背景没有 md 取色」）：
+    // 面板底色**只能由内容自己铺** —— `SheetOptions` 里没有 `backgroundColor` 字段
+    // （见文件末尾 `addTaskSheetOptions` 的注释，已核对 SDK `common.d.ts` 的接口全字段）。
+    // 这里用 M3 `surface`：与任务列表 / 设置 / 板板三页同色，半模态不再是一块冷白灰。
+    .backgroundColor(this.themeStore.scheme.surface)
   }
 }
 
@@ -353,7 +360,15 @@ export struct AddTaskSheet {
  *  · `dragBar: true` —— 保留官方拖拽条（关掉半模态的一种手势）；
  *  · **`showClose: false` ＋ 不设 `title`** —— 标题行（含「保存」与关闭按钮）由内容自己画，
  *    见上面 `sheetHeader()` 的注释；系统关闭按钮会和自绘的那颗重复，所以关掉；
- *  · **不设 `backgroundColor`** —— 用官方默认底色（浅色近白）。
+ *  · **`blurStyle: BlurStyle.NONE`** —— 不叠官方模糊材质，面板保持干净实色
+ *    （官方 @default 就是 NONE，这里显式写出来把语义钉住，免得以后误加厚模糊把底色糊掉）。
+ *
+ * ⚠️ **`SheetOptions` 没有 `backgroundColor` 字段**（2026-10-25 核对 SDK
+ * `openharmony/ets/component/common.d.ts` 的 `SheetOptions` 接口全字段：只有
+ * `blurStyle` / `maskColor` / `radius` / `borderWidth|Color|Style` / `shadow` /
+ * `systemMaterial`(26.0.0+，超本工程 target 22) 这些）。
+ * 所以「面板底色」没法从选项里配 —— 只能由**内容自己铺满**：`AddTaskSheet` 根节点
+ * `.height('100%')` + `.backgroundColor(scheme.surface)` 把系统默认的浅色面板整体盖住。
  */
 export function addTaskSheetOptions(onDismiss?: () => void): SheetOptions {
   return {
@@ -361,6 +376,8 @@ export function addTaskSheetOptions(onDismiss?: () => void): SheetOptions {
     preferType: SheetType.BOTTOM,
     dragBar: true,
     showClose: false,
+    // 面板不叠模糊材质（默认值，显式钉住）
+    blurStyle: BlurStyle.NONE,
     // 划掉 / 关闭都会走到这里：页面在这一刻把草稿落盘
     onDisappear: () => {
       if (onDismiss !== undefined) {
