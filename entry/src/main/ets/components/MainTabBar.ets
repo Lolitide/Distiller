@@ -208,7 +208,12 @@ export struct MainTabBar {
       this.tabItem(0, $r('sys.symbol.checkmark_circle'), $r('sys.symbol.checkmark_circle_fill'),
         $r('app.string.tab_task_list'))
       // 板板：带 ddl 任务的甘特视图（放在任务与设置之间）
-      this.tabItem(1, $r('sys.symbol.calendar'), $r('sys.symbol.calendar'),
+      // ⚠️ 选中态必须传 `calendar_fill`（2026-10-25 修「选中板板时日历图标不是实心」）：
+      // 原来两个参数都传了未填充的 `calendar`，于是选中时**只有颜色变、形状不变**，
+      // 与左右两个页签（`checkmark_circle`/`_fill`、`gearshape`/`_fill`）的「描边 → 实心」不一致。
+      // `calendar` / `calendar_fill` 是系统符号表里成套的一对（SDK `toolchains/id_defined.json`，
+      // 两项 `"type": "symbol"` 且 order 3192/3193 相邻），不是自造名。
+      this.tabItem(1, $r('sys.symbol.calendar'), $r('sys.symbol.calendar_fill'),
         $r('app.string.tab_banban'))
       this.tabItem(2, $r('sys.symbol.gearshape'), $r('sys.symbol.gearshape_fill'),
         $r('app.string.tab_settings'))
