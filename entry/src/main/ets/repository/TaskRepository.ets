@@ -35,6 +35,26 @@ const K_SCHEMA: string = 'tasks_schema';
  */
 const SCHEMA_VERSION: number = 2;
 
+/**
+ * 旧版本（2026-10-17 `refactor: 接口字段对齐` 之前）落盘的字段名。
+ *
+ * 为什么要保留这张"旧键表"：`preferences` 里的 `tasks_json` **不会因为 App 升级自动清空**，
+ * 而那次重构把 `title` → `name`、`detail` → `note`。旧 JSON 在新版里读出来
+ * `raw.name` 是 `undefined`，`revive` 又只是原样搬运，于是 **`undefined` 流进了 `Task` 模型**
+ * （`Task.name` 声明成 `string`，编译器管不到 JSON 里缺键）。
+ * 后果链（2026-10-23 实测）：搜索页 `matches()` 对 `task.name` 调 `.toLowerCase()`
+ * → `TypeError: Cannot read property toLowerCase of undefined`
+ * → 异常发生在 `@Monitor` 里 → 框架按 RuntimeError 杀进程 → **一输入字符就闪退**。
+ *
+ * 所以旧键必须**在这里读出来并迁移**，而不是丢给界面去兜底。
+ * （旧 `repeat` 是数字枚举 `TaskRepeat`，新版是 `RepeatRule[]`；语义换算容易猜错，
+ *  这里只保证不崩、不猜——旧任务的重复规则会读成空，需要用户在详情页重设。）
+ */
+interface LegacyTaskJson {
+  title?: string;
+  detail?: string;
+}
+
 export class TaskRepository {
   private static store: preferences.Preferences | undefined = undefined;
 
@@ -85,10 +105,10 @@ export class TaskRepository {
       return [];
     }
     try {
-      const list: Task[] = JSON.parse(raw) as Task[];
+      const list: Object[] = JSON.parse(raw) as Object[];
       const out: Task[] = [];
       for (let i = 0; i < list.length; i++) {
-        const task: Task = TaskRepository.revive(list[i]);
+        const task: Task = TaskRepository.revive(list[i] as Task, list[i] as LegacyTaskJson);
         // ② 扔掉空壳：没有名称、没有备注、没有原文、也没有 ddl 的，一律不加载
         if (TaskRepository.isUsable(task)) {
           out.push(task);
@@ -132,21 +152,33 @@ export class TaskRepository {
   /**
    * JSON.parse 出来的是**普通对象**，直接塞给 `@ObservedV2` 的列表不会刷新界面
    * （深层字段不在观测范围）。所以必须重建为 `Task` / `TaskStep` / `RepeatRule` 实例。
+   *
+   * 🔴 这里是**数据进模型的唯一闸口**，所以"缺字段"必须在这里就被消灭：
+   * 旧版 JSON 缺 `name` / `note` 键（见 `LegacyTaskJson`），若原样搬运，
+   * `Task.name` 就会是 `undefined`，界面上表现为空标题，搜索页则直接 `TypeError` 闪退。
+   *
+   * @param raw    按当前契约读（缺键时值为 `undefined`）
+   * @param legacy 按旧版键名读（`title` / `detail`）
    */
-  private static revive(raw: Task): Task {
+  private static revive(raw: Task, legacy: LegacyTaskJson): Task {
     const task: Task = new Task();
-    task.id = raw.id;
+    task.id = TaskRepository.numberOr(raw.id, 0);
     task.clientTaskId = raw.clientTaskId;
     task.status = raw.status;
-    task.name = raw.name;
-    task.note = raw.note;
+    // 名字：新键 `name` → 旧键 `title` → 空串（缺失不编造，但与"undefined"划清界限）
+    task.name = TaskRepository.firstNonEmpty(raw.name, legacy.title);
+    // 备注：新键 `note` → 旧键 `detail`；两边都没有就保持"没有"（可选字段，不塞空串）
+    const note: string | undefined = TaskRepository.firstNonEmpty(raw.note, legacy.detail);
+    if (note !== undefined) {
+      task.note = note;
+    }
     task.rawText = raw.rawText;
     task.rawJson = raw.rawJson;
     task.dueAt = raw.dueAt;
     task.dueText = raw.dueText;
     task.place = raw.place;
     task.who = raw.who;
-    task.createdAt = raw.createdAt;
+    task.createdAt = TaskRepository.numberOr(raw.createdAt, 0);
     task.finishedAt = raw.finishedAt;
     task.priority = raw.priority;
     task.level = raw.level;
@@ -159,27 +191,28 @@ export class TaskRepository {
     task.category = raw.category;
     task.certainty = raw.certainty;
 
-    if (raw.tags !== undefined) {
+    if (Array.isArray(raw.tags)) {
       task.tags = raw.tags.slice();
     }
-    if (raw.urls !== undefined) {
+    if (Array.isArray(raw.urls)) {
       task.urls = raw.urls.slice();
     }
     task.linkUrl = raw.linkUrl;
-    if (raw.missingFields !== undefined) {
+    if (Array.isArray(raw.missingFields)) {
       task.missingFields = raw.missingFields.slice();
     }
-    if (raw.steps !== undefined) {
+    if (Array.isArray(raw.steps)) {
       const steps: TaskStep[] = [];
       for (let i = 0; i < raw.steps.length; i++) {
         const step: TaskStep = new TaskStep();
-        step.content = raw.steps[i].content;
+        step.content = TaskRepository.stringOr(raw.steps[i].content, '');
         step.done = raw.steps[i].done === 1 ? 1 : 0;
         steps.push(step);
       }
       task.steps = steps;
     }
-    if (raw.repeat !== undefined) {
+    // 旧版的 `repeat` 是数字枚举（`TaskRepeat`），迁移不猜语义 → 只认数组形态，其余读成"没有规则"
+    if (Array.isArray(raw.repeat)) {
       const rules: RepeatRule[] = [];
       for (let i = 0; i < raw.repeat.length; i++) {
         const r: RepeatRule = new RepeatRule();
@@ -210,8 +243,29 @@ export class TaskRepository {
       task.alarm = TaskAlarm.OFF;
     }
     if (task.source === undefined) {
+      // 旧版 `source` 是自由文本（如「QQ」），枚举里没有这个值也不算错：
+      // `TaskMetaCard.channelLabel` 会把枚举外的取值原样显示，所以这里只补"完全没有"的情况
       task.source = TaskSource.BOT;
     }
     return task;
+  }
+
+  /** 取第一个"有内容"的字符串：全都没有返回空串。`undefined` 永远不出现在结果里 */
+  private static firstNonEmpty(primary: string | undefined, fallback: string | undefined): string {
+    if (primary !== undefined && primary.length > 0) {
+      return primary;
+    }
+    if (fallback !== undefined && fallback.length > 0) {
+      return fallback;
+    }
+    return '';
+  }
+
+  private static stringOr(value: string | undefined, fallback: string): string {
+    return value === undefined ? fallback : value;
+  }
+
+  private static numberOr(value: number | undefined, fallback: number): number {
+    return value === undefined ? fallback : value;
   }
 }

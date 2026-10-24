@@ -21,6 +21,8 @@ import { ThemeStore } from '../utils/Theme';
 import { HdsNavDestination } from '@kit.UIDesignKit';
 import { KeyboardAvoidMode } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
+import { BusinessError } from '@kit.BasicServicesKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { WindowInsets } from '../utils/WindowInsets';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { EmptyHint } from '../components/EmptyHint';
@@ -50,6 +52,9 @@ import { TaskListStore } from '../viewmodel/TaskListStore';
 
 /** 搜索框与标题栏之间的额外间距（vp）：**故意留 0**，间距交给组件自己的内边距（与 List 页面同一约定） */
 const SEARCH_FIELD_TOP_GAP_VP: number = 0;
+
+const DOMAIN: number = 0x0000;
+const TAG: string = 'B_Search';
 
 /**
  * 二级页的实例化方法 —— **官方系统路由表要的就是它**（`router_map.json` 里的 `buildFunction`）。
@@ -128,9 +133,27 @@ export struct B_Search {
    */
   @Local results: TaskDayGroup[] = [];
 
+  /**
+   * 关键词一变就重算结果。
+   *
+   * 🔴 这个方法是 `@Monitor`（V2），**它里面抛出的异常不会被"某个组件渲染失败"消化掉**：
+   * 框架把它当 RuntimeError 上报，进程直接退出。2026-10-23 的闪退正是这么来的 ——
+   * `task.name` 是本机旧数据里的 `undefined`，`matches()` 里的 `.toLowerCase()` 一抛，
+   * 用户看到的就是"输入第一个字符，App 消失"。
+   *
+   * 根因已在两处修掉（`TaskRepository.revive` 做旧字段迁移、`TaskSearchViewModel.text` 做空值归一）。
+   * 这里再留一道护栏：搜索是**纯查询**，真出问题就退化成"没有结果"并写错误日志，
+   * 而不是把整个 App 带走。**异常必须记日志**，不许静默吞掉（否则真 bug 会藏起来）。
+   */
   @Monitor('query')
   onQueryChanged(): void {
-    this.results = TaskSearchViewModel.search(this.store.allTasks(), this.query, new Date());
+    try {
+      this.results = TaskSearchViewModel.search(this.store.allTasks(), this.query, new Date());
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'search failed: %{public}s', err.message);
+      this.results = [];
+    }
   }
 
   /** 当前该显示哪一种状态（没输关键词 / 有结果 / 无结果） */
