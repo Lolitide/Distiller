@@ -54,13 +54,15 @@ import { LengthMetrics } from '@kit.ArkUI';
 
 export class MainTitleBar {
   /**
-   * 内容区顶部要空出来的高度（vp）。
+   * 主页标题栏在 **FREE／FULL 档**下的高度（vp）。
    *
-   * 来历：`HdsNavigation` 的标题栏是**浮层**，尾随闭包里的内容从容器顶部开始，所以内容必须自己让开。
-   * 112 这个数出自 HdsNavigation 文档 `HdsNavigationTitleMode` 枚举说明的原文：
-   * 「FULL：只有主标题时，标题栏高度为 112vp；同时有主标题和副标题时，标题栏高度为 138vp」。
-   * 我们标题栏只有主标题（`mainTitle`）、且未改 `titleMode`（默认 FREE，未滚动时高度与 FULL 一致）→ 取 112。
-   * 若以后加了副标题，这里要改成 138。
+   * 官方 `HdsNavigationTitleMode` 枚举说明原文：「FULL：只有主标题时，标题栏高度为 112vp；
+   * 同时有主标题和副标题时，标题栏高度为 138vp」；FREE 未滚动时的初始高度同 FULL。
+   *
+   * 🔴 **2026-10-25 起没有任何页面用这个值做让白了**：作者把任务列表也改成固定小标题
+   *（「改成设置页那样 mainTitle 固定的吧，不需要动画，老有问题」），三个页签现在统一 `MINI`，
+   * 页内让白一律用下面的 `SUB_PAGE_TITLE_BAR_VP`(56)。
+   * 这个常量只作为**档位高度的事实记录**保留 —— 别在页面里再拿它算间距。
    */
   static readonly CONTENT_TOP_OFFSET_VP: number = 112;
 

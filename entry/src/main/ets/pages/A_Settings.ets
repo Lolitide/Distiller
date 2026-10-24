@@ -102,12 +102,9 @@ export struct A_Settings {
   /** 任务 store：清空任务 + 提醒提前量同步 */
   @Require @Param store: TaskListStore;
 
-  /**
-   * 滚动控制器：由 `A_Main` 创建、经 `MainTabBar` 传进来，
-   * `HdsNavigation.bindToScrollable` 要绑同一个对象 —— 不绑的话导航栏大标题
-   * 在设置页滚动时不会收缩，会**静默压在内容上**（实测过）。
-   */
-  @Require @Param scroller: Scroller;
+  // 2026-10-25：原来这里还有一个 `@Require @Param scroller: Scroller`，唯一的用途是交给
+  // `HdsNavigation.bindToScrollable` 做「大标题随滚动收缩」。三个页签统一改成固定 MINI 标题后
+  // 那条绑定已删除、本页也从未读过这个 scroller，于是把它一并去掉（死参数会误导后来的人）。
 
   /** 视觉个性化状态（跨页共享，见 utils/Theme.ets） */
   @Local themeStore: ThemeStore = ThemeStore.instance();

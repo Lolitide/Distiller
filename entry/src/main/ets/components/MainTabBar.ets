@@ -61,12 +61,11 @@ const FAB_RELEASE_MS: number = 320;
 @ComponentV2
 export struct MainTabBar {
   /**
-   * 任务列表的 Scroller，由外层 `A_Main` 创建并透传给 `A_TaskList` 的 `List`；
-   * 外层还要用它 `bindToScrollable`（标题栏跟手的前提），所以必须是同一个对象。
+   * 任务列表的 Scroller，由外层 `A_Main` 创建并透传给 `A_TaskList` 的 `List`。
+   * （2026-10-25：标题栏改成固定 MINI 后，它**不再**交给 `HdsNavigation.bindToScrollable`，
+   *  只作为列表自己的滚动控制器。）
    */
   @Require @Param scroller: Scroller;
-  /** 设置页的 Scroller（同上，给 `bindToScrollable` 用） */
-  @Require @Param settingsScroller: Scroller;
   /** 任务列表的「数据 ＋ 编辑态」store：右侧按钮按它切「添加 / 删除」 */
   @Require @Param store: TaskListStore;
   /** 当前页签下标，报给外层：标题栏按钮与标题模式要按页签变 */
@@ -319,7 +318,7 @@ export struct MainTabBar {
 
         TabContent() {
           // 设置页要 store 只为一件事：「清空全部任务」
-          A_Settings({ store: this.store, scroller: this.settingsScroller })
+          A_Settings({ store: this.store })
         }
       }
       .barHeight(0)

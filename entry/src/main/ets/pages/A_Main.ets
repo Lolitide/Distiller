@@ -21,18 +21,16 @@ const TAG: string = 'A_Main';
 @ComponentV2
 struct A_Main {
   private navPathStack: NavPathStack = new NavPathStack();
+
   /**
    * 任务列表的滚动控制器：在这里创建（照官方示例：Scroller 由页面持有），
-   * 一路透传 `MainTabBar → A_TaskList` 给 `List` 用，再交给 `HdsNavigation.bindToScrollable`。
+   * 一路透传 `MainTabBar → A_TaskList` 给 `List` 用。
+   *
+   * 2026-10-25：标题栏改成固定 MINI 后，它**不再**交给 `HdsNavigation.bindToScrollable`；
+   * 同批删掉了 `settingsScroller`（设置页从未读过它，它当时只是为了被绑上去）。
    */
   private taskListScroller: Scroller = new Scroller();
 
-  /**
-   * 设置页的 Scroller：**必须也绑到 indToScrollable**。
-   * 不绑的话，导航栏的大标题只在任务列表里跟着收缩；切到设置页滚动时
-   * 标题会**原样压在内容上**（实测：滑到中间时「设置」两个大字盖住「提醒提前量」卡片）。
-   */
-  private settingsScroller: Scroller = new Scroller();
   /**
    * 任务列表的「数据 ＋ 编辑态」store：页面持有、按引用透传（`@ObservedV2` 必须 `new` 出来才可观测）。
    * 编辑态要同时被导航栏（取消/全选）、底部悬浮栏（添加↔删除）、每张卡片（圆圈↔方框勾选框）读到，
@@ -260,7 +258,6 @@ struct A_Main {
       // 底部页签栏（HdsTabs 容器 + 两个页签 + 悬浮样式 + 迷你栏）整个在 components/MainTabBar.ets 里
       MainTabBar({
         scroller: this.taskListScroller,
-        settingsScroller: this.settingsScroller,
         store: this.store,
         onIndexChange: (index: number) => {
           this.currentIndex = index;
@@ -274,19 +271,17 @@ struct A_Main {
         }
       })
     }
-    // 2026-10-25：三个页签**一律用 HDS 标题栏**（作者：「板板页面导航栏和设置页面的不一样，
-    // 用设置页面的导航栏一样吧」）。原来板板页 `.hideTitleBar(true)` + 页面自绘标题行，
-    // 结果是标题字号/左右内边距/高度都和设置页差一点。现在删掉那条，
-    // 板板的标题行改由 HDS 按 `navTitle` 统一画（`tab_banban`），与设置页同一套 `MainTitleBar.style`。
-    // —— 标题栏跟手：官方要求把导航组件与可滚动容器绑起来 ——
-    // 官方原文：「6.0.0(20)及以上版本，推荐使用 bindToScrollable、bindToNestedScrollable 属性绑定导航组件和
-    // 可滚动容器组件后，再使用导航组件滚动相关的功能，从而获得更优的体验」；
-    // `HdsNavigationTitleMode.FREE` 的官方说明也写着「推荐搭配 bindToScrollable/bindToNestedScrollable 体验更佳的联动效果」。
-    .bindToScrollable([this.taskListScroller, this.settingsScroller])
-    // 设置页用**小标题**：它在 FREE（大标题）下没有可靠的滚动联动，
-    // 实测滚到中间时「设置」两个大字会直接压在卡片上（任务列表没这问题）。
-    // 任务列表保持 FREE（大标题 + 跟手收缩）。
-    .titleMode(this.currentIndex === 0 ? HdsNavigationTitleMode.FREE : HdsNavigationTitleMode.MINI)
+    // 2026-10-25：三个页签**一律用 HDS 标题栏 + 固定小标题（MINI）**。
+    //  · 板板页原来 `.hideTitleBar(true)` + 页面自绘标题行 → 标题字号/左右内边距/高度都和设置页差一点；
+    //  · 任务列表原来用 `FREE`（大标题随内容收缩）→ 作者：「改成设置页那样 mainTitle 固定的吧，
+    //    不需要动画，老有问题」。
+    // 现在三页同一套 `MainTitleBar.style` + 同一个 `titleMode`，标题位置**完全不动**。
+    //
+    // 连带删掉的：`.bindToScrollable([...])`。官方只说 FREE 模式「推荐搭配 bindToScrollable/
+    // bindToNestedScrollable 体验更佳的联动效果」（`HdsNavigationTitleMode` 枚举说明）——
+    // 那是**标题收缩联动**的驱动；MINI 是「固定为小标题模式」，没有要联动的量。
+    // 留着它只会让导航组件白订阅滚动事件，所以三页都 MINI 之后一并去掉。
+    .titleMode(HdsNavigationTitleMode.MINI)
     .hideBackButton(true)
     .titleBar({
       // 2026-10-21 窗口改回**全屏**（见 EntryAbility.setupWindow），所以这里必须恢复 `true`：
