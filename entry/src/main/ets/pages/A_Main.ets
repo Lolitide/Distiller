@@ -62,6 +62,8 @@ struct A_Main {
   @Local themeStore: ThemeStore = ThemeStore.instance();
   /** 提醒/日历对账定时器（分钟级就够） */
   private reminderTimer: number = -1;
+  /** 通知引导弹窗每次启动只弹一次，避免每分钟对账重复打扰 */
+  @Local notificationGuideShown: boolean = false;
 
   /**
    * 把导航栈放进 `AppStorage`：点卡片进详情这件事发生在 `A_TaskList`（以及搜索页的 `B_Search`）里，
@@ -88,10 +90,17 @@ struct A_Main {
       return;
     }
     this.store.init(context);
+    this.store.setReminderFailureListener((message: string, code: number) => {
+      this.onReminderFailure(message, code);
+    });
     // 通知/横幅权限：代理提醒依赖它；被拒后用户仍可从设置页重新打开
-    NotificationService.ensureEnabled(context as common.UIAbilityContext);
-    // 提醒/日历对账：启动一次，之后每分钟一次（改期、完成、删除后 store 也会主动触发）
-    this.store.reconcileReminders();
+    NotificationService.ensureEnabled(context as common.UIAbilityContext).then((enabled: boolean) => {
+      if (!enabled) {
+        this.showNotificationGuide();
+      }
+    });
+    // 提醒/日历对账：启动先清掉系统里残留的「幽灵提醒」再重建，之后每分钟一次
+    this.store.resetStaleReminders();
     this.reminderTimer = setInterval(() => {
       this.store.expireOverdue();
       this.store.reconcileReminders();
@@ -211,6 +220,46 @@ struct A_Main {
     } catch (error) {
       const err = error as BusinessError;
       hilog.error(DOMAIN, TAG, 'show toast failed: %{public}d, %{public}s', err.code, err.message);
+    }
+  }
+
+  /** 提醒发布失败：额度满直接说清楚；其余按「通知没开」引导到系统设置 */
+  private onReminderFailure(message: string, code: number): void {
+    this.toast(message);
+    if (code !== 1700002) {
+      this.showNotificationGuide();
+    }
+  }
+
+  /** 通知未开启的引导（每次启动只弹一次；「去开启」直接跳系统通知管理） */
+  private showNotificationGuide(): void {
+    if (this.notificationGuideShown) {
+      return;
+    }
+    this.notificationGuideShown = true;
+    try {
+      this.getUIContext().showAlertDialog({
+        title: '通知未开启',
+        message: '任务到点不会提醒。去系统设置打开「知了」的通知，并允许横幅。',
+        primaryButton: {
+          value: '暂不',
+          action: () => {
+          }
+        },
+        secondaryButton: {
+          value: '去开启',
+          fontColor: $r('sys.color.ohos_id_color_emphasize'),
+          action: () => {
+            const context: common.Context | undefined = this.getUIContext().getHostContext();
+            if (context !== undefined) {
+              NotificationService.openSettings(context as common.UIAbilityContext);
+            }
+          }
+        }
+      });
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'show notification guide failed: %{public}d, %{public}s', err.code, err.message);
     }
   }
 

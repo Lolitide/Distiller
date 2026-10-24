@@ -90,6 +90,7 @@ interface DraftSnapshot {
   linkUrl: string;
   certainty?: number;
   degraded?: boolean;
+  timeReviewed?: boolean;
   steps: DraftStepSnapshot[];
   repeat?: DraftRepeatSnapshot;
 }
@@ -148,6 +149,8 @@ export class AddTaskDraft {
   @Trace certainty: number = 0;
   /** 本次预填是否来自规则降级（后端 engine=rules） */
   @Trace degraded: boolean = false;
+  /** 用户已手动确认过到期时间：低可信提示不再标在时间字段上 */
+  @Trace timeReviewed: boolean = false;
   @Trace steps: TaskStep[] = [];
 
   /** 名称非空才能保存（「保存」按钮的灰/亮看它） */
@@ -275,6 +278,7 @@ export class AddTaskDraft {
     }
     this.certainty = c.certainty !== undefined ? Math.round(c.certainty) : Math.round(c.confidence * 100);
     this.degraded = c.degraded === true;
+    this.timeReviewed = false;
 
     const mergedTags: string[] = this.tags.slice();
     for (let i = 0; i < c.tags.length; i++) {
@@ -348,6 +352,7 @@ export class AddTaskDraft {
     this.linkUrl = '';
     this.certainty = 0;
     this.degraded = false;
+    this.timeReviewed = false;
     this.steps = [];
     this.repeatRule = undefined;
   }
@@ -395,6 +400,7 @@ export class AddTaskDraft {
       linkUrl: this.linkUrl,
       certainty: this.certainty,
       degraded: this.degraded,
+      timeReviewed: this.timeReviewed,
       steps: steps,
       repeat: repeat
     };
@@ -432,6 +438,7 @@ export class AddTaskDraft {
       this.linkUrl = s.linkUrl !== undefined ? s.linkUrl : '';
       this.certainty = s.certainty !== undefined ? s.certainty : 0;
       this.degraded = s.degraded === true;
+      this.timeReviewed = s.timeReviewed === true;
 
       const steps: TaskStep[] = [];
       if (s.steps !== undefined) {

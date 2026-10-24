@@ -358,6 +358,16 @@ export struct TaskInfoCard {
             const next: string = value.trim();
             this.task.place = next === '' ? undefined : next;
           })
+        // 解析置信度低：地点是模型推断字段，标一下让用户核对（FE-40 字段级提示）
+        if (this.task.certainty !== undefined && this.task.certainty < 60 &&
+          (this.task.place === undefined || this.task.place.length === 0)) {
+          Text('待核对')
+            .fontSize(11)
+            .fontColor(this.themeStore.scheme.error)
+            .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+            .borderRadius(8)
+            .backgroundColor(this.themeStore.scheme.errorContainer)
+        }
       }
       .width('100%')
       .height(ROW_HEIGHT_VP)

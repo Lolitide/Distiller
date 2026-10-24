@@ -30,6 +30,8 @@ export interface ManualParseResult {
   localOcr?: boolean;
   /** 二维码/条形码里读到的 URL（详情页要能点开） */
   link?: string;
+  /** 失败原因码（no_server/network/not_supported/...），用于页面分类提示 */
+  code?: string;
 }
 
 export class ManualParseService {
@@ -40,7 +42,7 @@ export class ManualParseService {
     }
     const res = await RelayApi.parseText(trimmed, 'manual_text');
     if (!res.ok || res.data === undefined) {
-      return { ok: false, message: apiErrorMessage(res), text: '' };
+      return { ok: false, message: apiErrorMessage(res), text: '', code: res.error !== undefined ? res.error.code : 'unknown' };
     }
     return { ok: true, message: '', candidate: res.data.candidate, text: res.data.text };
   }
@@ -79,7 +81,7 @@ export class ManualParseService {
         };
       }
       // 端侧识别成功但后端抽取失败：把文字带回去，用户至少能手动改
-      return { ok: false, message: apiErrorMessage(local), text: localText, localOcr: true };
+      return { ok: false, message: apiErrorMessage(local), text: localText, localOcr: true, code: local.error !== undefined ? local.error.code : 'unknown' };
     }
 
     // ③ 端侧识别不到（模拟器/图片太糊/非文字）：回退到后端多模态 OCR
@@ -89,7 +91,7 @@ export class ManualParseService {
     }
     const res = await RelayApi.parseImage(base64, 'manual_screenshot');
     if (!res.ok || res.data === undefined) {
-      return { ok: false, message: apiErrorMessage(res), text: '' };
+      return { ok: false, message: apiErrorMessage(res), text: '', code: res.error !== undefined ? res.error.code : 'unknown' };
     }
     return { ok: true, message: '', candidate: res.data.candidate, text: res.data.text, localOcr: false };
   }

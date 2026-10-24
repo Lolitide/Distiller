@@ -5,6 +5,7 @@
  * 逐个接线必漏。这里按任务表做一次对账，启动、保存、完成、删除后各跑一遍即可。
  */
 import { bundleManager, common } from '@kit.AbilityKit';
+import { reminderAgentManager } from '@kit.BackgroundTasksKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Task, TaskAlarm, TaskStatus } from '../../model';
@@ -17,12 +18,35 @@ const TAG: string = 'ReminderCoordinator';
 export class ReminderCoordinator {
   /** 最近一次发布失败的提示（页面可读它显示 toast；为空表示没有错误） */
   static lastError: string = '';
+  /** 最近一次失败的原始错误码（1700002 = 额度满；其余按权限/系统错误处理） */
+  static lastErrorCode: number = 0;
 
+  /**
+   * 启动清理：撤销本应用**所有**有效提醒。
+   * 反复重装/清数据会留下任务表里已无句柄的「幽灵提醒」，它们照样占 30 条额度，
+   * 表现为只有几条任务却报 1700002。清空后由对账器按当前任务表重新发布。
+   * 返回是否清理成功（失败就不要清空任务里的句柄，避免重复发布）。
+   */
+  static async cancelAll(): Promise<boolean> {
+    try {
+      const infos: reminderAgentManager.ReminderInfo[] = await reminderAgentManager.getAllValidReminders();
+      for (let i = 0; i < infos.length; i++) {
+        await ReminderService.cancel(infos[i].reminderId);
+      }
+      hilog.info(DOMAIN, TAG, 'cancelled %{public}d stale reminders', infos.length);
+      return true;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.warn(DOMAIN, TAG, 'cancelAll failed: %{public}d %{public}s', err.code, err.message);
+      return false;
+    }
+  }
 
   static async reconcile(tasks: Task[], context: common.Context, onChanged: () => void): Promise<void> {
     const bundleName: string = bundleManager.getBundleInfoForSelfSync(0).name;
     let changed: boolean = false;
     ReminderCoordinator.lastError = '';
+    ReminderCoordinator.lastErrorCode = 0;
     for (let i = 0; i < tasks.length; i++) {
       const task: Task = tasks[i];
       const want: boolean = ReminderCoordinator.shouldRemind(task);
@@ -48,6 +72,7 @@ export class ReminderCoordinator {
             task.alarm = TaskAlarm.OFF;
           }
           ReminderCoordinator.lastError = ReminderCoordinator.errorText(err.code);
+          ReminderCoordinator.lastErrorCode = err.code;
           hilog.warn(DOMAIN, TAG, 'publish failed for task %{public}d: %{public}d',
             task.id, err.code);
           changed = true;

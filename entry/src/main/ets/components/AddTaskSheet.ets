@@ -217,6 +217,9 @@ export struct AddTaskSheet {
   @Local aiBusy: boolean = false;
   /** 用户点了「知道了」后本次不再显示低可信提示 */
   @Local lowHintDismissed: boolean = false;
+  /** 解析失败：分类展示 + 重试/手动填写（FE-41） */
+  @Local parseErrorCode: string = '';
+  @Local parseErrorMsg: string = '';
 
   /**
    * AI 预填：文本/截图 → 后端 `/parse` → 把名称/时间/优先级/标签/地点填进草稿。
@@ -235,9 +238,12 @@ export struct AddTaskSheet {
         result = await ManualParseService.parseText(this.draft.rawText);
       }
       if (!result.ok || result.candidate === undefined) {
-        this.toast(result.message.length > 0 ? result.message : '没解析出内容，请手动填写');
+        this.parseErrorCode = result.code !== undefined ? result.code : 'unknown';
+        this.parseErrorMsg = result.message.length > 0 ? result.message : '没能识别出任务内容';
         return;
       }
+      this.parseErrorCode = '';
+      this.parseErrorMsg = '';
       const candidate: CandidateItem = result.candidate;
       this.draft.applyParsed(candidate, this.store.remindLeadMinutes);
       if (result.link !== undefined && result.link.length > 0) {
@@ -249,6 +255,9 @@ export struct AddTaskSheet {
       }
       const where: string = result.localOcr === true ? '已在手机本地识别文字，' : '';
       this.toast(where + '已自动填写，请确认后保存');
+    } catch (error) {
+      this.parseErrorCode = 'unknown';
+      this.parseErrorMsg = '解析时出错了，请重试或手动填写';
     } finally {
       this.aiBusy = false;
     }
@@ -260,6 +269,74 @@ export struct AddTaskSheet {
     } catch (error) {
       // toast 失败不影响主流程
     }
+  }
+
+  /** 解析失败的可执行文案（按错误码分类） */
+  private parseErrorText(): string {
+    if (this.parseErrorCode === 'no_server') {
+      return '还没有配置服务器地址，先去设置里填上再解析。';
+    }
+    if (this.parseErrorCode === 'network') {
+      return '连不上服务器，检查手机网络和服务器地址后重试。';
+    }
+    if (this.parseErrorCode === 'not_supported') {
+      return '服务器没开图片识别，请改用文字输入，或手动填写。';
+    }
+    if (this.parseErrorCode === 'unauthorized') {
+      return '设备身份失效，去设置里重新绑定后再解析。';
+    }
+    if (this.parseErrorCode === 'bad_response' || this.parseErrorCode === 'bad_json') {
+      return '服务器返回异常，稍后重试；也可以直接手动填写。';
+    }
+    return this.parseErrorMsg.length > 0 ? this.parseErrorMsg : '没能识别出任务内容，请重试或手动填写。';
+  }
+
+  /** 解析失败卡：重试 / 手动填写（FE-41） */
+  @Builder
+  parseErrorCard() {
+    Column({ space: 8 }) {
+      Text('没能识别这段内容')
+        .fontSize($r('sys.float.ohos_id_text_size_body2'))
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.themeStore.scheme.error)
+      Text(this.parseErrorText())
+        .fontSize($r('sys.float.ohos_id_text_size_body2'))
+        .fontColor(this.themeStore.scheme.onSurfaceVariant)
+        .width('100%')
+      Row({ space: 12 }) {
+        Text(this.aiBusy ? '识别中…' : '重试')
+          .fontSize(13)
+          .fontColor(this.aiBusy ? this.themeStore.scheme.onSurfaceVariant : this.themeStore.scheme.primary)
+          .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+          .borderRadius(14)
+          .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
+          .onClick(() => {
+            if (!this.aiBusy) {
+              this.aiFill();
+            }
+          })
+        Text('手动填写')
+          .fontSize(13)
+          .fontColor(this.themeStore.scheme.onSurfaceVariant)
+          .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+          .borderRadius(14)
+          .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
+          .onClick(() => {
+            this.parseErrorCode = '';
+            this.parseErrorMsg = '';
+            setTimeout(() => {
+              focusControl.requestFocus('addTaskNameInput');
+            }, 0);
+          })
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .padding(12)
+    .alignItems(HorizontalAlign.Start)
+    .backgroundColor(this.themeStore.scheme.errorContainer)
+    .borderRadius(12)
+    .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
   }
 
   /** 解析依据：低可信提示 + 原文对照（确认闸的一部分：看得见「为什么这么填」） */
@@ -356,6 +433,11 @@ export struct AddTaskSheet {
           // ⚠️ 这里**不 `layoutWeight(1)`**：内容区按自身高度贴着按钮组，下面才是名称框与芯片行。
           .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
 
+          // 解析失败：分类错误卡 + 重试 / 手动填写
+          if (this.parseErrorCode.length > 0) {
+            this.parseErrorCard()
+          }
+
           // 解析结果只提示「低可信」；原文不再重复展示（在任务详情页看，见 TaskRawTextCard）
           if (this.draft.certainty > 0 && this.draft.certainty < 60) {
             this.parseEvidence()
@@ -372,6 +454,7 @@ export struct AddTaskSheet {
             draft: this.draft,
             aiBusy: this.aiBusy,
             showAi: true,
+            lowConfidence: this.draft.certainty > 0 && this.draft.certainty < 60,
             onAiFill: () => {
               this.aiFill();
             }

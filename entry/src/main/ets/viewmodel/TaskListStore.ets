@@ -161,8 +161,40 @@ export class TaskListStore {
       this.persist();
     });
     this.reminderError = ReminderCoordinator.lastError;
+    const code: number = ReminderCoordinator.lastErrorCode;
+    if (this.reminderError.length > 0) {
+      const key: string = code.toString() + '|' + this.reminderError;
+      if (key !== this.lastReminderFailureKey) {
+        this.lastReminderFailureKey = key;
+        if (this.reminderFailureListener !== undefined) {
+          this.reminderFailureListener(this.reminderError, code);
+        }
+      }
+    } else {
+      this.lastReminderFailureKey = '';
+    }
   }
 
+  /**
+   * 启动清理「幽灵提醒」：重装/清数据后系统里可能残留本应用的提醒（占满 30 条额度），
+   * 任务表里却没有对应句柄。先全部撤销，再按当前任务表重新发布。
+   */
+  async resetStaleReminders(): Promise<void> {
+    const ctx: common.Context | undefined = this.dataContext;
+    if (ctx === undefined) {
+      return;
+    }
+    const cleared: boolean = await ReminderCoordinator.cancelAll();
+    if (cleared) {
+      const tasks: Task[] = this.allTasks();
+      for (let i = 0; i < tasks.length; i++) {
+        tasks[i].reminderId = undefined;
+        tasks[i].reminderAt = undefined;
+      }
+      this.persist();
+    }
+    await this.reconcileReminders();
+  }
 
   /** 详情页等「直接改字段」的入口在离开/提交时调它，避免重启丢编辑。 */
   saveNow(): void {
@@ -771,6 +803,14 @@ export class TaskListStore {
   @Trace remindLeadMinutes: number = 0;
   /** 最近一次提醒发布失败的原因（设置页展示；为空表示正常） */
   @Trace reminderError: string = '';
+  /** 提醒失败回调：页面注册后弹可执行提示（30 条上限 / 通知未开），同一条只弹一次 */
+  private reminderFailureListener: ((message: string, code: number) => void) | undefined = undefined;
+  private lastReminderFailureKey: string = '';
+
+  setReminderFailureListener(listener: (message: string, code: number) => void): void {
+    this.reminderFailureListener = listener;
+  }
+
   /**
    * 点列表副卡片上某一步的圆圈：切换该步的完成态（`done` 存 0/1）。
    *
