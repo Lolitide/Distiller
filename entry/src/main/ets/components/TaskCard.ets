@@ -384,6 +384,17 @@ export struct TaskCard {
         .height(PRIORITY_BADGE_SIZE_VP)
         .flexShrink(0)
 
+        // ③ 状态标记：进行中在截止文字前显示一个小胶囊（FE-28，卡片要能看出状态变化）
+        if (this.task.status === TaskStatus.IN_PROGRESS) {
+          Text('进行中')
+            .fontSize($r('sys.float.ohos_id_text_size_caption'))
+            .fontColor(this.themeStore.scheme.primary)
+            .padding({ left: 6, right: 6, top: 1, bottom: 1 })
+            .backgroundColor(this.themeStore.scheme.primaryContainer)
+            .borderRadius(6)
+            .flexShrink(0)
+        }
+
         // ③ 截止文字：**整体自然显示**（作者：「后面的所有字（已过期 / 未定时 /
         //    xxx 后截止）直接显示就行」）—— 不再拆「XXX + 后截止」两段、也不再定宽居中。
         Text(this.dueLabel)

@@ -27,7 +27,9 @@ import { TaskInfoCard } from '../components/TaskInfoCard';
 import { TaskTagsCard } from '../components/TaskTagsCard';
 import { TaskNoteCard } from '../components/TaskNoteCard';
 import { TaskMediaCard } from '../components/TaskMediaCard';
-import { TaskAlarm, TaskStatus } from '../model';
+import { TaskRawTextCard } from '../components/TaskRawTextCard';
+import { FeedbackService } from '../service/cloud/FeedbackService';
+import { Task, TaskAlarm, TaskStatus } from '../model';
 import { NAV_STACK_KEY, TaskDetailParam } from '../viewmodel/TaskNavParams';
 import { showDeleteConfirmDialog } from '../utils/DeleteConfirmDialog';
 
@@ -66,6 +68,8 @@ export struct B_TaskDetail {
   @Local statusBarVp: number = 0;
   /** 改名时的草稿（提交前不写回任务） */
   @Local draftName: string = '';
+  /** 进入页面时的内容快照：离开时对比，只有真改过才标记 userEdited（避免轮询覆盖） */
+  private snapshot: string = '';
   /** 改名输入框的控制器：进入编辑时把光标放到文本末尾（不默认全选） */
   private nameController: TextInputController = new TextInputController();
 
@@ -93,6 +97,24 @@ export struct B_TaskDetail {
   aboutToAppear(): void {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
     this.syncStatusBarHeight();
+    this.snapshot = this.contentSnapshot();
+  }
+
+  /** 内容字段快照（用于判断用户是否真的改过；不含 status/reminderId 等系统态） */
+  private contentSnapshot(): string {
+    const t: Task = this.param.task;
+    return JSON.stringify({
+      name: t.name,
+      note: t.note,
+      dueAt: t.dueAt,
+      place: t.place,
+      who: t.who,
+      priority: t.priority,
+      level: t.level,
+      category: t.category,
+      tags: t.tags,
+      steps: t.steps
+    });
   }
 
   /**
@@ -126,6 +148,12 @@ export struct B_TaskDetail {
 
   aboutToDisappear(): void {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.OFFSET);
+    // 真改过内容才置脏：置脏后 5 秒轮询不再覆盖这些字段（FE-79）
+    if (this.contentSnapshot() !== this.snapshot) {
+      this.param.task.userEdited = true;
+    }
+    // 详情页的字段是「直接改 Task」，离开时统一落盘一次（FE-30：重启后编辑仍在）
+    this.param.store.saveNow();
   }
 
   /** 点名称 → 进入编辑：草稿从当前值起（抢焦点交给输入框的 `onAppear`，见 nameRow） */
@@ -183,6 +211,14 @@ export struct B_TaskDetail {
     const stack: NavPathStack | undefined = AppStorage.get<NavPathStack>(NAV_STACK_KEY);
     if (stack !== undefined) {
       stack.pop();
+    }
+  }
+
+  private showToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: message });
+    } catch (error) {
+      // toast 失败不影响主流程
     }
   }
 
@@ -331,6 +367,54 @@ export struct B_TaskDetail {
             .width('100%')
             .padding({ top: 24 })
 
+            // 状态入口：已确认 → 开始执行；进行中 → 标记完成（六态状态机，FE-28）
+            if (this.param.task.status === TaskStatus.CONFIRMED
+              || this.param.task.status === TaskStatus.PENDING_CONFIRM
+              || this.param.task.status === TaskStatus.IN_PROGRESS) {
+              Row({ space: 8 }) {
+                Button({ type: ButtonType.Capsule, stateEffect: true }) {
+                  Text(this.param.task.status === TaskStatus.IN_PROGRESS ? '标记完成' : '开始执行')
+                    .fontSize(13)
+                    .fontColor(this.themeStore.scheme.onPrimary)
+                }
+                .height(32)
+                .padding({ left: 16, right: 16 })
+                .backgroundColor(this.themeStore.scheme.primary)
+                .onClick(() => {
+                  if (this.param.task.status === TaskStatus.IN_PROGRESS) {
+                    this.param.store.toggleComplete(this.param.task);
+                  } else {
+                    this.param.store.startTask(this.param.task);
+                  }
+                })
+
+                // 采纳 / 忽略（FE-75）：只对来自后端候选的任务显示
+                if (this.param.task.clientTaskId !== undefined && this.param.task.clientTaskId.length > 0) {
+                  Text('有用')
+                    .fontSize(13)
+                    .fontColor(this.themeStore.scheme.primary)
+                    .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+                    .onClick(() => {
+                      FeedbackService.send(this.param.task, 'accept');
+                      this.showToast('已记录：这条整理对你有用');
+                    })
+                  Text('忽略')
+                    .fontSize(13)
+                    .fontColor(this.themeStore.scheme.onSurfaceVariant)
+                    .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+                    .onClick(() => {
+                      FeedbackService.send(this.param.task, 'dismiss');
+                      this.param.store.deleteTask(this.param.task.id);
+                      this.popBack();
+                      this.showToast('已忽略，之后不再优先推送');
+                    })
+                }
+              }
+              .width('100%')
+              .padding({ left: CONTENT_SIDE_PADDING_VP, right: CONTENT_SIDE_PADDING_VP, top: 8 })
+              .justifyContent(FlexAlign.Start)
+            }
+
             // 第二块：步骤（需求方 2026-10-16 的 4 张交互图，见 `TaskStepsSection` 顶部注释）
             Column() {
               TaskStepsSection({ task: this.param.task })
@@ -355,6 +439,17 @@ export struct B_TaskDetail {
                 top: CONTENT_GAP_VP
               })
             }
+
+            // 原文卡：这条任务从哪段话整理出来的（粘贴 / 截图 / 语音 / 群消息）
+            Column() {
+              TaskRawTextCard({ task: this.param.task })
+            }
+            .width('100%')
+            .padding({
+              left: CONTENT_SIDE_PADDING_VP,
+              right: CONTENT_SIDE_PADDING_VP,
+              top: CONTENT_GAP_VP
+            })
 
             // 第三块：属性编辑卡（提醒 / 到期 / 重复，照官方设置页造型）
             // 需求方 2026-10-16：「这个卡片放到步骤下方」

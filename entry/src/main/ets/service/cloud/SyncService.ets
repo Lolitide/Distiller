@@ -120,6 +120,14 @@ export class SyncService {
 
       const res = await RelayApi.candidates(BackendConfig.cursor, 200);
       if (!res.ok || res.data === undefined) {
+        // 身份失效（BE-05）：清掉本机身份与绑定，停止轮询，等用户重新配对
+        if (!res.ok && res.error !== undefined && res.error.code === 'unauthorized') {
+          BackendConfig.clearIdentity(context, true);
+          SyncService.lastError = '设备身份已失效，请在设置里重新绑定';
+          SyncService.connected = false;
+          SyncService.stop();
+          return 0;
+        }
         SyncService.lastError = res.ok ? '候选返回为空' : apiErrorMessage(res);
         SyncService.connected = false;
         return 0;

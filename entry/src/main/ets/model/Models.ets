@@ -156,6 +156,12 @@ export class Task {
   @Trace remindAt?: number;
   /** 18. 提醒句柄：已发布的本地提醒键，撤销用它。**为空而 `alarm=1` ⇒ 开关开了但未生效**（如超 30 条报 1700002） */
   @Trace reminderId?: number;
+  /** 18.0.1 这个句柄对应的响铃时刻（改提醒时间后要重发；`reminderId` 存在但时刻不同即过期句柄） */
+  @Trace reminderAt?: number;
+  /** 18.1 系统日历事件句柄（Calendar Kit 写入后回填；删除/完成时撤销） */
+  @Trace calendarEventId?: number;
+  /** 18.2 用户是否改过内容字段：为 true 时 5 秒轮询不再覆盖 name/note/dueAt/place/priority（FE-79） */
+  @Trace userEdited?: boolean;
   /** 19. 重复规则**数组**（元素见 `RepeatRule`）；命中任一条即算今天要做（并集） */
   @Trace repeat?: RepeatRule[];
   /** 20. 规则外的补充原话：只在规则表达不了时兜底（如「每学期第 3 周交」） */

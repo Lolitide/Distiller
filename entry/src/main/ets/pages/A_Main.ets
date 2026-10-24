@@ -13,6 +13,7 @@ import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
 import { DraftRepository } from '../repository/DraftRepository';
 import { SettingsRepository } from '../repository/SettingsRepository';
 import { SyncService } from '../service/cloud/SyncService';
+import { NotificationService } from '../service/system/NotificationService';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'A_Main';
@@ -59,6 +60,8 @@ struct A_Main {
 
   /** 视觉个性化：M3 色系（页面底色取 surface） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
+  /** 提醒/日历对账定时器（分钟级就够） */
+  private reminderTimer: number = -1;
 
   /**
    * 把导航栈放进 `AppStorage`：点卡片进详情这件事发生在 `A_TaskList`（以及搜索页的 `B_Search`）里，
@@ -85,6 +88,14 @@ struct A_Main {
       return;
     }
     this.store.init(context);
+    // 通知/横幅权限：代理提醒依赖它；被拒后用户仍可从设置页重新打开
+    NotificationService.ensureEnabled(context as common.UIAbilityContext);
+    // 提醒/日历对账：启动一次，之后每分钟一次（改期、完成、删除后 store 也会主动触发）
+    this.store.reconcileReminders();
+    this.reminderTimer = setInterval(() => {
+      this.store.expireOverdue();
+      this.store.reconcileReminders();
+    }, 60000);
     SyncService.init(context);
     SyncService.start();
     SyncService.syncOnce();
@@ -92,6 +103,10 @@ struct A_Main {
 
   aboutToDisappear(): void {
     SyncService.stop();
+    if (this.reminderTimer >= 0) {
+      clearInterval(this.reminderTimer);
+      this.reminderTimer = -1;
+    }
   }
 
   /**

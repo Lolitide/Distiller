@@ -88,6 +88,8 @@ interface DraftSnapshot {
   dueText: string;
   repeatText: string;
   linkUrl: string;
+  certainty?: number;
+  degraded?: boolean;
   steps: DraftStepSnapshot[];
   repeat?: DraftRepeatSnapshot;
 }
@@ -142,6 +144,10 @@ export class AddTaskDraft {
   @Trace repeatText: string = '';
   /** 扫码得到的直达链接（二维码/条形码是 URL 时） */
   @Trace linkUrl: string = '';
+  /** 解析置信度 0~100（0 = 非解析来源）；低于阈值时表单提示「低可信」 */
+  @Trace certainty: number = 0;
+  /** 本次预填是否来自规则降级（后端 engine=rules） */
+  @Trace degraded: boolean = false;
   @Trace steps: TaskStep[] = [];
 
   /** 名称非空才能保存（「保存」按钮的灰/亮看它） */
@@ -205,6 +211,9 @@ export class AddTaskDraft {
     if (this.linkUrl.length > 0) {
       task.linkUrl = this.linkUrl;
     }
+    if (this.certainty > 0) {
+      task.certainty = this.certainty;
+    }
     if (this.steps.length > 0) {
       task.steps = this.steps;
     }
@@ -264,6 +273,8 @@ export class AddTaskDraft {
     if (c.category !== undefined && c.category.length > 0) {
       this.category = c.category;
     }
+    this.certainty = c.certainty !== undefined ? Math.round(c.certainty) : Math.round(c.confidence * 100);
+    this.degraded = c.degraded === true;
 
     const mergedTags: string[] = this.tags.slice();
     for (let i = 0; i < c.tags.length; i++) {
@@ -335,6 +346,8 @@ export class AddTaskDraft {
     this.dueText = '';
     this.repeatText = '';
     this.linkUrl = '';
+    this.certainty = 0;
+    this.degraded = false;
     this.steps = [];
     this.repeatRule = undefined;
   }
@@ -380,6 +393,8 @@ export class AddTaskDraft {
       dueText: this.dueText,
       repeatText: this.repeatText,
       linkUrl: this.linkUrl,
+      certainty: this.certainty,
+      degraded: this.degraded,
       steps: steps,
       repeat: repeat
     };
@@ -415,6 +430,8 @@ export class AddTaskDraft {
       this.dueText = s.dueText !== undefined ? s.dueText : '';
       this.repeatText = s.repeatText !== undefined ? s.repeatText : '';
       this.linkUrl = s.linkUrl !== undefined ? s.linkUrl : '';
+      this.certainty = s.certainty !== undefined ? s.certainty : 0;
+      this.degraded = s.degraded === true;
 
       const steps: TaskStep[] = [];
       if (s.steps !== undefined) {

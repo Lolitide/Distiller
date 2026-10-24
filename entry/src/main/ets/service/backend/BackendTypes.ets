@@ -77,6 +77,8 @@ export interface BindStatusData {
   bound: boolean;
   user_openid_tail?: string;
   bound_at?: string;
+  /** 绑定时刻（毫秒）：用于区分「旧绑定」与「本次新绑定」 */
+  bound_at_ms?: number;
   source?: string;
 }
 
@@ -219,6 +221,8 @@ export interface CandidateItem {
   tags: string[];
   confidence: number;
   engine: string;
+  /** 是否规则降级（engine=rules）；前端据此提示「降级解析」 */
+  degraded?: boolean;
   source: CandidateSource;
   created_at: string;
 }
@@ -235,6 +239,8 @@ export interface CandidatesData {
 export interface ParseData {
   candidate: CandidateItem;
   text: string;
+  /** 规则降级标记（后端 engine=rules） */
+  degraded?: boolean;
 }
 
 // ---------------------------------------------------------------- 其它

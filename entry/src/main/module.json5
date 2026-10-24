@@ -16,6 +16,10 @@
         "name": "ohos.permission.INTERNET"
       },
       {
+        // 后台代理提醒（Reminder Agent）：到点响铃；部分设备有管控，发布失败会回滚开关
+        "name": "ohos.permission.PUBLISH_AGENT_REMINDER"
+      },
+      {
         "name": "ohos.permission.MICROPHONE",
         "reason": "$string:permission_mic_reason",
         "usedScene": {

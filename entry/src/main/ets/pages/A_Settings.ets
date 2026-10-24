@@ -41,6 +41,7 @@ import { BackendConfig } from '../service/backend/BackendConfig';
 import { RelayApi } from '../service/backend/RelayApi';
 import { apiErrorMessage, GroupItemDto } from '../service/backend/BackendTypes';
 import { SyncService } from '../service/cloud/SyncService';
+import { NotificationService } from '../service/system/NotificationService';
 import { TaskRepository } from '../repository/TaskRepository';
 import { notificationManager } from '@kit.NotificationKit';
 import { abilityAccessCtrl, Permissions } from '@kit.AbilityKit';
@@ -147,6 +148,10 @@ export struct A_Settings {
   @Local bindCode: string = '';
   @Local bindHint: string = '';
   private bindTimer: number = -1;
+  /** 本次「去绑定/重新绑定」的开始时间（用于忽略旧 bound_at） */
+  private bindStartedAt: number = 0;
+  /** 绑定轮询剩余次数（按后端 expires_in 算，过期就停并提示重新生成） */
+  private bindPollLeft: number = 0;
 
   /* ── 权限管理（通知 / 日历 / 订阅消息）── */
   @Local notifyAllowed: boolean = false;
@@ -481,6 +486,9 @@ export struct A_Settings {
     if (this.bindCode.length > 0) {
       return;
     }
+    // 重新绑定**不动旧绑定**：只记下开始时间，轮询时用 bound_at 判断是不是这次新绑的。
+    // 这样用户点取消，原来的绑定仍然有效。
+    this.bindStartedAt = Date.now();
     const res = await RelayApi.bindCode();
     if (!res.ok || res.data === undefined) {
       this.toast('生成配对码失败：' + (res.ok ? '返回为空' : apiErrorMessage(res)));
@@ -488,7 +496,15 @@ export struct A_Settings {
     }
     this.bindCode = res.data.code;
     this.bindHint = res.data.hint;
+    this.bindPollLeft = Math.max(1, Math.ceil(res.data.expires_in / 2));
     this.bindTimer = setInterval(() => {
+      if (this.bindPollLeft <= 0) {
+        this.cancelBind();
+        this.bindCode = '';
+        this.toast('配对码已过期，请重新生成');
+        return;
+      }
+      this.bindPollLeft--;
       this.checkBind();
     }, 2000);
   }
@@ -496,6 +512,13 @@ export struct A_Settings {
   private async checkBind(): Promise<void> {
     const res = await RelayApi.bindStatus();
     if (!res.ok || res.data === undefined || !res.data.bound) {
+      return;
+    }
+    // 旧绑定也会返回 bound=true：必须拿到「本次开始之后」的绑定时刻才算成功；
+    // 拿不到时刻（旧数据/解析失败）一律忽略，避免一生成码就自动成功。
+    const boundAt: number = res.data.bound_at_ms !== undefined
+      ? res.data.bound_at_ms : this.parseBoundAt(res.data.bound_at);
+    if (boundAt <= 0 || boundAt < this.bindStartedAt - 2000) {
       return;
     }
     this.bound = true;
@@ -509,7 +532,70 @@ export struct A_Settings {
       this.bindTimer = -1;
     }
     this.toast('绑定成功，正在同步群消息');
+    await this.autoSubscribeAll();
     await SyncService.refreshAfterBind();
+  }
+
+  /**
+   * 绑定成功后：默认订阅机器人所在的所有群，并弹出群选择列表（全部勾选）。
+   * 用户可以在这里取消不想订阅的群；订阅失败不影响绑定本身。
+   */
+  private async autoSubscribeAll(): Promise<void> {
+    const first = await RelayApi.groups();
+    if (!first.ok || first.data === undefined) {
+      return;
+    }
+    const visible: GroupItemDto[] = [];
+    for (let i = 0; i < first.data.groups.length; i++) {
+      const g: GroupItemDto = first.data.groups[i];
+      if (!g.bot_present) {
+        continue;
+      }
+      visible.push(g);
+      if (!g.subscribed) {
+        await RelayApi.subscribe(g.group_openid);
+      }
+    }
+    if (visible.length === 0) {
+      this.toast('机器人还没加入任何群，先在 QQ 群里把它拉进去');
+      return;
+    }
+    // 重新拉一次，让开关显示后端真实状态（全部已订阅）
+    const second = await RelayApi.groups();
+    if (second.ok && second.data !== undefined) {
+      const fresh: GroupItemDto[] = [];
+      for (let i = 0; i < second.data.groups.length; i++) {
+        if (second.data.groups[i].bot_present) {
+          fresh.push(second.data.groups[i]);
+        }
+      }
+      this.groupList = fresh;
+    } else {
+      this.groupList = visible;
+    }
+    this.refreshSubscribedCount();
+    this.sheetKind = SHEET_GROUPS;
+    this.sheetShown = true;
+  }
+
+  /** 从当前 groupList 统计已订阅数，更新「订阅消息管理」行 */
+  private refreshSubscribedCount(): void {
+    let count: number = 0;
+    for (let i = 0; i < this.groupList.length; i++) {
+      if (this.groupList[i].subscribed) {
+        count++;
+      }
+    }
+    this.subscribedCount = count;
+  }
+
+  /** 后端 `bound_at` 是本地时间字符串 `YYYY-MM-DD HH:mm:ss`；解析失败返回 0（按旧逻辑处理） */
+  private parseBoundAt(text: string | undefined): number {
+    if (text === undefined || text.length === 0) {
+      return 0;
+    }
+    const ms: number = Date.parse(text.replace(' ', 'T'));
+    return Number.isNaN(ms) ? 0 : ms;
   }
 
   private cancelBind(): void {
@@ -518,6 +604,7 @@ export struct A_Settings {
       clearInterval(this.bindTimer);
       this.bindTimer = -1;
     }
+    // 取消重新绑定：旧绑定没有被解掉，保持原来的状态
   }
 
   /** 复制配对码到剪贴板（用户要粘贴到 QQ 私聊里发给机器人） */
@@ -537,7 +624,26 @@ export struct A_Settings {
     }
   }
 
-  /** 删除服务端数据（设备/绑定/订阅/推送 Token）并清本机任务 */
+  /** 打开系统通知管理（横幅/锁屏/声音都在这里） */
+  private openNotificationSettings(): void {
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    NotificationService.openSettings(ctx as common.UIAbilityContext);
+  }
+
+  /** 隐私说明：只讲本机存什么、什么会离开手机 */
+  private showPrivacy(): void {
+    this.getUIContext().getPromptAction().showDialog({
+      title: '隐私说明',
+      message: '任务、备注、原文、草稿只存在本机；'
+        + '只有任务名、截止时间、地点等任务字段会随同步上传到你配置的服务器。'
+        + '群消息原文在服务器内存保留 30 分钟后删除，不落盘。'
+        + '可随时在「删除服务端数据」中清空云端记录。',
+      buttons: [{ text: '知道了', color: this.themeStore.scheme.primary }]
+    });
+  }
   private deleteServerData(): void {
     this.getUIContext().getPromptAction().showDialog({
       title: '删除服务端数据',
@@ -656,8 +762,12 @@ export struct A_Settings {
   }
 
   private closeSheet(): void {
+    // 群列表关闭时刷新「订阅消息管理」的计数（一键订阅/勾选后都走这里）
+    if (this.sheetKind === SHEET_GROUPS) {
+      this.loadSubscriptionCount();
+    }
+    // 只收显隐；`sheetKind` 留到 onDisappear 再清，避免内容先消失、遮罩留一层
     this.sheetShown = false;
-    this.sheetKind = SHEET_NONE;
   }
 
   private confirmSheet(): void {
@@ -1376,7 +1486,43 @@ export struct A_Settings {
         Column() {
           this.infoRow('版本', this.versionLabel)
           this.rowDivider()
-          this.infoRow('隐私说明', '未接入')
+          Row() {
+            Text('隐私说明')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+            Text('查看')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.showPrivacy();
+          })
+
+          this.rowDivider()
+          Row() {
+            Text('通知与横幅设置')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+            Text('去开启')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.openNotificationSettings();
+          })
+
+          this.rowDivider()
+          this.infoRow('提醒状态', this.store.reminderError.length > 0 ? this.store.reminderError : '正常')
         }
         .width('100%')
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)

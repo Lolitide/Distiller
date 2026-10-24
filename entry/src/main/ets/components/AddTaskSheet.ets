@@ -210,10 +210,13 @@ export struct AddTaskSheet {
     const task: Task = this.draft.toTask(this.store.nextTaskId());
     this.store.addTask(task);
     this.draft.reset();
+    this.lowHintDismissed = false;
     this.onSaved();
   }
 
   @Local aiBusy: boolean = false;
+  /** 用户点了「知道了」后本次不再显示低可信提示 */
+  @Local lowHintDismissed: boolean = false;
 
   /**
    * AI 预填：文本/截图 → 后端 `/parse` → 把名称/时间/优先级/标签/地点填进草稿。
@@ -259,6 +262,59 @@ export struct AddTaskSheet {
     }
   }
 
+  /** 解析依据：低可信提示 + 原文对照（确认闸的一部分：看得见「为什么这么填」） */
+  @Builder
+  parseEvidence() {
+    Column({ space: 8 }) {
+      if (!this.lowHintDismissed && this.draft.certainty > 0 && this.draft.certainty < 60) {
+        Row({ space: 8 }) {
+          Text('!')
+            .fontSize(13)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.themeStore.scheme.onErrorContainer)
+            .width(18)
+            .height(18)
+            .textAlign(TextAlign.Center)
+            .borderRadius(9)
+            .backgroundColor(this.themeStore.scheme.errorContainer)
+          Column({ space: 2 }) {
+            Text('低可信，请核对时间与地点')
+              .fontSize(13)
+              .fontColor(this.themeStore.scheme.error)
+            if (this.draft.degraded) {
+              Text('本次为规则降级解析，建议重新解析或手动补齐')
+                .fontSize(11)
+                .fontColor(this.themeStore.scheme.onSurfaceVariant)
+            }
+          }
+          .layoutWeight(1)
+          .alignItems(HorizontalAlign.Start)
+
+          Text('重新解析')
+            .fontSize(12)
+            .fontColor(this.themeStore.scheme.primary)
+            .onClick(() => {
+              this.aiFill();
+            })
+          Text('知道了')
+            .fontSize(12)
+            .fontColor(this.themeStore.scheme.onSurfaceVariant)
+            .onClick(() => {
+              this.lowHintDismissed = true;
+            })
+        }
+        .width('100%')
+        .padding(10)
+        .backgroundColor(this.themeStore.scheme.errorContainer)
+        .borderRadius(12)
+      }
+
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+    .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
+  }
+
   build() {
     Column() {
       // 标题行：「添加任务」＋「保存」＋「关闭」（**固定**在顶部、不跟着滚）
@@ -299,6 +355,11 @@ export struct AddTaskSheet {
           .justifyContent(FlexAlign.Start)
           // ⚠️ 这里**不 `layoutWeight(1)`**：内容区按自身高度贴着按钮组，下面才是名称框与芯片行。
           .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
+
+          // 解析结果只提示「低可信」；原文不再重复展示（在任务详情页看，见 TaskRawTextCard）
+          if (this.draft.certainty > 0 && this.draft.certainty < 60) {
+            this.parseEvidence()
+          }
 
           // —— 任务名称输入框：三种来源共用（名称与来源无关），紧跟在内容区下面 ——
           AddTaskNameInput({ draft: this.draft })

@@ -10,6 +10,8 @@
 import { preferences } from '@kit.ArkData';
 import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { fileIo } from '@kit.CoreFileKit';
+import { util } from '@kit.ArkTS';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import {
   RepeatFrequency,
@@ -33,7 +35,55 @@ const K_SCHEMA: string = 'tasks_schema';
  * 字段结构变化（或发现旧测试数据是空壳）时 +1 —— 升级后第一次启动会**清空旧数据**，
  * 避免旧 schema 的半截任务被 revive 成空卡片。
  */
-const SCHEMA_VERSION: number = 2;
+const SCHEMA_VERSION: number = 3;
+
+/** 文件存储的信封：版本号 + 任务数组（便于以后迁移） */
+interface TaskFile {
+  version: number;
+  tasks: Object[];
+}
+
+/**
+ * 落盘用的**普通对象**。
+ *
+ * 为什么不能直接 `JSON.stringify(task)`：`Task` 是 `@ObservedV2`，属性会被写成
+ * `__ob_name` / `__ob_dueAt` 这类内部键，下次 `JSON.parse` 回来 `raw.name` 是 undefined
+ * —— 任务全变空壳、重启后看起来全丢了（2026-10-24 真机实测）。
+ */
+interface TaskPlain {
+  id: number;
+  clientTaskId?: string;
+  status: number;
+  name: string;
+  note?: string;
+  rawText?: string;
+  rawJson?: string;
+  dueAt?: number;
+  dueText?: string;
+  place?: string;
+  who?: string;
+  createdAt: number;
+  finishedAt?: number;
+  priority: number;
+  level?: number;
+  alarm: number;
+  remindAt?: number;
+  reminderId?: number;
+  reminderAt?: number;
+  calendarEventId?: number;
+  userEdited?: boolean;
+  repeat?: RepeatRule[];
+  repeatText?: string;
+  source?: TaskSource;
+  originDetail?: string;
+  category?: string;
+  tags?: string[];
+  steps?: TaskStep[];
+  urls?: string[];
+  linkUrl?: string;
+  certainty?: number;
+  missingFields?: string[];
+}
 
 /**
  * 旧版本（2026-10-17 `refactor: 接口字段对齐` 之前）落盘的字段名。
@@ -73,52 +123,200 @@ export class TaskRepository {
   }
 
   static load(context: common.Context): Task[] {
+    // ① 主存储：应用沙箱文件（preferences 单值有 8KB 上限，任务一多就静默写失败 → 重启全丢）
+    const fileText: string = TaskRepository.readFile(context);
+    if (fileText.length > 0) {
+      return TaskRepository.parseTasks(fileText);
+    }
+    // ② 首次升级：把旧 preferences 里的任务迁到文件，之后不再用 preferences 存任务
+    const migrated: string = TaskRepository.migrateFromPrefs(context);
+    if (migrated.length > 0) {
+      TaskRepository.writeFile(context, migrated);
+      return TaskRepository.parseTasks(migrated);
+    }
+    return [];
+  }
+
+  private static filePath(context: common.Context): string {
+    return context.filesDir + '/tasks.json';
+  }
+
+  private static readFile(context: common.Context): string {
+    const path: string = TaskRepository.filePath(context);
+    try {
+      if (!fileIo.accessSync(path)) {
+        return '';
+      }
+      const stat: fileIo.Stat = fileIo.statSync(path);
+      if (stat.size <= 0) {
+        return '';
+      }
+      const buffer: ArrayBuffer = new ArrayBuffer(stat.size);
+      const file: fileIo.File = fileIo.openSync(path, fileIo.OpenMode.READ_ONLY);
+      try {
+        fileIo.readSync(file.fd, buffer);
+      } finally {
+        fileIo.closeSync(file);
+      }
+      const decoder: util.TextDecoder = util.TextDecoder.create('utf-8');
+      return decoder.decodeToString(new Uint8Array(buffer));
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'read tasks file failed: %{public}s', err.message);
+      return '';
+    }
+  }
+
+  private static writeFile(context: common.Context, text: string): void {
+    const path: string = TaskRepository.filePath(context);
+    try {
+      const file: fileIo.File = fileIo.openSync(path,
+        fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
+      try {
+        fileIo.writeSync(file.fd, text);
+      } finally {
+        fileIo.closeSync(file);
+      }
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'write tasks file failed: %{public}s', err.message);
+    }
+  }
+
+  /** 旧 preferences（schema=2）迁移：读到就包成新文件格式返回；读不到返回空串 */
+  private static migrateFromPrefs(context: common.Context): string {
     const store: preferences.Preferences | undefined = TaskRepository.ensure(context);
     if (store === undefined) {
-      return [];
+      return '';
     }
-
-    // ① 版本闸：旧 schema 的数据直接清掉（这次就是为了解决「重装后残留空壳日程」）
-    let version: number = 0;
     try {
-      const v: preferences.ValueType = store.getSync(K_SCHEMA, 0);
-      version = typeof v === 'number' ? v : 0;
-    } catch (error) {
-      version = 0;
-    }
-    if (version !== SCHEMA_VERSION) {
-      try {
-        store.putSync(K_TASKS, '[]');
-        store.putSync(K_SCHEMA, SCHEMA_VERSION);
-        store.flushSync();
-      } catch (error) {
-        // 清不掉也不阻塞启动
+      const version: preferences.ValueType = store.getSync(K_SCHEMA, 0);
+      if (version !== 2) {
+        return '';
       }
-      return [];
-    }
-
-    let raw: string = '[]';
-    try {
       const value: preferences.ValueType = store.getSync(K_TASKS, '[]');
-      raw = typeof value === 'string' ? value : '[]';
+      const raw: string = typeof value === 'string' ? value : '[]';
+      const tasks: Object[] = JSON.parse(raw) as Object[];
+      if (tasks.length === 0) {
+        return '';
+      }
+      hilog.info(DOMAIN, TAG, 'migrating %{public}d tasks from preferences', tasks.length);
+      return JSON.stringify({ version: SCHEMA_VERSION, tasks: tasks });
     } catch (error) {
-      return [];
+      return '';
     }
+  }
+
+  private static parseTasks(text: string): Task[] {
     try {
-      const list: Object[] = JSON.parse(raw) as Object[];
+      // 兼容旧文件：@ObservedV2 的属性曾以 `__ob_` 前缀落盘，这里先还原成普通键名
+      const clean: string = text.split('"__ob_').join('"');
+      const parsed: TaskFile = JSON.parse(clean) as TaskFile;
+      const list: Object[] = parsed.tasks !== undefined ? parsed.tasks : [];
       const out: Task[] = [];
       for (let i = 0; i < list.length; i++) {
         const task: Task = TaskRepository.revive(list[i] as Task, list[i] as LegacyTaskJson);
-        // ② 扔掉空壳：没有名称、没有备注、没有原文、也没有 ddl 的，一律不加载
         if (TaskRepository.isUsable(task)) {
           out.push(task);
         }
       }
+      hilog.info(DOMAIN, TAG, 'loaded %{public}d tasks', out.length);
       return out;
     } catch (error) {
-      hilog.error(DOMAIN, TAG, 'tasks_json 解析失败，按空列表处理');
+      hilog.error(DOMAIN, TAG, 'tasks file parse failed');
       return [];
     }
+  }
+
+  /** Task → 普通对象（只取契约字段，避免 `__ob_` 内部键进文件） */
+  private static toPlain(task: Task): TaskPlain {
+    const plain: TaskPlain = {
+      id: task.id,
+      status: task.status,
+      name: task.name,
+      createdAt: task.createdAt,
+      priority: task.priority,
+      alarm: task.alarm
+    };
+    if (task.clientTaskId !== undefined) {
+      plain.clientTaskId = task.clientTaskId;
+    }
+    if (task.note !== undefined) {
+      plain.note = task.note;
+    }
+    if (task.rawText !== undefined) {
+      plain.rawText = task.rawText;
+    }
+    if (task.rawJson !== undefined) {
+      plain.rawJson = task.rawJson;
+    }
+    if (task.dueAt !== undefined) {
+      plain.dueAt = task.dueAt;
+    }
+    if (task.dueText !== undefined) {
+      plain.dueText = task.dueText;
+    }
+    if (task.place !== undefined) {
+      plain.place = task.place;
+    }
+    if (task.who !== undefined) {
+      plain.who = task.who;
+    }
+    if (task.finishedAt !== undefined) {
+      plain.finishedAt = task.finishedAt;
+    }
+    if (task.level !== undefined) {
+      plain.level = task.level;
+    }
+    if (task.remindAt !== undefined) {
+      plain.remindAt = task.remindAt;
+    }
+    if (task.reminderId !== undefined) {
+      plain.reminderId = task.reminderId;
+    }
+    if (task.reminderAt !== undefined) {
+      plain.reminderAt = task.reminderAt;
+    }
+    if (task.calendarEventId !== undefined) {
+      plain.calendarEventId = task.calendarEventId;
+    }
+    if (task.userEdited !== undefined) {
+      plain.userEdited = task.userEdited;
+    }
+    if (task.repeat !== undefined) {
+      plain.repeat = task.repeat;
+    }
+    if (task.repeatText !== undefined) {
+      plain.repeatText = task.repeatText;
+    }
+    if (task.source !== undefined) {
+      plain.source = task.source;
+    }
+    if (task.originDetail !== undefined) {
+      plain.originDetail = task.originDetail;
+    }
+    if (task.category !== undefined) {
+      plain.category = task.category;
+    }
+    if (task.tags !== undefined) {
+      plain.tags = task.tags;
+    }
+    if (task.steps !== undefined) {
+      plain.steps = task.steps;
+    }
+    if (task.urls !== undefined) {
+      plain.urls = task.urls;
+    }
+    if (task.linkUrl !== undefined) {
+      plain.linkUrl = task.linkUrl;
+    }
+    if (task.certainty !== undefined) {
+      plain.certainty = task.certainty;
+    }
+    if (task.missingFields !== undefined) {
+      plain.missingFields = task.missingFields;
+    }
+    return plain;
   }
 
   /** 空壳判定：至少要有「名称 / 备注 / 原文 / ddl」之一，否则就是没信息的残留 */
@@ -131,18 +329,12 @@ export class TaskRepository {
   }
 
   static save(context: common.Context, tasks: Task[]): void {
-    const store: preferences.Preferences | undefined = TaskRepository.ensure(context);
-    if (store === undefined) {
-      return;
+    const plain: TaskPlain[] = [];
+    for (let i = 0; i < tasks.length; i++) {
+      plain.push(TaskRepository.toPlain(tasks[i]));
     }
-    try {
-      store.putSync(K_TASKS, JSON.stringify(tasks));
-      store.putSync(K_SCHEMA, SCHEMA_VERSION);
-      store.flushSync();
-    } catch (error) {
-      const err = error as BusinessError;
-      hilog.error(DOMAIN, TAG, 'save failed: %{public}s', err.message);
-    }
+    const text: string = JSON.stringify({ version: SCHEMA_VERSION, tasks: plain });
+    TaskRepository.writeFile(context, text);
   }
 
   static clear(context: common.Context): void {
@@ -185,6 +377,9 @@ export class TaskRepository {
     task.alarm = raw.alarm;
     task.remindAt = raw.remindAt;
     task.reminderId = raw.reminderId;
+    task.reminderAt = raw.reminderAt;
+    task.calendarEventId = raw.calendarEventId;
+    task.userEdited = raw.userEdited;
     task.repeatText = raw.repeatText;
     task.source = raw.source;
     task.originDetail = raw.originDetail;
