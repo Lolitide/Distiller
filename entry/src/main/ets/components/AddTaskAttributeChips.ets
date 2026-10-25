@@ -113,6 +113,8 @@ export struct AddTaskAttributeChips {
   @Param aiBusy: boolean = false;
   /** 语音页签还没接 ASR，不显示 AI 预填 */
   @Param showAi: boolean = true;
+  /** 解析置信度低：时间等「模型推断字段」用警示色标出来，提示用户核对 */
+  @Param lowConfidence: boolean = false;
   @Event onAiFill: () => void = () => {};
   /** 标签输入面板的草稿 */
   @Local tagDraft: string = '';
@@ -466,6 +468,8 @@ export struct AddTaskAttributeChips {
   private confirmPicker(): void {
     if (this.pickerKind === PICKER_DUE) {
       this.draft.dueAt = this.dueDraft.getTime();
+      // 用户亲手确认过时间 → 时间字段不再标「低可信」（地点等其它字段的提示保留）
+      this.draft.timeReviewed = true;
     } else if (this.pickerKind === PICKER_REMIND) {
       this.draft.remindAt = this.remindDraft.getTime();
     } else if (this.pickerKind === PICKER_REPEAT) {
@@ -538,16 +542,23 @@ export struct AddTaskAttributeChips {
    * ⚠️ 文案**直接在 build 里读 `this.dueChipLabel`**，不通过 `@Builder` 参数传 —— `@Builder` 的值参数不随状态刷新
    * （详情页 #? 的「点叉没生效」就是栽在这条上）。
    */
+  /** 时间字段是否要高亮：解析低可信 且 用户还没亲手改过 */
+  get dueLowConfidence(): boolean {
+    return this.lowConfidence && !this.draft.timeReviewed;
+  }
+
   @Builder
   dueChip() {
     Row({ space: CHIP_TEXT_MARGIN_VP }) {
       SymbolGlyph($r('sys.symbol.calendar'))
         .fontSize($r('sys.float.chip_small_icon_size'))
-        .fontColor([this.themeStore.scheme.primary])
+        .fontColor([this.dueLowConfidence ? this.themeStore.scheme.error : this.themeStore.scheme.primary])
 
-      Text(this.dueChipLabel)
+      Text(this.dueLowConfidence && this.draft.dueAt !== UNSET ? this.dueChipLabel + ' · 待核对' : this.dueChipLabel)
         .fontSize($r('sys.float.chip_small_font_size'))
-        .fontColor($r('sys.color.ohos_id_color_text_primary'))
+        .fontColor(this.dueLowConfidence
+          ? this.themeStore.scheme.error
+          : $r('sys.color.ohos_id_color_text_primary'))
         .maxLines(1)
 
       if (this.draft.dueAt !== UNSET) {
@@ -563,7 +574,14 @@ export struct AddTaskAttributeChips {
       right: $r('sys.float.chip_small_text_padding')
     })
     .alignItems(VerticalAlign.Center)
-    .backgroundColor(this.themeStore.scheme.surfaceContainerHighest)
+    // 低可信（解析出的到期时间还没被用户核对过）→ 错误容器底色 + 1vp 描边；
+    // 常态仍走 M3 `surfaceContainerHighest`（与同表单其它 chip 同一档，不再退回旧的系统冷灰 token）
+    .backgroundColor(this.dueLowConfidence
+      ? this.themeStore.scheme.errorContainer
+      : this.themeStore.scheme.surfaceContainerHighest)
+    .border(this.dueLowConfidence
+      ? { width: 1, color: this.themeStore.scheme.error }
+      : { width: 0, color: Color.Transparent })
     .borderRadius($r('sys.float.chip_border_radius_small'))
     .onClick(() => {
       this.openDuePicker();

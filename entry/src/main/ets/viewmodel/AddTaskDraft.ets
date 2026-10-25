@@ -31,8 +31,6 @@ import { CandidateItem, RepeatRuleDto } from '../service/backend/BackendTypes';
 /** 「未设置」的哨兵（时间戳不可能为 0；档位取不到就是 -1） */
 const UNSET_NUMBER: number = 0;
 const UNSET_INDEX: number = -1;
-/** 置信度「没给」的哨兵：0 是合法置信度（等于"完全不可信"），不能拿它当未设置 */
-const UNSET_CERTAINTY: number = -1;
 
 /**
  * 重复档位 → 契约里的 `RepeatFrequency`（顺序与 chips / 详情页的 `REPEAT_OPTIONS` 一致：
@@ -90,12 +88,16 @@ interface DraftSnapshot {
   dueText: string;
   repeatText: string;
   linkUrl: string;
+  /** AI 预填的置信度（0 ＝ 非解析来源）；随草稿落盘，关掉半模态再打开提示还在 */
+  certainty?: number;
+  /** 后端声明的缺失字段（`missing_fields`） */
+  missingFields?: string[];
+  /** 本次预填是否来自规则降级（后端 engine=rules） */
+  degraded?: boolean;
+  /** 用户是否已手动确认过到期时间 */
+  timeReviewed?: boolean;
   steps: DraftStepSnapshot[];
   repeat?: DraftRepeatSnapshot;
-  /** AI 预填的置信度（-1 ＝ 不是 AI 预填）；随草稿落盘，关掉半模态再打开提示还在 */
-  certainty: number;
-  /** 后端声明的缺失字段 */
-  missingFields: string[];
 }
 
 @ObservedV2
@@ -148,16 +150,13 @@ export class AddTaskDraft {
   @Trace repeatText: string = '';
   /** 扫码得到的直达链接（二维码/条形码是 URL 时） */
   @Trace linkUrl: string = '';
+  /** 解析置信度 0~100（0 = 非解析来源）；低于阈值时表单提示「低可信」 */
+  @Trace certainty: number = 0;
+  /** 本次预填是否来自规则降级（后端 engine=rules） */
+  @Trace degraded: boolean = false;
+  /** 用户已手动确认过到期时间：低可信提示不再标在时间字段上 */
+  @Trace timeReviewed: boolean = false;
   @Trace steps: TaskStep[] = [];
-
-  /**
-   * **AI 预填的置信度**（0~100 整数）；`-1` ＝ 不是 AI 预填、或后端没给。
-   *
-   * 之前 `applyParsed()` **完全不读 `certainty`** —— 候选带着 30% 的可信度被填进表单，
-   * 界面照样一句"已自动填写，请确认后保存"，用户以为填得挺准，存下来的任务也把 `certainty` 丢了。
-   * 现在它留在这里：表单据此给低可信提示（`ParseConfidenceHint`），保存时写回 `Task.certainty`。
-   */
-  @Trace certainty: number = UNSET_CERTAINTY;
 
   /**
    * 后端声明的 `missing_fields`（原样保留，用于**溯源**与"后端认定缺了什么"的提示）。
@@ -170,11 +169,6 @@ export class AddTaskDraft {
   /** 名称非空才能保存（「保存」按钮的灰/亮看它） */
   get canSave(): boolean {
     return this.name.trim().length > 0;
-  }
-
-  /** 这份草稿是不是 AI 预填出来的（有置信度或有后端声明缺失字段）—— 决定表单要不要挂提示条 */
-  get hasParseHint(): boolean {
-    return this.certainty !== UNSET_CERTAINTY || this.parsedMissing.length > 0;
   }
 
   /**
@@ -264,12 +258,12 @@ export class AddTaskDraft {
     if (this.linkUrl.length > 0) {
       task.linkUrl = this.linkUrl;
     }
+    // 置信度：AI 预填过才带（`0` ＝ 不是解析来源；手动建的任务没有"可信度"这回事，留 undefined）
+    if (this.certainty > 0) {
+      task.certainty = this.certainty;
+    }
     if (this.steps.length > 0) {
       task.steps = this.steps;
-    }
-    // 置信度：AI 预填过才带（手动建的任务没有"可信度"这回事，留 undefined）
-    if (this.certainty !== UNSET_CERTAINTY) {
-      task.certainty = this.certainty;
     }
     const urls: string[] = [];
     if (this.imageUri.length > 0) {
@@ -352,6 +346,9 @@ export class AddTaskDraft {
     if (c.category !== undefined && c.category.length > 0) {
       this.category = c.category;
     }
+    this.certainty = c.certainty !== undefined ? Math.round(c.certainty) : Math.round(c.confidence * 100);
+    this.degraded = c.degraded === true;
+    this.timeReviewed = false;
 
     const mergedTags: string[] = this.tags.slice();
     for (let i = 0; i < c.tags.length; i++) {
@@ -413,7 +410,7 @@ export class AddTaskDraft {
     } else if (c.confidence !== undefined) {
       this.certainty = Math.round(c.confidence * 100);
     } else {
-      this.certainty = UNSET_CERTAINTY;
+      this.certainty = 0;
     }
     this.parsedMissing = c.missing_fields !== undefined ? c.missing_fields.slice() : [];
   }
@@ -438,10 +435,12 @@ export class AddTaskDraft {
     this.dueText = '';
     this.repeatText = '';
     this.linkUrl = '';
+    this.certainty = 0;
+    this.degraded = false;
+    this.timeReviewed = false;
+    this.parsedMissing = [];
     this.steps = [];
     this.repeatRule = undefined;
-    this.certainty = UNSET_CERTAINTY;
-    this.parsedMissing = [];
   }
 
   /** 序列化草稿（落盘用）：只存表单字段，不含任何后端数据/身份信息 */
@@ -485,10 +484,12 @@ export class AddTaskDraft {
       dueText: this.dueText,
       repeatText: this.repeatText,
       linkUrl: this.linkUrl,
-      steps: steps,
-      repeat: repeat,
       certainty: this.certainty,
-      missingFields: this.parsedMissing
+      missingFields: this.parsedMissing,
+      degraded: this.degraded,
+      timeReviewed: this.timeReviewed,
+      steps: steps,
+      repeat: repeat
     };
     return JSON.stringify(snapshot);
   }
@@ -522,9 +523,11 @@ export class AddTaskDraft {
       this.dueText = s.dueText !== undefined ? s.dueText : '';
       this.repeatText = s.repeatText !== undefined ? s.repeatText : '';
       this.linkUrl = s.linkUrl !== undefined ? s.linkUrl : '';
-      // 旧草稿（这个字段之前没存）→ 按"不是 AI 预填"处理，提示条不出现，与改造前行为一致
-      this.certainty = s.certainty !== undefined ? s.certainty : UNSET_CERTAINTY;
+      // 旧草稿（这些字段之前没存）→ 按"不是 AI 预填"处理，低可信提示不出现，与改造前行为一致
+      this.certainty = s.certainty !== undefined ? s.certainty : 0;
       this.parsedMissing = s.missingFields !== undefined ? s.missingFields : [];
+      this.degraded = s.degraded === true;
+      this.timeReviewed = s.timeReviewed === true;
 
       const steps: TaskStep[] = [];
       if (s.steps !== undefined) {

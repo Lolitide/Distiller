@@ -16,6 +16,10 @@
         "name": "ohos.permission.INTERNET"
       },
       {
+        // 后台代理提醒（Reminder Agent）：到点响铃；部分设备有管控，发布失败会回滚开关
+        "name": "ohos.permission.PUBLISH_AGENT_REMINDER"
+      },
+      {
         "name": "ohos.permission.MICROPHONE",
         "reason": "$string:permission_mic_reason",
         "usedScene": {
@@ -60,6 +64,29 @@
             ],
             "actions": [
               "ohos.want.action.home"
+            ]
+          },
+          {
+            // 系统分享目标：QQ/相册把文本或图片分享给「知了」
+            "actions": [
+              "ohos.want.action.sendData"
+            ],
+            "uris": [
+              {
+                "scheme": "file",
+                "utd": "general.text",
+                "maxFileSupported": 1
+              },
+              {
+                "scheme": "file",
+                "utd": "general.plain-text",
+                "maxFileSupported": 1
+              },
+              {
+                "scheme": "file",
+                "utd": "general.image",
+                "maxFileSupported": 1
+              }
             ]
           }
         ]

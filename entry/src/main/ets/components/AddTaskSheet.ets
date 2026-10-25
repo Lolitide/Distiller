@@ -28,13 +28,13 @@ import { DraftRepository } from '../repository/DraftRepository';
 import { common } from '@kit.AbilityKit';
 import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
 import { TaskListStore } from '../viewmodel/TaskListStore';
+import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 import { AddTaskAttributeChips } from './AddTaskAttributeChips';
 import { AddTaskNameInput } from './AddTaskNameInput';
 import { AddTaskRecorder } from './AddTaskRecorder';
 import { AddTaskScreenshotPicker } from './AddTaskScreenshotPicker';
 import { AddTaskSource, AddTaskSourceTabs } from './AddTaskSourceTabs';
 import { AddTaskTextInput } from './AddTaskTextInput';
-import { ParseConfidenceHint } from './ParseConfidenceHint';
 
 /** 标题行左右内边距（vp）：与下面内容区对齐（官方 `padding_level8` = 16vp） */
 const HEADER_SIDE_PADDING_VP: number = 16;
@@ -76,6 +76,8 @@ export struct AddTaskSheet {
    * 页面层可以把它落盘，下次点「＋」继续编辑。
    */
   @Require @Param draft: AddTaskDraft;
+  /** 大于 0 时自动触发一次 AI 预填（系统分享带入内容后使用） */
+  @Param autoParseKey: number = 0;
 
   aboutToDisappear(): void {
     // 划掉半模态 / 切页导致销毁：把当前填写内容存起来（保存成功后会 clear）
@@ -213,10 +215,29 @@ export struct AddTaskSheet {
     const task: Task = this.draft.toTask(this.store.nextTaskId());
     this.store.addTask(task);
     this.draft.reset();
+    this.lowHintDismissed = false;
     this.onSaved();
   }
 
   @Local aiBusy: boolean = false;
+  /** 用户点了「知道了」后本次不再显示低可信提示 */
+  @Local lowHintDismissed: boolean = false;
+  /** 解析失败：分类展示 + 重试/手动填写（FE-41） */
+  @Local parseErrorCode: string = '';
+  @Local parseErrorMsg: string = '';
+
+  aboutToAppear(): void {
+    if (this.autoParseKey > 0) {
+      this.aiFill();
+    }
+  }
+
+  @Monitor('autoParseKey')
+  onAutoParseKeyChanged(): void {
+    if (this.autoParseKey > 0) {
+      this.aiFill();
+    }
+  }
 
   /**
    * AI 预填：文本/截图 → 后端 `/parse` → 把名称/时间/优先级/标签/地点填进草稿。
@@ -224,6 +245,13 @@ export struct AddTaskSheet {
    */
   private async aiFill(): Promise<void> {
     if (this.aiBusy) {
+      return;
+    }
+    if (this.draft.sourceTab === AddTaskSource.SCREENSHOT) {
+      if (this.draft.imageUri.length === 0) {
+        return;
+      }
+    } else if (this.draft.rawText.trim().length === 0) {
       return;
     }
     this.aiBusy = true;
@@ -235,9 +263,12 @@ export struct AddTaskSheet {
         result = await ManualParseService.parseText(this.draft.rawText);
       }
       if (!result.ok || result.candidate === undefined) {
-        this.toast(result.message.length > 0 ? result.message : '没解析出内容，请手动填写');
+        this.parseErrorCode = result.code !== undefined ? result.code : 'unknown';
+        this.parseErrorMsg = result.message.length > 0 ? result.message : '没能识别出任务内容';
         return;
       }
+      this.parseErrorCode = '';
+      this.parseErrorMsg = '';
       const candidate: CandidateItem = result.candidate;
       this.draft.applyParsed(candidate, this.store.remindLeadMinutes);
       if (result.link !== undefined && result.link.length > 0) {
@@ -249,6 +280,9 @@ export struct AddTaskSheet {
       }
       const where: string = result.localOcr === true ? '已在手机本地识别文字，' : '';
       this.toast(where + '已自动填写，请确认后保存');
+    } catch (error) {
+      this.parseErrorCode = 'unknown';
+      this.parseErrorMsg = '解析时出错了，请重试或手动填写';
     } finally {
       this.aiBusy = false;
     }
@@ -260,6 +294,156 @@ export struct AddTaskSheet {
     } catch (error) {
       // toast 失败不影响主流程
     }
+  }
+
+  /** 解析失败的可执行文案（按错误码分类） */
+  private parseErrorText(): string {
+    if (this.parseErrorCode === 'no_server') {
+      return '还没有配置服务器地址，先去设置里填上再解析。';
+    }
+    if (this.parseErrorCode === 'network') {
+      return '连不上服务器，检查手机网络和服务器地址后重试。';
+    }
+    if (this.parseErrorCode === 'not_supported') {
+      return '服务器没开图片识别，请改用文字输入，或手动填写。';
+    }
+    if (this.parseErrorCode === 'unauthorized') {
+      return '设备身份失效，去设置里重新绑定后再解析。';
+    }
+    if (this.parseErrorCode === 'bad_response' || this.parseErrorCode === 'bad_json') {
+      return '服务器返回异常，稍后重试；也可以直接手动填写。';
+    }
+    return this.parseErrorMsg.length > 0 ? this.parseErrorMsg : '没能识别出任务内容，请重试或手动填写。';
+  }
+
+  /** 解析失败卡：重试 / 手动填写（FE-41） */
+  @Builder
+  parseErrorCard() {
+    Column({ space: 8 }) {
+      Text('没能识别这段内容')
+        .fontSize($r('sys.float.ohos_id_text_size_body2'))
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.themeStore.scheme.error)
+      Text(this.parseErrorText())
+        .fontSize($r('sys.float.ohos_id_text_size_body2'))
+        .fontColor(this.themeStore.scheme.onSurfaceVariant)
+        .width('100%')
+      Row({ space: 12 }) {
+        Text(this.aiBusy ? '识别中…' : '重试')
+          .fontSize(13)
+          .fontColor(this.aiBusy ? this.themeStore.scheme.onSurfaceVariant : this.themeStore.scheme.primary)
+          .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+          .borderRadius(14)
+          .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
+          .onClick(() => {
+            if (!this.aiBusy) {
+              this.aiFill();
+            }
+          })
+        Text('手动填写')
+          .fontSize(13)
+          .fontColor(this.themeStore.scheme.onSurfaceVariant)
+          .padding({ left: 12, right: 12, top: 6, bottom: 6 })
+          .borderRadius(14)
+          .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
+          .onClick(() => {
+            this.parseErrorCode = '';
+            this.parseErrorMsg = '';
+            setTimeout(() => {
+              focusControl.requestFocus('addTaskNameInput');
+            }, 0);
+          })
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .padding(12)
+    .alignItems(HorizontalAlign.Start)
+    .backgroundColor(this.themeStore.scheme.errorContainer)
+    .borderRadius(12)
+    .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
+  }
+
+  /**
+   * 解析结果里「没识别出来的字段」——按**当前草稿**现算（用户补上就消失）。
+   * 与「低可信」是两件事：置信度可能不低，但某些字段确实空着。
+   */
+  @Computed
+  get missingFieldText(): string {
+    const fields: string[] = this.draft.missingHints();
+    const names: string[] = [];
+    for (let i = 0; i < fields.length; i++) {
+      names.push(TaskListViewModel.missingFieldLabel(fields[i]));
+    }
+    return names.join('、');
+  }
+
+  /** 解析提示条要不要出现：低可信，或者有没识别出来的字段 */
+  @Computed
+  get showParseEvidence(): boolean {
+    const low: boolean = this.draft.certainty > 0 && this.draft.certainty < 60;
+    return low || this.missingFieldText.length > 0;
+  }
+
+  /** 解析依据：低可信提示 ＋ 未识别字段（确认闸的一部分：看得见「为什么这么填」） */
+  @Builder
+  parseEvidence() {
+    Column({ space: 8 }) {
+      if (!this.lowHintDismissed && this.showParseEvidence) {
+        Row({ space: 8 }) {
+          Text('!')
+            .fontSize(13)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(this.themeStore.scheme.onErrorContainer)
+            .width(18)
+            .height(18)
+            .textAlign(TextAlign.Center)
+            .borderRadius(9)
+            .backgroundColor(this.themeStore.scheme.errorContainer)
+          Column({ space: 2 }) {
+            Text(this.draft.certainty > 0 && this.draft.certainty < 60
+              ? '低可信，请核对时间与地点'
+              : '有些字段没识别出来，请补齐')
+              .fontSize(13)
+              .fontColor(this.themeStore.scheme.error)
+            // 未识别字段清单（合并 FE-40 的 missing_fields 提示；按当前草稿现算）
+            if (this.missingFieldText.length > 0) {
+              Text('未识别：' + this.missingFieldText)
+                .fontSize(11)
+                .fontColor(this.themeStore.scheme.onSurfaceVariant)
+            }
+            if (this.draft.degraded) {
+              Text('本次为规则降级解析，建议重新解析或手动补齐')
+                .fontSize(11)
+                .fontColor(this.themeStore.scheme.onSurfaceVariant)
+            }
+          }
+          .layoutWeight(1)
+          .alignItems(HorizontalAlign.Start)
+
+          Text('重新解析')
+            .fontSize(12)
+            .fontColor(this.themeStore.scheme.primary)
+            .onClick(() => {
+              this.aiFill();
+            })
+          Text('知道了')
+            .fontSize(12)
+            .fontColor(this.themeStore.scheme.onSurfaceVariant)
+            .onClick(() => {
+              this.lowHintDismissed = true;
+            })
+        }
+        .width('100%')
+        .padding(10)
+        .backgroundColor(this.themeStore.scheme.errorContainer)
+        .borderRadius(12)
+      }
+
+    }
+    .width('100%')
+    .alignItems(HorizontalAlign.Start)
+    .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
   }
 
   build() {
@@ -303,16 +487,19 @@ export struct AddTaskSheet {
           // ⚠️ 这里**不 `layoutWeight(1)`**：内容区按自身高度贴着按钮组，下面才是名称框与芯片行。
           .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
 
+          // 解析失败：分类错误卡 + 重试 / 手动填写
+          if (this.parseErrorCode.length > 0) {
+            this.parseErrorCard()
+          }
+
+          // 解析结果提示：低可信 / 未识别字段；原文不再重复展示（在任务详情页看，见 TaskRawTextCard）
+          if (this.showParseEvidence) {
+            this.parseEvidence()
+          }
+
           // —— 任务名称输入框：三种来源共用（名称与来源无关），紧跟在内容区下面 ——
           AddTaskNameInput({ draft: this.draft })
             .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
-
-          // —— AI 预填结果提示：置信度偏低 / 哪些字段没识别出来（只在 AI 预填过之后出现）——
-          // 位置在名称与属性芯片之间：用户看完"填了什么"（名称）之后、动手改之前，先知道哪里要核对。
-          if (this.draft.hasParseHint) {
-            ParseConfidenceHint({ draft: this.draft })
-              .margin({ top: LengthMetrics.resource($r('sys.float.padding_level4')) })
-          }
 
           // —— 属性芯片行：截止日期 / 提醒我 / 重复 / 重要程度 / 来源 / ＋添加标签 / AI 预填 ——
           // AI 预填与「＋ 添加标签」同一行、同一种动作芯片（不再单独占一行）。
@@ -321,6 +508,7 @@ export struct AddTaskSheet {
             draft: this.draft,
             aiBusy: this.aiBusy,
             showAi: true,
+            lowConfidence: this.draft.certainty > 0 && this.draft.certainty < 60,
             onAiFill: () => {
               this.aiFill();
             }

@@ -32,6 +32,10 @@ const KEY_DENSITY: string = 'card_density';
  * 2026-10-20 起持久化（需求方：「记住上次的展开状态」）。
  */
 const KEY_GROUP_EXPANDED: string = 'task_group_expanded';
+/** 云端同步开关：关掉后不再轮询 /candidates */
+const KEY_SYNC_ENABLED: string = 'sync_enabled';
+/** 首次启动引导是否已看过 */
+const KEY_FIRST_LAUNCH: string = 'first_launch_done';
 
 /** 默认提醒提前量：0 分钟（到点提醒） */
 export const DEFAULT_REMIND_LEAD: number = 0;
@@ -235,6 +239,70 @@ export class SettingsRepository {
     } catch (error) {
       const err = error as BusinessError;
       hilog.error(DOMAIN, TAG, 'setGroupExpanded failed: %{public}s', err.message);
+      return false;
+    }
+  }
+
+  /** 云端同步是否开启（默认开：只有绑定过服务器的用户才会真的有数据） */
+  static async getSyncEnabled(context: common.Context, fallback: boolean = true): Promise<boolean> {
+    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
+    if (store === undefined) {
+      return fallback;
+    }
+    try {
+      const value: preferences.ValueType = await store.get(KEY_SYNC_ENABLED, fallback);
+      return typeof value === 'boolean' ? value : fallback;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'getSyncEnabled failed: %{public}s', err.message);
+      return fallback;
+    }
+  }
+
+  static async setSyncEnabled(context: common.Context, enabled: boolean): Promise<boolean> {
+    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
+    if (store === undefined) {
+      return false;
+    }
+    try {
+      await store.put(KEY_SYNC_ENABLED, enabled);
+      await store.flush();
+      return true;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'setSyncEnabled failed: %{public}s', err.message);
+      return false;
+    }
+  }
+
+  /** 首次启动引导是否已完成 */
+  static async getFirstLaunchDone(context: common.Context): Promise<boolean> {
+    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
+    if (store === undefined) {
+      return false;
+    }
+    try {
+      const value: preferences.ValueType = await store.get(KEY_FIRST_LAUNCH, false);
+      return value === true;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'getFirstLaunchDone failed: %{public}s', err.message);
+      return false;
+    }
+  }
+
+  static async setFirstLaunchDone(context: common.Context, done: boolean = true): Promise<boolean> {
+    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
+    if (store === undefined) {
+      return false;
+    }
+    try {
+      await store.put(KEY_FIRST_LAUNCH, done);
+      await store.flush();
+      return true;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'setFirstLaunchDone failed: %{public}s', err.message);
       return false;
     }
   }

@@ -6,7 +6,10 @@ import { ThemeStore } from '../utils/Theme';
  *  ① 「点任务卡片 → 滑进来一个详情页 → 能返回」✓（与搜索页同一套顶栏）；
  *  ② 正文第一块：**可编辑的任务名** ✓ —— 字号/字重用与列表页导航栏 mainTitle **同一套官方 token**，
  *     名称前带卡片前缀里那个**状态圆圈**，已完成时名称变灰，点名称进入编辑、按回车提交。
- *  其余详情内容（备注 / 原文对照 / 地点 / 对象 / 类型 / 链接 / 置信度 / 缺失字段 / 步骤…）**待做**。
+ *  ③ 正文其余各块（2026-10-25，`feature/mvp-completion` 合并后的现状）：
+ *     原文对照（`TaskRawTextCard`，只读＋可折叠＋可复制）/ 步骤 / 媒体 / 提醒·到期·重复 /
+ *     来源 / 标签 / 备注 / 更多信息（状态分段 · 难易 · 类型 · 地点 · 置信度 · 时间戳）。
+ *     仍缺的：缺失字段（`missingFields`）没有专门一栏。
  *
  * 页面级约定（前几轮踩出来的，别再犯）：
  *  · `HdsNavDestination` 的 `titleMode` 默认 **MINI ＝ 56vp**（不是主页 FREE 的 112vp）；
@@ -28,7 +31,8 @@ import { TaskTagsCard } from '../components/TaskTagsCard';
 import { TaskNoteCard } from '../components/TaskNoteCard';
 import { TaskRawTextCard } from '../components/TaskRawTextCard';
 import { TaskMediaCard } from '../components/TaskMediaCard';
-import { TaskAlarm, TaskStatus } from '../model';
+import { FeedbackService } from '../service/cloud/FeedbackService';
+import { Task, TaskAlarm, TaskStatus } from '../model';
 import { NAV_STACK_KEY, TaskDetailParam } from '../viewmodel/TaskNavParams';
 import { showDeleteConfirmDialog } from '../utils/DeleteConfirmDialog';
 
@@ -67,6 +71,8 @@ export struct B_TaskDetail {
   @Local statusBarVp: number = 0;
   /** 改名时的草稿（提交前不写回任务） */
   @Local draftName: string = '';
+  /** 进入页面时的内容快照：离开时对比，只有真改过才标记 userEdited（避免轮询覆盖） */
+  private snapshot: string = '';
   /** 改名输入框的控制器：进入编辑时把光标放到文本末尾（不默认全选） */
   private nameController: TextInputController = new TextInputController();
 
@@ -94,6 +100,24 @@ export struct B_TaskDetail {
   aboutToAppear(): void {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
     this.syncStatusBarHeight();
+    this.snapshot = this.contentSnapshot();
+  }
+
+  /** 内容字段快照（用于判断用户是否真的改过；不含 status/reminderId 等系统态） */
+  private contentSnapshot(): string {
+    const t: Task = this.param.task;
+    return JSON.stringify({
+      name: t.name,
+      note: t.note,
+      dueAt: t.dueAt,
+      place: t.place,
+      who: t.who,
+      priority: t.priority,
+      level: t.level,
+      category: t.category,
+      tags: t.tags,
+      steps: t.steps
+    });
   }
 
   /**
@@ -127,6 +151,12 @@ export struct B_TaskDetail {
 
   aboutToDisappear(): void {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.OFFSET);
+    // 真改过内容才置脏：置脏后 5 秒轮询不再覆盖这些字段（FE-79）
+    if (this.contentSnapshot() !== this.snapshot) {
+      this.param.task.userEdited = true;
+    }
+    // 详情页的字段是「直接改 Task」，离开时统一落盘一次（FE-30：重启后编辑仍在）
+    this.param.store.saveNow();
   }
 
   /** 点名称 → 进入编辑：草稿从当前值起（抢焦点交给输入框的 `onAppear`，见 nameRow） */
@@ -184,6 +214,14 @@ export struct B_TaskDetail {
     const stack: NavPathStack | undefined = AppStorage.get<NavPathStack>(NAV_STACK_KEY);
     if (stack !== undefined) {
       stack.pop();
+    }
+  }
+
+  private showToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: message });
+    } catch (error) {
+      // toast 失败不影响主流程
     }
   }
 
@@ -337,6 +375,36 @@ export struct B_TaskDetail {
             .width('100%')
             .padding({ top: 8 })
 
+            // 采纳 / 忽略（FE-75）：只对来自后端候选的任务显示。
+            // ⚠️ 这里原来还有一颗「开始执行 / 标记完成」按钮（MVP 支的状态入口）；
+            // 合并后状态统一由下方「更多信息卡 → 状态」那段承担（六态全在，且能来回改），
+            // 免得同一页出现两个改状态的地方。
+            if (this.param.task.clientTaskId !== undefined && this.param.task.clientTaskId.length > 0) {
+              Row({ space: 8 }) {
+                Text('有用')
+                  .fontSize(13)
+                  .fontColor(this.themeStore.scheme.primary)
+                  .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+                  .onClick(() => {
+                    FeedbackService.send(this.param.task, 'accept');
+                    this.showToast('已记录：这条整理对你有用');
+                  })
+                Text('忽略')
+                  .fontSize(13)
+                  .fontColor(this.themeStore.scheme.onSurfaceVariant)
+                  .padding({ left: 10, right: 10, top: 6, bottom: 6 })
+                  .onClick(() => {
+                    FeedbackService.send(this.param.task, 'dismiss');
+                    this.param.store.deleteTask(this.param.task.id);
+                    this.popBack();
+                    this.showToast('已忽略，之后不再优先推送');
+                  })
+              }
+              .width('100%')
+              .padding({ left: CONTENT_SIDE_PADDING_VP, right: CONTENT_SIDE_PADDING_VP, top: 8 })
+              .justifyContent(FlexAlign.Start)
+            }
+
             // 第二块：步骤（需求方 2026-10-16 的 4 张交互图，见 `TaskStepsSection` 顶部注释）
             Column() {
               TaskStepsSection({ task: this.param.task })
@@ -353,6 +421,20 @@ export struct B_TaskDetail {
               || (this.param.task.linkUrl !== undefined && this.param.task.linkUrl.length > 0)) {
               Column() {
                 TaskMediaCard({ task: this.param.task })
+              }
+              .width('100%')
+              .padding({
+                left: CONTENT_SIDE_PADDING_VP,
+                right: CONTENT_SIDE_PADDING_VP,
+                top: CONTENT_GAP_VP
+              })
+            }
+
+            // 原文卡：这条任务从哪段话整理出来的（粘贴 / 截图 / 语音 / 群消息）。
+            // 只读 ＋ 可折叠 ＋ 可复制；`rawText` 为空时整卡不渲染（手建且没填原文的任务）。
+            if (this.param.task.rawText !== undefined && this.param.task.rawText.trim().length > 0) {
+              Column() {
+                TaskRawTextCard({ task: this.param.task })
               }
               .width('100%')
               .padding({
@@ -408,21 +490,6 @@ export struct B_TaskDetail {
               right: CONTENT_SIDE_PADDING_VP,
               top: CONTENT_GAP_VP
             })
-
-            // 第七块：**原文对照**（`rawText`，字段表第 6 项「原文」）。
-            // 紧接着备注卡：一张是"人写的总结"、一张是"机器读的原话"，放一起才是对照。
-            // 只读 ＋ 可折叠 ＋ 可复制；`rawText` 为空时整卡不渲染（手建且没填原文的任务）。
-            if (this.param.task.rawText !== undefined && this.param.task.rawText.trim().length > 0) {
-              Column() {
-                TaskRawTextCard({ task: this.param.task })
-              }
-              .width('100%')
-              .padding({
-                left: CONTENT_SIDE_PADDING_VP,
-                right: CONTENT_SIDE_PADDING_VP,
-                top: CONTENT_GAP_VP
-              })
-            }
 
             // 第七块：更多信息卡（状态 / 难易程度 / 类型 / 地点 / 链接 / 置信度 / 创建于 / 完成于）
             // **挪到最后**（2026-10-19「详情部分的显示优先级、分组可做优化调整」）：

@@ -40,6 +40,11 @@ export class RelayApi {
     return await ApiClient.get<BindStatusData>(BASE + '/bind/status');
   }
 
+  /** 重新绑定前清掉旧绑定（否则刚生成新码就会被旧 bound=true 判成功） */
+  static async resetBind(): Promise<ApiResult<Record<string, Object>>> {
+    return await ApiClient.post<Record<string, Object>>(BASE + '/bind/reset', {});
+  }
+
   static async groups(): Promise<ApiResult<GroupsData>> {
     return await ApiClient.get<GroupsData>(BASE + '/groups');
   }

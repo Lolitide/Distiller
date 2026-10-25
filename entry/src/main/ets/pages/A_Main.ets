@@ -13,7 +13,10 @@ import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
 import { DraftRepository } from '../repository/DraftRepository';
 import { SettingsRepository } from '../repository/SettingsRepository';
 import { SyncService } from '../service/cloud/SyncService';
-import { TaskExpiryService } from '../service/system/TaskExpiryService';
+import { NotificationService } from '../service/system/NotificationService';
+import { ShareIntake, SharePayload, SHARE_KIND_IMAGE } from '../service/share/ShareIntake';
+import { AddTaskSource } from '../components/AddTaskSourceTabs';
+import { A_Onboarding } from './A_Onboarding';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'A_Main';
@@ -55,9 +58,17 @@ struct A_Main {
   @Local addSheetShown: boolean = false;
   /** 「添加任务」的草稿：由页面持有，关闭半模态时落盘、下次点「＋」恢复 */
   private addDraft: AddTaskDraft = new AddTaskDraft();
+  /** 分享带入内容后自增，AddTaskSheet 据此自动解析；0 表示普通新建 */
+  @Local shareParseKey: number = 0;
+  /** 首次启动引导 */
+  @Local showOnboarding: boolean = false;
 
   /** 视觉个性化：M3 色系（页面底色取 surface） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
+  /** 提醒/日历对账定时器（分钟级就够） */
+  private reminderTimer: number = -1;
+  /** 通知引导弹窗每次启动只弹一次，避免每分钟对账重复打扰 */
+  @Local notificationGuideShown: boolean = false;
 
   /**
    * 把导航栈放进 `AppStorage`：点卡片进详情这件事发生在 `A_TaskList`（以及搜索页的 `B_Search`）里，
@@ -70,6 +81,66 @@ struct A_Main {
     this.syncTheme();
     this.syncGroupExpand();
     this.startBackend();
+    this.setupShare();
+    this.setupOnboarding();
+  }
+
+  /** 首次启动：没看过引导就全屏覆盖；不阻塞列表初始化 */
+  private setupOnboarding(): void {
+    if (this.shareParseKey > 0) {
+      // 从分享冷启动：先处理分享，引导留到下次普通启动
+      return;
+    }
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      return;
+    }
+    SettingsRepository.getFirstLaunchDone(context).then((done: boolean) => {
+      if (!done && this.shareParseKey === 0) {
+        this.showOnboarding = true;
+      }
+    });
+  }
+
+  private finishOnboarding(): void {
+    this.showOnboarding = false;
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context !== undefined) {
+      SettingsRepository.setFirstLaunchDone(context);
+    }
+  }
+
+  /** 分享接收：热启动走监听，冷启动先取暂存；同一次分享只消费一次 */
+  private setupShare(): void {
+    ShareIntake.setListener((payload: SharePayload) => {
+      this.openShare(payload);
+    });
+    const pending: SharePayload | undefined = ShareIntake.consumePending();
+    if (pending !== undefined) {
+      this.openShare(pending);
+    }
+    const error: string = ShareIntake.consumeError();
+    if (error.length > 0) {
+      this.toast(error);
+    }
+  }
+
+  /** 把分享内容放进「添加任务」确认面，并自动触发一次解析 */
+  private openShare(payload: SharePayload): void {
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context !== undefined) {
+      DraftRepository.clear(context);
+    }
+    this.addDraft.reset();
+    if (payload.kind === SHARE_KIND_IMAGE) {
+      this.addDraft.sourceTab = AddTaskSource.SCREENSHOT;
+      this.addDraft.imageUri = payload.uri;
+    } else {
+      this.addDraft.sourceTab = AddTaskSource.TEXT;
+      this.addDraft.rawText = payload.text;
+    }
+    this.shareParseKey = Date.now();
+    this.addSheetShown = true;
   }
 
   /**
@@ -83,17 +154,37 @@ struct A_Main {
     if (context === undefined) {
       return;
     }
+    // `store.init` 内部已经跑过一次「已过期」扫描（FE-29：`syncExpiredStatus`），
+    // 所以这里不用再单独扫一遍；之后由下面这个 60 秒定时器 + `SyncService` 的 5 秒 tick 持续兜住。
     this.store.init(context);
-    // 冷启动先扫一次「已过期」：上次落盘的任务可能早就过了截止时间，
-    // 首帧就该是正确状态，不必等 5 秒后的第一次轮询（写逻辑在 store.syncExpiredStatus）。
-    TaskExpiryService.scanOnce();
+    this.store.setReminderFailureListener((message: string, code: number) => {
+      this.onReminderFailure(message, code);
+    });
+    // 通知/横幅权限：代理提醒依赖它；被拒后用户仍可从设置页重新打开
+    NotificationService.ensureEnabled(context as common.UIAbilityContext).then((enabled: boolean) => {
+      if (!enabled) {
+        this.showNotificationGuide();
+      }
+    });
+    // 提醒/日历对账：启动先清掉系统里残留的「幽灵提醒」再重建，之后每分钟一次
+    this.store.resetStaleReminders();
+    this.reminderTimer = setInterval(() => {
+      this.store.expireOverdue();
+      this.store.reconcileReminders();
+    }, 60000);
     SyncService.init(context);
-    SyncService.start();
-    SyncService.syncOnce();
+    SettingsRepository.getSyncEnabled(context).then((enabled: boolean) => {
+      // 关掉同步就不轮询；打开会立即拉一次
+      SyncService.setEnabled(enabled);
+    });
   }
 
   aboutToDisappear(): void {
     SyncService.stop();
+    if (this.reminderTimer >= 0) {
+      clearInterval(this.reminderTimer);
+      this.reminderTimer = -1;
+    }
   }
 
   /**
@@ -201,6 +292,46 @@ struct A_Main {
     }
   }
 
+  /** 提醒发布失败：额度满直接说清楚；其余按「通知没开」引导到系统设置 */
+  private onReminderFailure(message: string, code: number): void {
+    this.toast(message);
+    if (code !== 1700002) {
+      this.showNotificationGuide();
+    }
+  }
+
+  /** 通知未开启的引导（每次启动只弹一次；「去开启」直接跳系统通知管理） */
+  private showNotificationGuide(): void {
+    if (this.notificationGuideShown) {
+      return;
+    }
+    this.notificationGuideShown = true;
+    try {
+      this.getUIContext().showAlertDialog({
+        title: '通知未开启',
+        message: '任务到点不会提醒。去系统设置打开「知了」的通知，并允许横幅。',
+        primaryButton: {
+          value: '暂不',
+          action: () => {
+          }
+        },
+        secondaryButton: {
+          value: '去开启',
+          fontColor: $r('sys.color.ohos_id_color_emphasize'),
+          action: () => {
+            const context: common.Context | undefined = this.getUIContext().getHostContext();
+            if (context !== undefined) {
+              NotificationService.openSettings(context as common.UIAbilityContext);
+            }
+          }
+        }
+      });
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'show notification guide failed: %{public}d, %{public}s', err.code, err.message);
+    }
+  }
+
   /** 右上角「编辑」：进入多选模式（卡片的圆圈变方框勾选框、右上角变取消/全选、底部添加变删除） */
   private onEdit(): void {
     this.store.enterEdit();
@@ -223,6 +354,7 @@ struct A_Main {
    * 原来这里是一句 toast 占位，本轮被真正的半模态取代。
    */
   private onAdd(): void {
+    this.shareParseKey = 0;
     const context: common.Context | undefined = this.getUIContext().getHostContext();
     if (context !== undefined) {
       // 恢复上次没填完的草稿（没有/损坏就保持空表单）
@@ -242,6 +374,7 @@ struct A_Main {
     AddTaskSheet({
       store: this.store,
       draft: this.addDraft,
+      autoParseKey: this.shareParseKey,
       onSaved: () => {
         // 保存成功：清掉本机草稿 → 收起半模态 + 给一条反馈
         const context: common.Context | undefined = this.getUIContext().getHostContext();
@@ -258,7 +391,8 @@ struct A_Main {
   }
 
   build() {
-    HdsNavigation(this.navPathStack) {
+    Stack() {
+      HdsNavigation(this.navPathStack) {
       // 底部页签栏（HdsTabs 容器 + 两个页签 + 悬浮样式 + 迷你栏）整个在 components/MainTabBar.ets 里
       MainTabBar({
         scroller: this.taskListScroller,
@@ -326,5 +460,18 @@ struct A_Main {
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     .width('100%')
     .height('100%')
+
+      // 首次启动引导：全屏覆盖，完成后写 first_launch_done 不再出现
+      if (this.showOnboarding) {
+        A_Onboarding({
+          onFinish: () => {
+            this.finishOnboarding();
+          }
+        })
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.themeStore.scheme.surface)
   }
 }

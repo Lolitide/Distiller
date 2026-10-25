@@ -43,6 +43,8 @@ import { BackendConfig } from '../service/backend/BackendConfig';
 import { RelayApi } from '../service/backend/RelayApi';
 import { apiErrorMessage, GroupItemDto } from '../service/backend/BackendTypes';
 import { SyncService } from '../service/cloud/SyncService';
+import { NotificationService } from '../service/system/NotificationService';
+import { PermissionEvents } from '../service/system/PermissionEvents';
 import { TaskRepository } from '../repository/TaskRepository';
 import { notificationManager } from '@kit.NotificationKit';
 import { abilityAccessCtrl, Permissions } from '@kit.AbilityKit';
@@ -145,7 +147,17 @@ export struct A_Settings {
   @Local bound: boolean = false;
   @Local bindCode: string = '';
   @Local bindHint: string = '';
+  /** 配对码已过期：显示「重新生成」而不是继续倒计时 */
+  @Local bindExpired: boolean = false;
+  /** 配对码剩余秒数（每 2 秒减一次，用于界面倒计时） */
+  @Local bindLeftSec: number = 0;
+  /** 云端同步开关（关闭即停止轮询） */
+  @Local syncEnabled: boolean = true;
   private bindTimer: number = -1;
+  /** 本次「去绑定/重新绑定」的开始时间（用于忽略旧 bound_at） */
+  private bindStartedAt: number = 0;
+  /** 绑定轮询剩余次数（按后端 expires_in 算，过期就停并提示重新生成） */
+  private bindPollLeft: number = 0;
 
   /* ── 权限管理（通知 / 日历 / 订阅消息）── */
   @Local notifyAllowed: boolean = false;
@@ -173,6 +185,11 @@ export struct A_Settings {
     this.loadSettings();
     this.loadBackend();
     this.loadPermissions();
+    this.loadSyncEnabled();
+    // 引导页里授权通知/日历后，这里没有重新走生命周期，靠广播刷新
+    PermissionEvents.setListener(() => {
+      this.loadPermissions();
+    });
     // 窗口全屏后页面铺到屏幕顶端，顶部让位要补上状态栏高度（见 utils/WindowInsets）
     const context: common.Context | undefined = this.getUIContext().getHostContext();
     if (context !== undefined) {
@@ -180,6 +197,10 @@ export struct A_Settings {
         this.statusBarVp = px > 0 ? this.getUIContext().px2vp(px) : 0;
       });
     }
+  }
+
+  aboutToDisappear(): void {
+    PermissionEvents.clearListener();
   }
 
   /* ── 权限管理 ── */
@@ -195,7 +216,7 @@ export struct A_Settings {
    */
   private async loadPermissions(): Promise<void> {
     await this.loadNotifyPermission();
-    this.loadCalendarPermission();
+    await this.loadCalendarPermission();
     await this.loadSubscriptionCount();
   }
 
@@ -214,13 +235,14 @@ export struct A_Settings {
    * （拿 uid 去查永远返回 DENIED —— 这就是"授权了还显示未授权"的根因）。
    * accessTokenId 由 `bundleManager.getBundleInfoForSelfSync().appInfo` 取。
    */
-  private loadCalendarPermission(): void {
+  private async loadCalendarPermission(): Promise<void> {
     try {
       const flags: number = bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT;
       const info = bundleManager.getBundleInfoForSelfSync(flags);
       const at = abilityAccessCtrl.createAtManager();
+      // 用异步 checkAccessToken：同步版在本机实测会把已授权的日历读成 DENIED
       const status: abilityAccessCtrl.GrantStatus =
-        at.checkAccessTokenSync(info.appInfo.accessTokenId, 'ohos.permission.WRITE_CALENDAR');
+        await at.checkAccessToken(info.appInfo.accessTokenId, 'ohos.permission.WRITE_CALENDAR');
       this.calendarAllowed = status === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
     } catch (error) {
       const err = error as BusinessError;
@@ -480,6 +502,9 @@ export struct A_Settings {
     if (this.bindCode.length > 0) {
       return;
     }
+    // 重新绑定**不动旧绑定**：只记下开始时间，轮询时用 bound_at 判断是不是这次新绑的。
+    // 这样用户点取消，原来的绑定仍然有效。
+    this.bindStartedAt = Date.now();
     const res = await RelayApi.bindCode();
     if (!res.ok || res.data === undefined) {
       this.toast('生成配对码失败：' + (res.ok ? '返回为空' : apiErrorMessage(res)));
@@ -487,7 +512,20 @@ export struct A_Settings {
     }
     this.bindCode = res.data.code;
     this.bindHint = res.data.hint;
+    this.bindExpired = false;
+    this.bindLeftSec = res.data.expires_in;
+    this.bindPollLeft = Math.max(1, Math.ceil(res.data.expires_in / 2));
     this.bindTimer = setInterval(() => {
+      if (this.bindPollLeft <= 0) {
+        this.cancelBind();
+        this.bindCode = '';
+        this.bindExpired = true;
+        this.bindLeftSec = 0;
+        this.toast('配对码已过期，请重新生成');
+        return;
+      }
+      this.bindPollLeft--;
+      this.bindLeftSec = Math.max(0, this.bindLeftSec - 2);
       this.checkBind();
     }, 2000);
   }
@@ -497,26 +535,100 @@ export struct A_Settings {
     if (!res.ok || res.data === undefined || !res.data.bound) {
       return;
     }
+    // 旧绑定也会返回 bound=true：必须拿到「本次开始之后」的绑定时刻才算成功；
+    // 拿不到时刻（旧数据/解析失败）一律忽略，避免一生成码就自动成功。
+    const boundAt: number = res.data.bound_at_ms !== undefined
+      ? res.data.bound_at_ms : this.parseBoundAt(res.data.bound_at);
+    if (boundAt <= 0 || boundAt < this.bindStartedAt - 2000) {
+      return;
+    }
     this.bound = true;
     const ctx: common.Context | undefined = this.hostContext();
     if (ctx !== undefined) {
       BackendConfig.setBound(ctx, true);
     }
     this.bindCode = '';
+    this.bindLeftSec = 0;
+    this.bindExpired = false;
     if (this.bindTimer >= 0) {
       clearInterval(this.bindTimer);
       this.bindTimer = -1;
     }
     this.toast('绑定成功，正在同步群消息');
+    await this.autoSubscribeAll();
     await SyncService.refreshAfterBind();
+  }
+
+  /**
+   * 绑定成功后：默认订阅机器人所在的所有群，并弹出群选择列表（全部勾选）。
+   * 用户可以在这里取消不想订阅的群；订阅失败不影响绑定本身。
+   */
+  private async autoSubscribeAll(): Promise<void> {
+    const first = await RelayApi.groups();
+    if (!first.ok || first.data === undefined) {
+      return;
+    }
+    const visible: GroupItemDto[] = [];
+    for (let i = 0; i < first.data.groups.length; i++) {
+      const g: GroupItemDto = first.data.groups[i];
+      if (!g.bot_present) {
+        continue;
+      }
+      visible.push(g);
+      if (!g.subscribed) {
+        await RelayApi.subscribe(g.group_openid);
+      }
+    }
+    if (visible.length === 0) {
+      this.toast('机器人还没加入任何群，先在 QQ 群里把它拉进去');
+      return;
+    }
+    // 重新拉一次，让开关显示后端真实状态（全部已订阅）
+    const second = await RelayApi.groups();
+    if (second.ok && second.data !== undefined) {
+      const fresh: GroupItemDto[] = [];
+      for (let i = 0; i < second.data.groups.length; i++) {
+        if (second.data.groups[i].bot_present) {
+          fresh.push(second.data.groups[i]);
+        }
+      }
+      this.groupList = fresh;
+    } else {
+      this.groupList = visible;
+    }
+    this.refreshSubscribedCount();
+    this.sheetKind = SHEET_GROUPS;
+    this.sheetShown = true;
+  }
+
+  /** 从当前 groupList 统计已订阅数，更新「订阅消息管理」行 */
+  private refreshSubscribedCount(): void {
+    let count: number = 0;
+    for (let i = 0; i < this.groupList.length; i++) {
+      if (this.groupList[i].subscribed) {
+        count++;
+      }
+    }
+    this.subscribedCount = count;
+  }
+
+  /** 后端 `bound_at` 是本地时间字符串 `YYYY-MM-DD HH:mm:ss`；解析失败返回 0（按旧逻辑处理） */
+  private parseBoundAt(text: string | undefined): number {
+    if (text === undefined || text.length === 0) {
+      return 0;
+    }
+    const ms: number = Date.parse(text.replace(' ', 'T'));
+    return Number.isNaN(ms) ? 0 : ms;
   }
 
   private cancelBind(): void {
     this.bindCode = '';
+    this.bindLeftSec = 0;
     if (this.bindTimer >= 0) {
       clearInterval(this.bindTimer);
       this.bindTimer = -1;
     }
+    // 取消重新绑定：旧绑定没有被解掉，保持原来的状态
   }
 
   /** 复制配对码到剪贴板（用户要粘贴到 QQ 私聊里发给机器人） */
@@ -536,7 +648,64 @@ export struct A_Settings {
     }
   }
 
-  /** 删除服务端数据（设备/绑定/订阅/推送 Token）并清本机任务 */
+  /** 打开系统通知管理（横幅/锁屏/声音都在这里） */
+  private openNotificationSettings(): void {
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    NotificationService.openSettings(ctx as common.UIAbilityContext);
+  }
+
+  private replayOnboarding(): void {
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    SettingsRepository.setFirstLaunchDone(ctx, false);
+    this.toast('下次启动会显示启动引导');
+  }
+
+  private async loadSyncEnabled(): Promise<void> {    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    this.syncEnabled = await SettingsRepository.getSyncEnabled(ctx, true);
+  }
+
+  private onSyncToggle(isOn: boolean): void {
+    this.syncEnabled = isOn;
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    SettingsRepository.setSyncEnabled(ctx, isOn);
+    SyncService.setEnabled(isOn);
+    this.toast(isOn ? '云端同步已开启' : '云端同步已关闭，不再拉取群消息');
+  }
+
+  /** 云端字段清单：与隐私说明同一口径，不把「本机数据」混进来 */
+  private showCloudFields(): void {
+    this.getUIContext().getPromptAction().showDialog({
+      title: '会离开手机的字段',
+      message: '同步开启时，App 会向你的服务器发送：设备标识、绑定关系、群订阅、'
+        + '采纳/忽略反馈计数、Push 令牌（未接入则没有）。'
+        + '\n\n服务器只临时保存群消息原文（内存 30 分钟，不落盘）。'
+        + '\n\n任务名称、备注、原文、草稿、画像只存在本机；原文不会回传。',
+      buttons: [{ text: '知道了', color: this.themeStore.scheme.primary }]
+    });
+  }
+
+  /** 隐私说明：只讲本机存什么、什么会离开手机 */
+  private showPrivacy(): void {    this.getUIContext().getPromptAction().showDialog({
+      title: '隐私说明',
+      message: '任务、备注、原文、草稿只存在本机。'
+        + '同步开启时只向服务器发送设备标识、绑定关系、群订阅与采纳/忽略计数。'
+        + '群消息原文由服务器临时保留 30 分钟（仅内存、不落盘），不会回传。'
+        + '可随时在「删除服务端数据」中清空云端记录。',
+      buttons: [{ text: '知道了', color: this.themeStore.scheme.primary }]
+    });
+  }
   private deleteServerData(): void {
     this.getUIContext().getPromptAction().showDialog({
       title: '删除服务端数据',
@@ -655,8 +824,12 @@ export struct A_Settings {
   }
 
   private closeSheet(): void {
+    // 群列表关闭时刷新「订阅消息管理」的计数（一键订阅/勾选后都走这里）
+    if (this.sheetKind === SHEET_GROUPS) {
+      this.loadSubscriptionCount();
+    }
+    // 只收显隐；`sheetKind` 留到 onDisappear 再清，避免内容先消失、遮罩留一层
     this.sheetShown = false;
-    this.sheetKind = SHEET_NONE;
   }
 
   private confirmSheet(): void {
@@ -1260,6 +1433,9 @@ export struct A_Settings {
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
                 .fontColor($r('sys.color.ohos_id_color_text_secondary'))
                 .textAlign(TextAlign.Center)
+              Text('剩余 ' + this.bindLeftSec + ' 秒')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor(this.themeStore.scheme.onSurfaceVariant)
               Row({ space: 10 }) {
                 Button({ type: ButtonType.Capsule, stateEffect: true }) {
                   Text('复制配对码')
@@ -1293,6 +1469,85 @@ export struct A_Settings {
             .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP, bottom: 12 })
             .alignItems(HorizontalAlign.Center)
           }
+
+          if (this.bindExpired && this.bindCode.length === 0) {
+            Column({ space: 8 }) {
+              Text('配对码已过期，请重新生成')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor(this.themeStore.scheme.onSurfaceVariant)
+              Button({ type: ButtonType.Capsule, stateEffect: true }) {
+                Text('重新生成')
+                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                  .fontColor(this.themeStore.scheme.onPrimary)
+              }
+              .height(32)
+              .padding({ left: 16, right: 16 })
+              .backgroundColor(this.themeStore.scheme.primary)
+              .borderRadius(16)
+              .onClick(() => {
+                this.startBind();
+              })
+            }
+            .width('100%')
+            .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP, bottom: 12 })
+            .alignItems(HorizontalAlign.Center)
+          }
+
+          this.rowDivider()
+        }
+        .width('100%')
+        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
+        .borderRadius(Theme.RADIUS_CARD)
+        .clip(true)
+
+        // ⑤ 云端数据：字段清单 + 同步开关 + 整包删除
+        Column() {
+          this.sectionTitle('云端数据')
+        }
+        .margin({ top: SECTION_GAP_VP })
+
+        Column() {
+          Row({ space: 8 }) {
+            Column({ space: 2 }) {
+              Text('云端同步')
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              Text('关闭后不再拉取群消息候选')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+            }
+            .layoutWeight(1)
+            .alignItems(HorizontalAlign.Start)
+
+            Toggle({ type: ToggleType.Switch, isOn: this.syncEnabled })
+              .id('syncEnabledToggle')
+              .onChange((isOn: boolean) => {
+                this.onSyncToggle(isOn);
+              })
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+
+          this.rowDivider()
+          Row({ space: 8 }) {
+            Text('会离开手机的字段')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+              .maxLines(1)
+            Text('查看')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.showCloudFields();
+          })
 
           this.rowDivider()
           Row() {
@@ -1361,9 +1616,6 @@ export struct A_Settings {
           .onClick(() => {
             this.clearAllTasks();
           })
-
-          this.rowDivider()
-          this.infoRow($r('app.string.settings_cloud_off'), '')
         }
         .width('100%')
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
@@ -1379,7 +1631,61 @@ export struct A_Settings {
         Column() {
           this.infoRow('版本', this.versionLabel)
           this.rowDivider()
-          this.infoRow('隐私说明', '未接入')
+          Row() {
+            Text('隐私说明')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+            Text('查看')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.showPrivacy();
+          })
+
+          this.rowDivider()
+          Row() {
+            Text('重新查看启动引导')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+            Text('下次启动')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.replayOnboarding();
+          })
+
+          this.rowDivider()
+          Row() {
+            Text('通知与横幅设置')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+            Text('去开启')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.openNotificationSettings();
+          })
+
+          this.rowDivider()
+          this.infoRow('提醒状态', this.store.reminderError.length > 0 ? this.store.reminderError : '正常')
         }
         .width('100%')
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)

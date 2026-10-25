@@ -14,7 +14,16 @@
  *   **「重要程度」已从这条链里移除**（需求方 2026-10-15：「description 里面的重要程度不显示了」）——
  *   它改用**卡片底色**表达，见 `components/TaskCard.ets` 的 `cardBackground`。
  */
-import { LOW_CERTAINTY_THRESHOLD, RepeatFrequency, RepeatRule, Task, TaskAlarm, TaskPriority, TaskStatus } from '../model';
+import {
+  LOW_CERTAINTY_THRESHOLD,
+  RepeatFrequency,
+  RepeatRule,
+  Task,
+  TaskAlarm,
+  TaskLevel,
+  TaskPriority,
+  TaskStatus
+} from '../model';
 
 const DAY_MS: number = 24 * 60 * 60 * 1000;
 const HOUR_MS: number = 60 * 60 * 1000;
@@ -71,6 +80,8 @@ export class TaskDayGroup {
   hasDate: boolean = false;
   /** 与今天的整日差：0 今天 / 1 明天 / 2 及以后更远 / 负数 已过去 */
   dayOffset: number = 0;
+  /** 时间线档位标题（今天/明天/本周/更远）；为空时组头按日期渲染 */
+  bucketLabel?: string;
   /** 0=周日 … 6=周六。仅 hasDate 时有意义 */
   weekdayIndex: number = 0;
   /** 1-12。仅 hasDate 时有意义 */
@@ -125,6 +136,24 @@ function startOfDay(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 }
 
+/**
+ * 组内排序（FE-08）：priority 降序 → level 降序 → 截止时间升序。
+ * 卡片红圈多少与列表顺序必须一致（任务字段对照 §6）。
+ */
+function compareInGroup(a: Task, b: Task): number {
+  const pa: number = a.priority !== undefined ? a.priority : TaskPriority.NORMAL;
+  const pb: number = b.priority !== undefined ? b.priority : TaskPriority.NORMAL;
+  if (pa !== pb) {
+    return pb - pa;
+  }
+  const la: number = a.level !== undefined ? a.level : TaskLevel.EASY;
+  const lb: number = b.level !== undefined ? b.level : TaskLevel.EASY;
+  if (la !== lb) {
+    return lb - la;
+  }
+  return taskTime(a) - taskTime(b);
+}
+
 function findOrCreate(groups: TaskDayGroup[], dayStart: number, todayStart: number): TaskDayGroup {
   for (let i = 0; i < groups.length; i++) {
     const exist: TaskDayGroup = groups[i];
@@ -147,15 +176,17 @@ function findOrCreate(groups: TaskDayGroup[], dayStart: number, todayStart: numb
 
 export class TaskListViewModel {
   /**
-   * 按天分组。已删除的任务不进时间线（§9.3）。
+   * 首页时间线四档（FE-09）：未安排 / 今天 / 明天 / 本周 / 更远。
    *
-   * 组的顺序：**「未安排日期」在最前**，其后按日期升序（需求方 2026-10-17）。
-   * 两处列表（任务列表页 / 搜索页）共用这一份分组结果，所以排序只在这里定一次。
+   * 组内排序统一按 priority → level → 截止时间（FE-08）。
+   * 已删除的任务不进时间线（§9.3）。
    */
   static groupByDay(tasks: Task[], today: Date): TaskDayGroup[] {
     const todayStart: number = startOfDay(today);
+    const groups: TaskDayGroup[] = [];
     const undated: TaskDayGroup = new TaskDayGroup();
-    const groups: TaskDayGroup[] = [undated];
+    undated.expanded = false;
+    groups.push(undated);
 
     tasks.forEach((task: Task) => {
       if (task.status === TaskStatus.DELETED) {
@@ -166,24 +197,53 @@ export class TaskListViewModel {
         undated.tasks.push(task);
         return;
       }
-      findOrCreate(groups, startOfDay(new Date(ts)), todayStart).tasks.push(task);
+      const offset: number = Math.floor((startOfDay(new Date(ts)) - todayStart) / DAY_MS);
+      const slot: number = offset <= 0 ? 0 : (offset === 1 ? 1 : (offset <= 6 ? 2 : 3));
+      TaskListViewModel.bucketGroup(groups, slot, today).tasks.push(task);
     });
 
     groups.forEach((group: TaskDayGroup) => {
-      group.tasks.sort((a: Task, b: Task) => taskTime(a) - taskTime(b));
+      group.tasks.sort((a: Task, b: Task) => compareInGroup(a, b));
     });
 
     return groups
       .filter((group: TaskDayGroup) => group.totalCount > 0)
       .sort((a: TaskDayGroup, b: TaskDayGroup) => {
-        // 「未安排日期」组**排最前**（需求方 2026-10-17：「任务列表页面把未安排日期放到最上面」）。
-        // 它没有日期可比，所以不能参与时间线排序 —— 要么最前、要么最后，现在定的是最前：
-        // 没定日期的任务最需要用户先处理，放顶上免得沉在长列表末尾。
+        // 「未安排日期」组排最前（需求方 2026-10-17），其余 今天→明天→本周→更远
         if (a.hasDate !== b.hasDate) {
           return a.hasDate ? 1 : -1;
         }
         return a.sortValue - b.sortValue;
       });
+  }
+
+  /** 取（或创建）某个时间线档位的组 */
+  private static bucketGroup(groups: TaskDayGroup[], slot: number, today: Date): TaskDayGroup {
+    for (let i = 0; i < groups.length; i++) {
+      const exist: TaskDayGroup = groups[i];
+      if (exist.hasDate && exist.sortValue === slot) {
+        return exist;
+      }
+    }
+    const created: TaskDayGroup = new TaskDayGroup();
+    created.hasDate = true;
+    created.sortValue = slot;
+    created.dayOffset = slot;
+    created.month = today.getMonth() + 1;
+    created.day = today.getDate();
+    created.weekdayIndex = today.getDay();
+    created.expanded = slot === 0;
+    if (slot === 0) {
+      created.bucketLabel = '今天';
+    } else if (slot === 1) {
+      created.bucketLabel = '明天';
+    } else if (slot === 2) {
+      created.bucketLabel = '本周';
+    } else {
+      created.bucketLabel = '更远';
+    }
+    groups.push(created);
+    return created;
   }
 
   /**
