@@ -38,6 +38,8 @@ import { ToggleSlider } from '../components/ToggleSlider';
 import { M3Switch } from '../components/M3Switch';
 import { Task } from '../model';
 import { TaskListStore } from '../viewmodel/TaskListStore';
+import { TaskExportViewModel } from '../viewmodel/TaskExportViewModel';
+import { TaskExportResult, TaskExportService } from '../service/system/TaskExportService';
 import { WindowInsets } from '../utils/WindowInsets';
 import { BackendConfig } from '../service/backend/BackendConfig';
 import { RelayApi } from '../service/backend/RelayApi';
@@ -143,6 +145,8 @@ export struct A_Settings {
   /** 连接状态文案（已连接 / 失败原因） */
   @Local backendState: string = '未连接';
   @Local backendBusy: boolean = false;
+  /** 「导出任务」那一行的格式菜单显隐（FE-60） */
+  @Local exportMenuShown: boolean = false;
   /** 绑定状态与配对码 */
   @Local bound: boolean = false;
   @Local bindCode: string = '';
@@ -971,8 +975,97 @@ export struct A_Settings {
     }
   }
 
-  private clearAllTasks(): void {
-    const total: number = this.store.totalCount;
+  /**
+   * 导出菜单（FE-60）：点「导出任务」那一行弹出。
+   * 三种口径按"给人看 / 给机器看 / 贴到别处"分：CSV 白名单列、JSON 完整（含原文）、复制到剪贴板。
+   */
+  @Builder
+  exportMenu() {
+    Column() {
+      Text('CSV（表格，不含原文）')
+        .width('100%')
+        .height(ROW_HEIGHT_VP)
+        .fontSize($r('sys.float.ohos_id_text_size_body1'))
+        .fontColor($r('sys.color.ohos_id_color_text_primary'))
+        .textAlign(TextAlign.Start)
+        .onClick(() => {
+          this.exportMenuShown = false;
+          this.exportTasks('csv');
+        })
+      Text('JSON（完整，含原文）')
+        .width('100%')
+        .height(ROW_HEIGHT_VP)
+        .fontSize($r('sys.float.ohos_id_text_size_body1'))
+        .fontColor($r('sys.color.ohos_id_color_text_primary'))
+        .textAlign(TextAlign.Start)
+        .onClick(() => {
+          this.exportMenuShown = false;
+          this.exportTasks('json');
+        })
+      Text('复制到剪贴板（CSV）')
+        .width('100%')
+        .height(ROW_HEIGHT_VP)
+        .fontSize($r('sys.float.ohos_id_text_size_body1'))
+        .fontColor($r('sys.color.ohos_id_color_text_primary'))
+        .textAlign(TextAlign.Start)
+        .onClick(() => {
+          this.exportMenuShown = false;
+          this.exportToClipboard();
+        })
+    }
+    .width(240)
+    .padding(8)
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  /**
+   * 导出到文件：`csv` / `json`。
+   *
+   * 走 `TaskExportViewModel`（拼文本）→ `TaskExportService`（系统保存面板 + 落盘），
+   * 页面只管"拿结果报一句话"。用户取消保存时**不提示**（不是失败）。
+   */
+  private async exportTasks(ext: string): Promise<void> {
+    const tasks: Task[] = this.store.allTasks();
+    if (tasks.length === 0) {
+      this.toast('没有可导出的任务');
+      return;
+    }
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      return;
+    }
+    const csv: boolean = ext === 'csv';
+    const content: string = csv ? TaskExportViewModel.buildCsv(tasks) : TaskExportViewModel.buildJson(tasks);
+    const fileName: string = TaskExportViewModel.fileName(ext);
+    const suffix: string = csv ? 'CSV|.csv' : 'JSON|.json';
+    const result: TaskExportResult = await TaskExportService.saveFile(context, fileName, suffix, content);
+    if (result.cancelled) {
+      return;
+    }
+    if (result.ok) {
+      this.toast(`已导出 ${tasks.length} 条任务` + (csv ? '（CSV）' : '（JSON，含原文）'));
+      return;
+    }
+    this.toast(result.message.length > 0 ? result.message : '导出失败');
+  }
+
+  /** 导出到剪贴板（CSV 口径：白名单列，不把原文贴出去） */
+  private async exportToClipboard(): Promise<void> {
+    const tasks: Task[] = this.store.allTasks();
+    if (tasks.length === 0) {
+      this.toast('没有可导出的任务');
+      return;
+    }
+    const content: string = TaskExportViewModel.buildCsv(tasks);
+    const result: TaskExportResult = await TaskExportService.copyToClipboard(content);
+    if (result.ok) {
+      this.toast(`已复制 ${tasks.length} 条任务（CSV）到剪贴板`);
+      return;
+    }
+    this.toast(result.message.length > 0 ? result.message : '复制失败');
+  }
+
+  private clearAllTasks(): void {    const total: number = this.store.totalCount;
     if (total === 0) {
       this.toast($r('app.string.settings_clear_empty'));
       return;
@@ -1612,6 +1705,45 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
+          // 「导出任务」：点一下弹格式菜单（FE-60）。CSV/JSON 走系统保存面板，剪贴板走 pasteboard
+          Row({ space: 8 }) {
+            Text('导出任务')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+              .maxLines(1)
+              .textAlign(TextAlign.Start)
+            Text('CSV / JSON / 剪贴板')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+              .maxLines(1)
+            SymbolGlyph($r('sys.symbol.chevron_right'))
+              .fontSize(Theme.FONT_CAPTION)
+              .fontColor([$r('sys.color.icon_tertiary')])
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.exportMenuShown = true;
+          })
+          .bindPopup(this.exportMenuShown, {
+            builder: this.exportMenu(),
+            placement: Placement.Bottom,
+            popupColor: this.themeStore.scheme.surfaceContainerHigh,
+            radius: 16,
+            enableArrow: false,
+            focusable: true,
+            onStateChange: (event) => {
+              if (!event.isVisible) {
+                this.exportMenuShown = false;
+              }
+            }
+          })
+
+          this.rowDivider()
+
           Row() {
             Text($r('app.string.settings_clear_tasks'))
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
