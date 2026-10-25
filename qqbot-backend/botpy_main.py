@@ -125,9 +125,16 @@ class MyClient(botpy.Client):
             )
 
             code = relay.parse_bind_command(content)
-            if (code is None and content not in ("解绑", "unbind", "状态", "帮助")
-                    and len(content) >= 4 and user_openid):
-                # 降级入口：QQ 分享面板不列第三方应用时，用户把消息发给机器人单聊。
+            attachments = _json_list(getattr(message, "attachments", None))
+            if (code is None and user_openid
+                    and content not in ("解绑", "unbind", "状态", "帮助")
+                    and (len(content) >= 4 or attachments)):
+                if not content:
+                    await message.reply(
+                        content="这条消息没有可读取的文字（图片转发暂不支持）。\n"
+                                "请在 App 里「＋ → 截图 → 从相册选择」，或先把文字复制发给我。"
+                    )
+                    return
                 count = relay.enqueue_forward(user_openid, content)
                 if count > 0:
                     await message.reply(
@@ -175,9 +182,8 @@ class MyClient(botpy.Client):
         if bound:
             return (
                 "你已经绑定「知了」✅\n"
-                f"已授权的设备数：{len(bound)}\n"
-                "在 App 的「订阅管理」里可以勾选要接收的群。\n"
-                "发送「解绑」可以解除绑定。"
+                "直接把要添加的消息发给我，回到 App 会自动打开确认页（图片暂不支持）。\n"
+                "在 App 的「订阅管理」里可以勾选要接收的群；发送「解绑」可以解除绑定。"
             )
         return (
             "你好，我是「知了」的信息采集机器人 🦗\n"
