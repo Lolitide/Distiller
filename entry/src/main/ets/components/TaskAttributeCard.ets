@@ -14,6 +14,7 @@
 import { RepeatFrequency, RepeatRule, Task, TaskAlarm } from '../model';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 import { TaskListStore } from '../viewmodel/TaskListStore';
+import { TaskExpiryService } from '../service/system/TaskExpiryService';
 import { DateTimePickerBody } from './DateTimePickerBody';
 import { CenterDialogFrame, DialogTitle } from './CenterDialogFrame';
 import { OptionPickerBody } from './OptionPickerBody';
@@ -148,6 +149,9 @@ export struct TaskAttributeCard {
     this.task.dueText = undefined;
     // 到期时间决定任务落在哪一天（没有日期就进「未安排日期」），所以必须让列表重新分组
     this.store.refreshGroups(this.task.id);
+    // 期限没了就不再算过期：已过期的任务要**立刻**回到「已确认」
+    //（不重扫的话 `dueLabel` 会一直走 `status === EXPIRED` 分支，卡片永远显示「已过期」）
+    TaskExpiryService.scanOnce();
   }
 
   /** 清重复 */
@@ -320,6 +324,10 @@ export struct TaskAttributeCard {
   private applyDue(timestamp: number): void {
     this.task.dueAt = timestamp;
     this.store.refreshGroups(this.task.id);
+    // 期限一改就要重判「已过期」（**双向**）：
+    //  · 改到过去 → 立刻变「已过期」，不必等下一轮 5 秒轮询；
+    //  · 从「已过期」挪到将来 → 立刻回到「已确认」，否则 `dueLabel` 会一直卡在「已过期」。
+    TaskExpiryService.scanOnce();
   }
 
   /**

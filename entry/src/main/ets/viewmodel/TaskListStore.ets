@@ -694,6 +694,67 @@ export class TaskListStore {
   }
 
   /**
+   * **系统侧「已过期」扫描** —— 六态里唯一「只有系统能写」的那一态（`EXPIRED = 4`）。
+   *
+   * 为什么要有它：全仓此前**没有任何 EXPIRED 的写入点** —— 它只出现在 `mock/MockTasks` 的假数据里，
+   * 而 `TaskListViewModel.dueLabel` 只是**按 `due <= now` 现场显示**「已过期」文案、`status` 从不落地。
+   * 于是「已过期」根本不是真实状态：筛选、组头计数、详情页状态分段、落盘都看不到它。
+   *
+   * 本方法**双向**同步，两条方向缺一不可：
+   *   ① **到期未完成**（`dueAt <= now`，当前状态 ∈ 待确认 / 已确认 / 进行中）→ 写 `EXPIRED`；
+   *   ② **已经是 EXPIRED 但期限被挪到将来（或清空）** → 回到 `CONFIRMED`。
+   *      没有 ② 会留下一个永久的假过期：`dueLabel` **先看 `status === EXPIRED`**（见那里的分支），
+   *      用户把期限往后改，卡片上仍会一直显示「已过期」。
+   *
+   * 明确**不碰**的三类：
+   *   · `COMPLETED` —— `dueLabel` 的完成态分支（`COMPLETED` 时返回空串、不显示剩余时间）就靠这条守住：
+   *     已完成的任务即使早过了截止时间，也不该被改写成「已过期」；
+   *   · `DELETED` —— 软删不可逆；
+   *   · 没有 `dueAt` 的任务 —— 没期限就没有「过期」可言（`dueText` 只是原文，不拿来猜时刻）。
+   *
+   * 过期时顺手关提醒：`alarm` 置 OFF、`reminderId` 清空（已经过期了再响没有意义）。
+   * TODO(需求方): 真接 `service/system/ReminderService` 后，这里要先**撤销已发布的提醒**再改状态。
+   *
+   * @param now 判定基准（毫秒）；默认取当前时刻，测试/走查可以喂固定值
+   * @returns 改了多少条（0 ＝ 全都没变，此时不落盘、不重新分组）
+   */
+  syncExpiredStatus(now: number = Date.now()): number {
+    let changed: number = 0;
+    const all: Task[] = this.allTasks();
+    for (let i = 0; i < all.length; i++) {
+      const task: Task = all[i];
+      if (task.status === TaskStatus.COMPLETED || task.status === TaskStatus.DELETED) {
+        continue;
+      }
+      const due: number | undefined = task.dueAt;
+      const overdue: boolean = due !== undefined && due <= now;
+      if (task.status === TaskStatus.EXPIRED) {
+        // ② 反向：期限挪到将来 / 被清空 → 复活成「已确认」，否则界面会一直停在「已过期」
+        if (!overdue) {
+          task.status = TaskStatus.CONFIRMED;
+          changed++;
+        }
+        continue;
+      }
+      if (!overdue) {
+        continue;
+      }
+      // ① 正向：到期未完成 → 已过期
+      task.status = TaskStatus.EXPIRED;
+      task.alarm = TaskAlarm.OFF;
+      task.reminderId = undefined;
+      changed++;
+    }
+    if (changed > 0) {
+      // 排序键是 `dueAt`（没动，组内顺序不变），但状态变了要让所有按 status 派生的读数跟上
+      // （组头「未完成 x 项」、筛选、卡片图标…），也保证 `groups` 引用是最新那一份。
+      this.refreshGroups();
+      this.persist();
+    }
+    return changed;
+  }
+
+  /**
    * 拨「响铃提醒」开关。
    *
    * v1 契约把"用户意图"和"已发布句柄"分开了：**`alarm`(0/1) 是意图**（字段表第 16 项，开关读它），

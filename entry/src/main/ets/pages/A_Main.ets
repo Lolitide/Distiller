@@ -13,6 +13,7 @@ import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
 import { DraftRepository } from '../repository/DraftRepository';
 import { SettingsRepository } from '../repository/SettingsRepository';
 import { SyncService } from '../service/cloud/SyncService';
+import { TaskExpiryService } from '../service/system/TaskExpiryService';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'A_Main';
@@ -83,6 +84,9 @@ struct A_Main {
       return;
     }
     this.store.init(context);
+    // 冷启动先扫一次「已过期」：上次落盘的任务可能早就过了截止时间，
+    // 首帧就该是正确状态，不必等 5 秒后的第一次轮询（写逻辑在 store.syncExpiredStatus）。
+    TaskExpiryService.scanOnce();
     SyncService.init(context);
     SyncService.start();
     SyncService.syncOnce();

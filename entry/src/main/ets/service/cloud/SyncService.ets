@@ -17,6 +17,7 @@ import { candidateToTask } from '../backend/TaskMapper';
 import { CandidateItem, ServeMessage, apiErrorMessage } from '../backend/BackendTypes';
 import { TaskRepository } from '../../repository/TaskRepository';
 import { TaskListStore } from '../../viewmodel/TaskListStore';
+import { TaskExpiryService } from '../system/TaskExpiryService';
 import { Task } from '../../model';
 
 const DOMAIN: number = 0x0000;
@@ -145,6 +146,8 @@ export class SyncService {
 
       const store: TaskListStore = TaskListStore.instance();
       const added: number = store.upsertAll(incoming);
+      // 新拉下来的候选可能「到手就已经过期」：立刻过一遍，别让它们以"未完成"的样子在列表里闪一下
+      TaskExpiryService.scanOnce();
       BackendConfig.setCursor(context, res.data.cursor);
       TaskRepository.save(context, store.allTasks());
       SyncService.lastSyncAt = SyncService.clock();
@@ -165,6 +168,9 @@ export class SyncService {
   static start(): void {
     SyncService.stop();
     SyncService.timerId = setInterval(() => {
+      // 先扫本地「已过期」（**不依赖网络**）：断网/没配服务器时，到期状态也要照常推进；
+      // 再拉候选。两件事都是每 5 秒一轮，共用同一个 tick。
+      TaskExpiryService.scanOnce();
       SyncService.syncOnce();
     }, POLL_INTERVAL_MS);
   }
