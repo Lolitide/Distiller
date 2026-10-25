@@ -9,7 +9,7 @@ import { Theme, ThemeStore } from '../utils/Theme';
 import { WindowInsets } from '../utils/WindowInsets';
 import { GROUP_HEADER_LIST_PULL_UP_VP, TaskGroupHeader } from '../components/TaskGroupHeader';
 import { EmptyHint } from '../components/EmptyHint';
-import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
+import { TaskDayGroup, TaskListViewModel } from '../viewmodel/TaskListViewModel';
 import { TaskFilterChips } from '../components/TaskFilterChips';
 import { ROUTE_TASK_DETAIL, NAV_STACK_KEY, TaskDetailParam } from '../viewmodel/TaskNavParams';
 import { TaskListStore } from '../viewmodel/TaskListStore';
@@ -222,6 +222,8 @@ export struct A_TaskList {
    * （只画一条露出的下边缘），状态必须活在它外面。
    */
   @Local expandedStepIds: number[] = [];
+  /** 待确认消息卡是否展开 */
+  @Local pendingExpanded: boolean = true;
 
   /** 该任务有没有步骤（决定要不要画堆叠层） */
   private hasSteps(task: Task): boolean {
@@ -395,6 +397,83 @@ export struct A_TaskList {
     .height('100%')
   }
 
+  private pendingTime(ts: number): string {
+    const d: Date = new Date(ts);
+    const hh: string = TaskListViewModel.pad2(d.getHours());
+    const mm: string = TaskListViewModel.pad2(d.getMinutes());
+    return hh + ':' + mm;
+  }
+
+  /** 待确认消息（转发/群聊/图片收集）：置顶，带未读数与子卡片 */
+  @Builder
+  pendingSection() {
+    Column() {
+      Row({ space: 8 }) {
+        Text('待确认消息')
+          .fontSize(('sys.float.ohos_id_text_size_body1'))
+          .fontWeight(FontWeight.Medium)
+          .fontColor(('sys.color.ohos_id_color_text_primary'))
+        if (this.store.pendingUnseenCount() > 0) {
+          Text(String(this.store.pendingUnseenCount()))
+            .fontSize(11)
+            .fontColor(this.themeStore.scheme.onError)
+            .padding({ left: 6, right: 6, top: 1, bottom: 1 })
+            .backgroundColor(this.themeStore.scheme.error)
+            .borderRadius(9)
+        }
+        Blank()
+        Text(this.pendingExpanded ? '收起' : '展开')
+          .fontSize(12)
+          .fontColor(this.themeStore.scheme.primary)
+      }
+      .width('100%')
+      .padding(14)
+      .onClick(() => {
+        this.pendingExpanded = !this.pendingExpanded;
+      })
+
+      if (this.pendingExpanded) {
+        ForEach(this.store.pendingTasks(), (task: Task) => {
+          Column({ space: 3 }) {
+            Row({ space: 8 }) {
+              Text(task.name)
+                .fontSize(('sys.float.ohos_id_text_size_body2'))
+                .fontColor(('sys.color.ohos_id_color_text_primary'))
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+                .layoutWeight(1)
+              if (task.pendingSeen !== true) {
+                Column()
+                  .width(8)
+                  .height(8)
+                  .borderRadius(4)
+                  .backgroundColor(this.themeStore.scheme.error)
+              }
+            }
+            .width('100%')
+            Text((task.pendingSource === 'image' ? '图片转发' : (task.pendingSource === 'forward' ? '转发给机器人' : '群聊收集'))
+              + ' · ' + this.pendingTime(task.createdAt))
+              .fontSize(11)
+              .fontColor(('sys.color.ohos_id_color_text_secondary'))
+          }
+          .width('100%')
+          .padding({ left: 14, right: 14, top: 8, bottom: 8 })
+          .alignItems(HorizontalAlign.Start)
+          .onClick(() => {
+            this.store.markPendingSeen(task);
+            AppStorage.get<NavPathStack>(NAV_STACK_KEY)
+              ?.pushPathByName(ROUTE_TASK_DETAIL, new TaskDetailParam(task, this.store, true));
+          })
+        }, (task: Task) => 'pending-' + task.id)
+      }
+    }
+    .width('100%')
+    .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
+    .borderRadius(14)
+    .clip(true)
+    .margin({ left: 16, right: 16, bottom: 8 })
+  }
+
   /** 同步状态细条（离线 / 同步中 / 已关闭），离线可点重试 */
   @Builder
   syncBanner() {
@@ -450,6 +529,12 @@ export struct A_TaskList {
         Row().width('100%').height(CHIPS_BAND_HEIGHT_VP + CHIPS_BAND_BOTTOM_GAP_VP)
       }
       .accessibilityLevel('no')
+
+      if (this.store.pendingList.length > 0) {
+        ListItem() {
+          this.pendingSection()
+        }
+      }
 
       if (this.syncStatus.showsBanner) {
         ListItem() {
@@ -589,13 +674,13 @@ export struct A_TaskList {
   build() {
     // 有任务＝列表；一条都没有＝官方风格的空状态（两者都是内容区的根，外面套 Stack 保证根节点是容器）
     Stack({ alignContent: Alignment.TopStart }) {
-      if (this.isEmpty) {
+      if (this.isEmpty && this.store.pendingList.length === 0) {
         this.emptyState()
       } else {
         this.taskList()
       }
 
-      if (!this.isEmpty) {
+      if (!this.isEmpty || this.store.pendingList.length > 0) {
         // **底部渐变遮罩**（2026-10-20 恢复）：内容滑到胶囊/＋ 那一带时淡出，而不是在视口底边被齐切。
         // 结构与下面那层一样：外层铺满、内容靠底，`HitTestMode.None` 让滚动/点击穿透给下面的列表。
         Column() {
@@ -630,7 +715,7 @@ export struct A_TaskList {
       // 「上下裁切的边缘是圆角矩形」——于是改成给背板 `borderRadius({bottomLeft, bottomRight})`：
       // 圆角之外的两个角会露出下面滑过的卡片，视觉上就是"内容正滑进一个带圆角的容器"，
       // 比渐隐更利落。底部那条边缘按他给的兜底方案仍用渐变遮罩（见上面那段）。
-      if (!this.isEmpty) {
+      if (!this.isEmpty || this.store.pendingList.length > 0) {
         Column() {
           TaskFilterChips({ store: this.store })
         }

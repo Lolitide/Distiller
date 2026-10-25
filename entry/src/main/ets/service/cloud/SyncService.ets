@@ -178,7 +178,9 @@ export class SyncService {
       const incoming: Task[] = [];
       for (let i = 0; i < candidates.length; i++) {
         const c: CandidateItem = candidates[i];
-        incoming.push(candidateToTask(c, 0, SyncService.joinRaw(c, rawTexts)));
+        const pendingTask: Task = candidateToTask(c, 0, SyncService.joinRaw(c, rawTexts), true);
+        pendingTask.pendingSource = 'group';
+        incoming.push(pendingTask);
       }
 
       const store: TaskListStore = TaskListStore.instance();

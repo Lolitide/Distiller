@@ -265,7 +265,9 @@ export interface PushTokenData {
 
 /** 转发给机器人的一条待确认文本（纯内存，App 取走即删） */
 export interface ForwardItem {
+  kind?: string;
   text: string;
+  url?: string;
   created_at: number;
 }
 

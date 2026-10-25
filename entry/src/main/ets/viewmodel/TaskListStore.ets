@@ -79,6 +79,8 @@ export class TaskListStore {
 
   /** 按天分好组的任务（真实数据；首次启动为空，由 `SyncService` 拉取候选填充） */
   @Trace groups: TaskDayGroup[] = TaskListViewModel.groupByDay([], new Date());
+  /** 待确认消息：不进时间线，但和任务一起落盘 */
+  @Trace pendingList: Task[] = [];
   /** 是否处于编辑（多选）模式 */
   @Trace editing: boolean = false;
   /** 已勾选的任务 id */
@@ -133,7 +135,53 @@ export class TaskListStore {
     this.groups.forEach((group: TaskDayGroup) => {
       group.tasks.forEach((task: Task) => tasks.push(task));
     });
+    this.pendingList.forEach((task: Task) => tasks.push(task));
     return tasks;
+  }
+
+  /** 待确认消息（按收集时间从新到早） */
+  pendingTasks(): Task[] {
+    const list: Task[] = this.pendingList.slice();
+    list.sort((a: Task, b: Task) => b.createdAt - a.createdAt);
+    return list;
+  }
+
+  pendingUnseenCount(): number {
+    let n: number = 0;
+    this.pendingList.forEach((task: Task) => {
+      if (task.pendingSeen !== true) {
+        n++;
+      }
+    });
+    return n;
+  }
+
+  markPendingSeen(task: Task): void {
+    if (task.pendingSeen !== true) {
+      task.pendingSeen = true;
+      this.persist();
+    }
+  }
+
+  confirmPending(task: Task): void {
+    task.status = TaskStatus.CONFIRMED;
+    task.pendingSeen = true;
+    task.userEdited = true;
+    this.rebuildGroups(this.allTasks(), task.id);
+    this.persist();
+    this.reconcileReminders();
+  }
+
+  ignorePending(task: Task): void {
+    const rest: Task[] = [];
+    this.pendingList.forEach((item: Task) => {
+      if (item.id !== task.id) {
+        rest.push(item);
+      }
+    });
+    this.pendingList = rest;
+    this.rebuildGroups(this.allTasks());
+    this.persist();
   }
 
   /**
@@ -157,7 +205,8 @@ export class TaskListStore {
     if (ctx === undefined) {
       return;
     }
-    await ReminderCoordinator.reconcile(this.allTasks(), ctx, () => {
+    const active: Task[] = this.allTasks().filter((task: Task) => task.status !== TaskStatus.PENDING_CONFIRM);
+    await ReminderCoordinator.reconcile(active, ctx, () => {
       this.persist();
     });
     this.reminderError = ReminderCoordinator.lastError;
@@ -422,7 +471,17 @@ export class TaskListStore {
 
   /** `refreshGroups` / `addTask` / `upsertAll` 共用的「分组 + 就地复用同一天对象」 */
   private rebuildGroups(all: Task[], expandTaskId?: number): void {
-    const rebuilt: TaskDayGroup[] = TaskListViewModel.groupByDay(all, new Date());
+    const pending: Task[] = [];
+    const rest: Task[] = [];
+    all.forEach((task: Task) => {
+      if (task.status === TaskStatus.PENDING_CONFIRM) {
+        pending.push(task);
+      } else {
+        rest.push(task);
+      }
+    });
+    this.pendingList = pending;
+    const rebuilt: TaskDayGroup[] = TaskListViewModel.groupByDay(rest, new Date());
     const merged: TaskDayGroup[] = [];
     rebuilt.forEach((fresh: TaskDayGroup) => {
       const kept: TaskDayGroup | undefined = this.findGroup(fresh.sortValue, fresh.hasDate);

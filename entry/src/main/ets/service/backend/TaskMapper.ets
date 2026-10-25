@@ -110,12 +110,15 @@ function stepsOf(steps: StepDto[] | undefined): TaskStep[] {
  * @param id       本机自增主键
  * @param rawText  原文（由 `source.msg_ids` 从 `/messages` 拼出来；取不到就空着）
  */
-export function candidateToTask(c: CandidateItem, id: number, rawText: string): Task {
+export function candidateToTask(c: CandidateItem, id: number, rawText: string, pending: boolean = false): Task {
   const task: Task = new Task();
   task.id = id;
   task.clientTaskId = c.candidate_id;
-  // 没有「确认页」的版本里直接进已确认，否则列表会按待确认态显示
-  task.status = TaskStatus.CONFIRMED;
+  // 群聊/转发/图片收集：默认进待确认；手动确认保存才置为已确认
+  task.status = pending ? TaskStatus.PENDING_CONFIRM : TaskStatus.CONFIRMED;
+  if (pending) {
+    task.pendingSeen = false;
+  }
   // 三档兜底：title → summary → 占位名，避免存进本机后变成没有名称的空壳卡片
   const title: string = typeof c.title === 'string' ? c.title.trim() : '';
   const summary: string = typeof c.summary === 'string' ? c.summary.trim() : '';

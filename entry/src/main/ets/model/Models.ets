@@ -187,6 +187,10 @@ export class Task {
   @Trace certainty?: number;
   /** 28. 缺失字段名：由 `place` / `who` / `dueAt` 是否为空推出（「缺失不猜测」的工程形式） */
   @Trace missingFields?: string[];
+  /** 29. 待确认状态里是否已看过（真机红点；普通待办不用） */
+  @Trace pendingSeen?: boolean;
+  /** 30. 待确认来源：group / forward / image（普通待办不用） */
+  @Trace pendingSource?: string;
 }
 
 /** 类型（`category`）预设：作业 / 考试 / 活动 / 通知 / 其他；也可自定义（字段表 §1 第 23 项） */

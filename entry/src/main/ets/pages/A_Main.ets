@@ -16,6 +16,10 @@ import { SyncService } from '../service/cloud/SyncService';
 import { PushRegistrar } from '../service/cloud/PushRegistrar';
 import { NotificationService } from '../service/system/NotificationService';
 import { BackendConfig } from '../service/backend/BackendConfig';
+import { candidateToTask } from '../service/backend/TaskMapper';
+import { ManualParseResult, ManualParseService } from '../service/cloud/ManualParseService';
+import { ForwardImageService } from '../service/cloud/ForwardImageService';
+import { Task, TaskPriority, TaskStatus, TaskSource } from '../model';
 import { RelayApi } from '../service/backend/RelayApi';
 import { ForwardPendingData, ForwardItem } from '../service/backend/BackendTypes';
 import { ShareIntake, SharePayload, SHARE_KIND_IMAGE } from '../service/share/ShareIntake';
@@ -132,15 +136,94 @@ struct A_Main {
     if (data.items.length === 0) {
       return;
     }
-    const latest: ForwardItem = data.items[data.items.length - 1];
-    this.addDraft.reset();
-    this.addDraft.sourceTab = AddTaskSource.TEXT;
-    this.addDraft.rawText = latest.text;
-    this.shareParseKey = Date.now();
-    this.addSheetShown = true;
-    if (data.items.length > 1) {
-      this.toast('收到 ' + data.items.length + ' 条转发，已打开最新一条');
+    const pending: Task[] = [];
+    for (let i = 0; i < data.items.length; i++) {
+      const item: ForwardItem = data.items[i];
+      const task: Task = item.kind === 'image' && item.url !== undefined && item.url.length > 0
+        ? await this.imageToPending(item, i)
+        : await this.forwardToPending(item, i);
+      pending.push(task);
     }
+    this.store.upsertAll(pending);
+    this.toast('收到 ' + data.items.length + ' 条待确认消息');
+  }
+
+  /** 转发文本 → 待确认任务（解析失败也保留原文，不丢消息） */
+  private async forwardToPending(item: ForwardItem, index: number): Promise<Task> {
+    const raw: string = item.text.trim();
+    const now: number = Date.now() + index;
+    try {
+      const parsed: ManualParseResult = await ManualParseService.parseText(raw);
+      if (parsed.ok && parsed.candidate !== undefined) {
+        const task: Task = candidateToTask(parsed.candidate, 0, raw, true);
+        task.createdAt = now;
+        task.pendingSource = 'forward';
+        task.pendingSeen = false;
+        return task;
+      }
+    } catch (error) {
+      // 网络/解析失败：落到下面的原文兜底
+    }
+    const task: Task = new Task();
+    let name: string = raw.length > 0 ? raw.split('\n')[0].trim() : '转发的消息';
+    if (name.length > 20) {
+      name = name.substring(0, 20);
+    }
+    task.name = name.length > 0 ? name : '转发的消息';
+    task.rawText = raw;
+    task.status = TaskStatus.PENDING_CONFIRM;
+    task.priority = TaskPriority.NORMAL;
+    task.source = TaskSource.SHARE;
+    task.createdAt = now;
+    task.pendingSeen = false;
+    task.pendingSource = 'forward';
+    return task;
+  }
+
+  /** 转发图片 → 缓存文件 → 本地/后端 OCR → 待确认任务；不打开任何页面 */
+  private async imageToPending(item: ForwardItem, index: number): Promise<Task> {
+    const now: number = Date.now() + index;
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    let uri: string = '';
+    if (context !== undefined && item.url !== undefined) {
+      uri = await ForwardImageService.download(context, item.url);
+    }
+    if (uri.length > 0) {
+      try {
+        const parsed: ManualParseResult = await ManualParseService.parseImage(uri);
+        if (parsed.ok && parsed.candidate !== undefined) {
+          const task: Task = candidateToTask(parsed.candidate, 0, parsed.text, true);
+          task.createdAt = now;
+          task.pendingSource = 'image';
+          task.pendingSeen = false;
+          return task;
+        }
+        if (parsed.text.length > 0) {
+          const task: Task = new Task();
+          const first: string = parsed.text.split('\n')[0].trim();
+          task.name = first.length > 0 ? first.substring(0, 20) : '图片消息';
+          task.rawText = parsed.text;
+          task.status = TaskStatus.PENDING_CONFIRM;
+          task.priority = TaskPriority.NORMAL;
+          task.source = TaskSource.SHARE;
+          task.createdAt = now;
+          task.pendingSeen = false;
+          task.pendingSource = 'image';
+          return task;
+        }
+      } catch (error) {
+        // 落到下面的占位任务
+      }
+    }
+    const task: Task = new Task();
+    task.name = '图片消息（待核对）';
+    task.status = TaskStatus.PENDING_CONFIRM;
+    task.priority = TaskPriority.NORMAL;
+    task.source = TaskSource.SHARE;
+    task.createdAt = now;
+    task.pendingSeen = false;
+    task.pendingSource = 'image';
+    return task;
   }
 
   private finishOnboarding(): void {

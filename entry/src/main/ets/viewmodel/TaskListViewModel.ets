@@ -186,10 +186,9 @@ export class TaskListViewModel {
     const groups: TaskDayGroup[] = [];
     const undated: TaskDayGroup = new TaskDayGroup();
     undated.expanded = false;
-    groups.push(undated);
 
     tasks.forEach((task: Task) => {
-      if (task.status === TaskStatus.DELETED) {
+      if (task.status === TaskStatus.DELETED || task.status === TaskStatus.PENDING_CONFIRM) {
         return;
       }
       const ts: number = taskTime(task);
@@ -202,6 +201,10 @@ export class TaskListViewModel {
       TaskListViewModel.bucketGroup(groups, slot, today).tasks.push(task);
     });
 
+    if (undated.tasks.length > 0) {
+      undated.tasks.sort((a: Task, b: Task) => compareInGroup(a, b));
+      groups.push(undated);
+    }
     groups.forEach((group: TaskDayGroup) => {
       group.tasks.sort((a: Task, b: Task) => compareInGroup(a, b));
     });
@@ -209,9 +212,9 @@ export class TaskListViewModel {
     return groups
       .filter((group: TaskDayGroup) => group.totalCount > 0)
       .sort((a: TaskDayGroup, b: TaskDayGroup) => {
-        // 「未安排日期」组排最前（需求方 2026-10-17），其余 今天→明天→本周→更远
+        // 有日期的组在前（今天→明天→本周→更远），「未安排日期」放最后
         if (a.hasDate !== b.hasDate) {
-          return a.hasDate ? 1 : -1;
+          return a.hasDate ? -1 : 1;
         }
         return a.sortValue - b.sortValue;
       });

@@ -83,6 +83,8 @@ interface TaskPlain {
   linkUrl?: string;
   certainty?: number;
   missingFields?: string[];
+  pendingSeen?: boolean;
+  pendingSource?: string;
 }
 
 /**
@@ -316,6 +318,12 @@ export class TaskRepository {
     if (task.missingFields !== undefined) {
       plain.missingFields = task.missingFields;
     }
+    if (task.pendingSeen !== undefined) {
+      plain.pendingSeen = task.pendingSeen;
+    }
+    if (task.pendingSource !== undefined) {
+      plain.pendingSource = task.pendingSource;
+    }
     return plain;
   }
 
@@ -395,6 +403,12 @@ export class TaskRepository {
     task.linkUrl = raw.linkUrl;
     if (Array.isArray(raw.missingFields)) {
       task.missingFields = raw.missingFields.slice();
+    }
+    if (raw.pendingSeen === true) {
+      task.pendingSeen = true;
+    }
+    if (typeof raw.pendingSource === 'string') {
+      task.pendingSource = raw.pendingSource;
     }
     if (Array.isArray(raw.steps)) {
       const steps: TaskStep[] = [];

@@ -12,7 +12,7 @@
  *
  * 时间：CSV 用本地时区的 `YYYY-MM-DD HH:mm`（给人看）；JSON 保留**毫秒时间戳原值**（给机器/回灌用）。
  */
-import { Task, TaskLevel, TaskPriority, TaskSource, TaskStatus } from '../model';
+import { Task, TaskLevel, TaskPriority, TaskSource, TaskStatus, TaskStep } from '../model';
 import { TaskListViewModel } from './TaskListViewModel';
 
 /** CSV 列名（顺序即列序）。**这就是白名单**：不在这个数组里的字段不会进 CSV */
@@ -50,6 +50,8 @@ export class TaskExportRow {
   who: string = '';
   stepsTotal: number = 0;
   stepsDone: number = 0;
+  /** JSON 完整备份带步骤内容；CSV 不用 */
+  steps?: TaskStep[];
   certainty: number = -1;
   missingFields: string[] = [];
   createdAt: number = 0;
@@ -58,6 +60,8 @@ export class TaskExportRow {
   /** 以下两个**只在 JSON 导出里出现**（CSV 白名单不含） */
   rawText: string = '';
   rawJson: string = '';
+  urls?: string[];
+  linkUrl?: string;
 }
 
 /** JSON 导出的外层结构（带元信息，方便对方判断"这是什么时候、哪个版本的导出"） */
@@ -137,6 +141,7 @@ export class TaskExportViewModel {
     row.place = task.place !== undefined ? task.place : '';
     row.who = task.who !== undefined ? task.who : '';
     if (task.steps !== undefined) {
+      row.steps = task.steps;
       row.stepsTotal = task.steps.length;
       let done: number = 0;
       for (let i = 0; i < task.steps.length; i++) {
@@ -151,6 +156,8 @@ export class TaskExportViewModel {
     row.createdAt = task.createdAt;
     row.finishedAt = task.finishedAt !== undefined ? task.finishedAt : 0;
     row.note = task.note !== undefined ? task.note : '';
+    row.urls = task.urls !== undefined ? task.urls : [];
+    row.linkUrl = task.linkUrl !== undefined ? task.linkUrl : '';
     row.rawText = task.rawText !== undefined ? task.rawText : '';
     row.rawJson = task.rawJson !== undefined ? task.rawJson : '';
     return row;
@@ -250,6 +257,31 @@ export class TaskExportViewModel {
     return source;
   }
 
+  /** 导入去重：所有可导出字段完全一致才算同一条 */
+  static sameTask(a: Task, b: Task): boolean {
+    return a.name === b.name
+      && (a.note || '') === (b.note || '')
+      && (a.rawText || '') === (b.rawText || '')
+      && (a.rawJson || '') === (b.rawJson || '')
+      && (a.dueAt || 0) === (b.dueAt || 0)
+      && (a.dueText || '') === (b.dueText || '')
+      && (a.place || '') === (b.place || '')
+      && (a.who || '') === (b.who || '')
+      && a.createdAt === b.createdAt
+      && (a.finishedAt || 0) === (b.finishedAt || 0)
+      && a.priority === b.priority
+      && (a.level === undefined ? -1 : a.level) === (b.level === undefined ? -1 : b.level)
+      && (a.category || '') === (b.category || '')
+      && (a.source || '') === (b.source || '')
+      && (a.originDetail || '') === (b.originDetail || '')
+      && (a.linkUrl || '') === (b.linkUrl || '')
+      && (a.certainty === undefined ? -1 : a.certainty) === (b.certainty === undefined ? -1 : b.certainty)
+      && JSON.stringify(a.tags || []) === JSON.stringify(b.tags || [])
+      && JSON.stringify(a.steps || []) === JSON.stringify(b.steps || [])
+      && JSON.stringify(a.urls || []) === JSON.stringify(b.urls || [])
+      && JSON.stringify(a.missingFields || []) === JSON.stringify(b.missingFields || []);
+  }
+
   /** 解析导入 JSON（只认本应用导出的 schema=1；不合规的行跳过，不猜字段） */
   static parseJson(text: string): TaskImportParseResult {
     const out: TaskImportParseResult = new TaskImportParseResult();
@@ -289,8 +321,14 @@ export class TaskExportViewModel {
       task.place = typeof row.place === 'string' && row.place.length > 0 ? row.place : undefined;
       task.who = typeof row.who === 'string' && row.who.length > 0 ? row.who : undefined;
       task.category = typeof row.category === 'string' && row.category.length > 0 ? row.category : undefined;
+      task.originDetail = typeof row.originDetail === 'string' && row.originDetail.length > 0 ? row.originDetail : undefined;
+      task.urls = Array.isArray(row.urls) ? row.urls : [];
+      task.linkUrl = typeof row.linkUrl === 'string' && row.linkUrl.length > 0 ? row.linkUrl : undefined;
+      task.certainty = typeof row.certainty === 'number' && row.certainty >= 0 ? row.certainty : undefined;
+      task.missingFields = Array.isArray(row.missingFields) ? row.missingFields : [];
       task.source = TaskExportViewModel.importSource(row.source);
       task.tags = Array.isArray(row.tags) ? row.tags : [];
+      task.steps = Array.isArray(row.steps) ? row.steps : [];
       task.createdAt = typeof row.createdAt === 'number' && row.createdAt > 0 ? row.createdAt : now;
       task.finishedAt = typeof row.finishedAt === 'number' && row.finishedAt > 0 ? row.finishedAt : undefined;
       task.alarm = 0;
@@ -367,6 +405,12 @@ export class TaskImportParseResult {
 }
 
 interface ImportRow {
+  steps?: TaskStep[];
+  originDetail?: string;
+  urls?: string[];
+  linkUrl?: string;
+  certainty?: number;
+  missingFields?: string[];
   name?: string;
   status?: number;
   priority?: number;

@@ -31,7 +31,6 @@ import { TaskTagsCard } from '../components/TaskTagsCard';
 import { TaskNoteCard } from '../components/TaskNoteCard';
 import { TaskRawTextCard } from '../components/TaskRawTextCard';
 import { TaskMediaCard } from '../components/TaskMediaCard';
-import { FeedbackService } from '../service/cloud/FeedbackService';
 import { Task, TaskAlarm, TaskStatus } from '../model';
 import { NAV_STACK_KEY, TaskDetailParam } from '../viewmodel/TaskNavParams';
 import { showDeleteConfirmDialog } from '../utils/DeleteConfirmDialog';
@@ -101,6 +100,9 @@ export struct B_TaskDetail {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
     this.syncStatusBarHeight();
     this.snapshot = this.contentSnapshot();
+    if (this.param.pendingMode) {
+      this.param.store.markPendingSeen(this.param.task);
+    }
   }
 
   /** 内容字段快照（用于判断用户是否真的改过；不含 status/reminderId 等系统态） */
@@ -384,36 +386,7 @@ export struct B_TaskDetail {
               top: CONTENT_GAP_VP
             })
 
-            // 采纳 / 忽略（FE-75）：只对来自后端候选的任务显示。
-            // 2026-10-25 需求方：「把有用/忽略放到添加步骤下面」——从任务名下方搬到这里。
-            // ⚠️ 这里原来还有一颗「开始执行 / 标记完成」按钮（MVP 支的状态入口）；
-            // 合并后状态统一由下方「更多信息卡 → 状态」那段承担（六态全在，且能来回改），
-            // 免得同一页出现两个改状态的地方。
-            if (this.param.task.clientTaskId !== undefined && this.param.task.clientTaskId.length > 0) {
-              Row({ space: 8 }) {
-                Text('有用')
-                  .fontSize(13)
-                  .fontColor(this.themeStore.scheme.primary)
-                  .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-                  .onClick(() => {
-                    FeedbackService.send(this.param.task, 'accept');
-                    this.showToast('已记录：这条整理对你有用');
-                  })
-                Text('忽略')
-                  .fontSize(13)
-                  .fontColor(this.themeStore.scheme.onSurfaceVariant)
-                  .padding({ left: 10, right: 10, top: 6, bottom: 6 })
-                  .onClick(() => {
-                    FeedbackService.send(this.param.task, 'dismiss');
-                    this.param.store.deleteTask(this.param.task.id);
-                    this.popBack();
-                    this.showToast('已忽略，之后不再优先推送');
-                  })
-              }
-              .width('100%')
-              .padding({ left: CONTENT_SIDE_PADDING_VP, right: CONTENT_SIDE_PADDING_VP, top: 8 })
-              .justifyContent(FlexAlign.Start)
-            }
+            // 普通待办不再显示「有用 / 忽略」；待确认消息用底部的「保留 / 忽略」
 
             // 第二块之后：图片 / 文件 / 扫码链接（步骤下方、提醒上方）
             if ((this.param.task.urls !== undefined && this.param.task.urls.length > 0)
@@ -505,6 +478,40 @@ export struct B_TaskDetail {
               right: CONTENT_SIDE_PADDING_VP,
               top: CONTENT_GAP_VP
             })
+
+            if (this.param.pendingMode) {
+              Row({ space: 12 }) {
+                Button({ type: ButtonType.Capsule, stateEffect: true }) {
+                  Text('忽略')
+                    .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                    .fontColor(this.themeStore.scheme.onSurfaceVariant)
+                }
+                .layoutWeight(1)
+                .height(44)
+                .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
+                .borderRadius(22)
+                .onClick(() => {
+                  this.param.store.ignorePending(this.param.task);
+                  this.popBack();
+                })
+
+                Button({ type: ButtonType.Capsule, stateEffect: true }) {
+                  Text('保留')
+                    .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                    .fontColor(this.themeStore.scheme.onPrimary)
+                }
+                .layoutWeight(1)
+                .height(44)
+                .backgroundColor(this.themeStore.scheme.primary)
+                .borderRadius(22)
+                .onClick(() => {
+                  this.param.store.confirmPending(this.param.task);
+                  this.popBack();
+                })
+              }
+              .width('100%')
+              .padding({ left: CONTENT_SIDE_PADDING_VP, right: CONTENT_SIDE_PADDING_VP, top: 16 })
+            }
 
             // 底部留白：最后一张卡（备注卡）不要贴着手势条。
             // 原来这里还有一块「任务详情待做」占位 —— 五张卡做完就撤了（需求方 2026-10-17：「把底部的任务待做去掉」）

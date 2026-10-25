@@ -174,6 +174,8 @@ export struct A_Settings {
   /** 绑定轮询剩余次数（按后端 expires_in 算，过期就停并提示重新生成） */
   /** 每 2 秒查一次绑定结果（倒计时按 1 秒走，避免界面两秒一跳） */
   private bindTick: number = 0;
+  /** 配对码到期绝对时刻（后台定时器被节流也按真实时间算） */
+  private bindExpireAt: number = 0;
 
   /* ── 权限管理（通知 / 日历 / 订阅消息）── */
   @Local notifyAllowed: boolean = false;
@@ -532,9 +534,13 @@ export struct A_Settings {
     this.bindHint = res.data.hint;
     this.bindExpired = false;
     this.bindLeftSec = res.data.expires_in;
+    this.bindExpireAt = Date.now() + res.data.expires_in * 1000;
     this.bindTick = 0;
     this.bindTimer = setInterval(() => {
-      if (this.bindLeftSec <= 0) {
+      // 用绝对到期时刻算，App 在后台被节流后回来也不会少减
+      const left: number = Math.max(0, Math.ceil((this.bindExpireAt - Date.now()) / 1000));
+      this.bindLeftSec = left;
+      if (left <= 0) {
         this.cancelBind();
         this.bindCode = '';
         this.bindExpired = true;
@@ -542,9 +548,8 @@ export struct A_Settings {
         this.toast('配对码已过期，请重新生成');
         return;
       }
-      this.bindLeftSec--;
       this.bindTick++;
-      // UI 每秒更新，查询仍保持 2 秒一次，别把 /bind/status 打得太密
+      // 查询仍保持 2 秒一次，别把 /bind/status 打得太密
       if (this.bindTick % 2 === 0) {
         this.checkBind();
       }
@@ -645,6 +650,7 @@ export struct A_Settings {
   private cancelBind(): void {
     this.bindCode = '';
     this.bindLeftSec = 0;
+    this.bindExpireAt = 0;
     if (this.bindTimer >= 0) {
       clearInterval(this.bindTimer);
       this.bindTimer = -1;
@@ -1134,8 +1140,32 @@ export struct A_Settings {
       this.toast(parsed.message.length > 0 ? parsed.message : '没有可导入的任务');
       return;
     }
-    this.store.upsertAll(parsed.tasks);
-    this.toast('已导入 ' + parsed.tasks.length + ' 条任务');
+    // 严格去重：所有字段都相同才算同一条；不按 clientTaskId 或名称猜
+    const existing: Task[] = this.store.allTasks();
+    const fresh: Task[] = [];
+    for (let i = 0; i < parsed.tasks.length; i++) {
+      const candidate: Task = parsed.tasks[i];
+      let duplicated: boolean = false;
+      for (let j = 0; j < existing.length; j++) {
+        if (TaskExportViewModel.sameTask(candidate, existing[j])) {
+          duplicated = true;
+          break;
+        }
+      }
+      if (!duplicated) {
+        for (let k = 0; k < fresh.length; k++) {
+          if (TaskExportViewModel.sameTask(candidate, fresh[k])) {
+            duplicated = true;
+            break;
+          }
+        }
+      }
+      if (!duplicated) {
+        fresh.push(candidate);
+      }
+    }
+    this.store.upsertAll(fresh);
+    this.toast('已导入 ' + fresh.length + ' 条任务' + (fresh.length < parsed.tasks.length ? '（已去重）' : ''));
   }
 
   /** 导出到剪贴板（CSV 口径：白名单列，不把原文贴出去） */  private async exportToClipboard(): Promise<void> {
