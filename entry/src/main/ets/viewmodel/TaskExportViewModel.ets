@@ -259,7 +259,8 @@ export class TaskExportViewModel {
 
   /** 导入去重：所有可导出字段完全一致才算同一条 */
   static sameTask(a: Task, b: Task): boolean {
-    return a.name === b.name
+    return a.status === b.status
+      && a.name === b.name
       && (a.note || '') === (b.note || '')
       && (a.rawText || '') === (b.rawText || '')
       && (a.rawJson || '') === (b.rawJson || '')
