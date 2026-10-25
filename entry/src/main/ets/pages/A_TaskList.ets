@@ -13,6 +13,13 @@ import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
 import { TaskFilterChips } from '../components/TaskFilterChips';
 import { ROUTE_TASK_DETAIL, NAV_STACK_KEY, TaskDetailParam } from '../viewmodel/TaskNavParams';
 import { TaskListStore } from '../viewmodel/TaskListStore';
+import { SyncService } from '../service/cloud/SyncService';
+import {
+  SyncStatus,
+  SYNC_PHASE_SYNCING,
+  SYNC_PHASE_OFFLINE,
+  SYNC_PHASE_DISABLED
+} from '../service/cloud/SyncStatus';
 
 /**
  * 列表底部留白（vp）：让**最后一张卡片能滚到悬浮页签栏上方**，不被它压住。
@@ -161,6 +168,8 @@ export struct A_TaskList {
    * 编辑态再传给每张卡片（圆圈 ↔ 方框勾选框）。
    */
   @Require @Param store: TaskListStore;
+  /** 同步状态细条：离线/重试中/同步中 */
+  private syncStatus: SyncStatus = SyncStatus.instance();
 
   /** 视觉个性化状态：卡片间距按密度档取值（紧凑档更紧） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
@@ -408,6 +417,39 @@ export struct A_TaskList {
     .height('100%')
   }
 
+  /** 同步状态细条（离线 / 同步中 / 已关闭），离线可点重试 */
+  @Builder
+  syncBanner() {
+    Row({ space: 8 }) {
+      Text(this.syncStatus.phase === SYNC_PHASE_SYNCING
+        ? '正在同步…'
+        : (this.syncStatus.phase === SYNC_PHASE_DISABLED
+          ? '云端同步已关闭，可在设置里开启'
+          : '离线，数据可能不是最新'))
+        .fontSize(12)
+        .fontColor(this.syncStatus.phase === SYNC_PHASE_OFFLINE
+          ? this.themeStore.scheme.error
+          : this.themeStore.scheme.onSurfaceVariant)
+        .maxLines(1)
+        .layoutWeight(1)
+      if (this.syncStatus.phase === SYNC_PHASE_OFFLINE) {
+        Text('重试')
+          .fontSize(12)
+          .fontColor(this.themeStore.scheme.primary)
+          .onClick(() => {
+            SyncService.syncOnce(true);
+          })
+      }
+    }
+    .width('100%')
+    .height(36)
+    .padding({ left: 12, right: 12 })
+    .backgroundColor(this.syncStatus.phase === SYNC_PHASE_OFFLINE
+      ? this.themeStore.scheme.errorContainer
+      : this.themeStore.scheme.surfaceContainerHigh)
+    .borderRadius(10)
+  }
+
   @Builder
   taskList() {
     List({ scroller: this.scroller }) {
@@ -432,6 +474,16 @@ export struct A_TaskList {
         Row().width('100%').height(CHIPS_BAND_HEIGHT_VP + CHIPS_BAND_BOTTOM_GAP_VP)
       }
       .accessibilityLevel('no')
+
+      if (this.syncStatus.showsBanner) {
+        ListItem() {
+          Row() {
+            this.syncBanner()
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, bottom: 6 })
+        }
+      }
 
       ForEach(this.store.groups, (group: TaskDayGroup) => {
         // 当前筛选下这一组一条都没有 → 整组不渲染（组头也不出现）

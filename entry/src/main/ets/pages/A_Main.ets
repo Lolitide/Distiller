@@ -14,6 +14,9 @@ import { DraftRepository } from '../repository/DraftRepository';
 import { SettingsRepository } from '../repository/SettingsRepository';
 import { SyncService } from '../service/cloud/SyncService';
 import { NotificationService } from '../service/system/NotificationService';
+import { ShareIntake, SharePayload, SHARE_KIND_IMAGE } from '../service/share/ShareIntake';
+import { AddTaskSource } from '../components/AddTaskSourceTabs';
+import { A_Onboarding } from './A_Onboarding';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'A_Main';
@@ -57,6 +60,10 @@ struct A_Main {
   @Local addSheetShown: boolean = false;
   /** 「添加任务」的草稿：由页面持有，关闭半模态时落盘、下次点「＋」恢复 */
   private addDraft: AddTaskDraft = new AddTaskDraft();
+  /** 分享带入内容后自增，AddTaskSheet 据此自动解析；0 表示普通新建 */
+  @Local shareParseKey: number = 0;
+  /** 首次启动引导 */
+  @Local showOnboarding: boolean = false;
 
   /** 视觉个性化：M3 色系（页面底色取 surface） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
@@ -76,6 +83,66 @@ struct A_Main {
     this.syncTheme();
     this.syncGroupExpand();
     this.startBackend();
+    this.setupShare();
+    this.setupOnboarding();
+  }
+
+  /** 首次启动：没看过引导就全屏覆盖；不阻塞列表初始化 */
+  private setupOnboarding(): void {
+    if (this.shareParseKey > 0) {
+      // 从分享冷启动：先处理分享，引导留到下次普通启动
+      return;
+    }
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      return;
+    }
+    SettingsRepository.getFirstLaunchDone(context).then((done: boolean) => {
+      if (!done && this.shareParseKey === 0) {
+        this.showOnboarding = true;
+      }
+    });
+  }
+
+  private finishOnboarding(): void {
+    this.showOnboarding = false;
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context !== undefined) {
+      SettingsRepository.setFirstLaunchDone(context);
+    }
+  }
+
+  /** 分享接收：热启动走监听，冷启动先取暂存；同一次分享只消费一次 */
+  private setupShare(): void {
+    ShareIntake.setListener((payload: SharePayload) => {
+      this.openShare(payload);
+    });
+    const pending: SharePayload | undefined = ShareIntake.consumePending();
+    if (pending !== undefined) {
+      this.openShare(pending);
+    }
+    const error: string = ShareIntake.consumeError();
+    if (error.length > 0) {
+      this.toast(error);
+    }
+  }
+
+  /** 把分享内容放进「添加任务」确认面，并自动触发一次解析 */
+  private openShare(payload: SharePayload): void {
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context !== undefined) {
+      DraftRepository.clear(context);
+    }
+    this.addDraft.reset();
+    if (payload.kind === SHARE_KIND_IMAGE) {
+      this.addDraft.sourceTab = AddTaskSource.SCREENSHOT;
+      this.addDraft.imageUri = payload.uri;
+    } else {
+      this.addDraft.sourceTab = AddTaskSource.TEXT;
+      this.addDraft.rawText = payload.text;
+    }
+    this.shareParseKey = Date.now();
+    this.addSheetShown = true;
   }
 
   /**
@@ -106,8 +173,10 @@ struct A_Main {
       this.store.reconcileReminders();
     }, 60000);
     SyncService.init(context);
-    SyncService.start();
-    SyncService.syncOnce();
+    SettingsRepository.getSyncEnabled(context).then((enabled: boolean) => {
+      // 关掉同步就不轮询；打开会立即拉一次
+      SyncService.setEnabled(enabled);
+    });
   }
 
   aboutToDisappear(): void {
@@ -285,6 +354,7 @@ struct A_Main {
    * 原来这里是一句 toast 占位，本轮被真正的半模态取代。
    */
   private onAdd(): void {
+    this.shareParseKey = 0;
     const context: common.Context | undefined = this.getUIContext().getHostContext();
     if (context !== undefined) {
       // 恢复上次没填完的草稿（没有/损坏就保持空表单）
@@ -304,6 +374,7 @@ struct A_Main {
     AddTaskSheet({
       store: this.store,
       draft: this.addDraft,
+      autoParseKey: this.shareParseKey,
       onSaved: () => {
         // 保存成功：清掉本机草稿 → 收起半模态 + 给一条反馈
         const context: common.Context | undefined = this.getUIContext().getHostContext();
@@ -320,7 +391,8 @@ struct A_Main {
   }
 
   build() {
-    HdsNavigation(this.navPathStack) {
+    Stack() {
+      HdsNavigation(this.navPathStack) {
       // 底部页签栏（HdsTabs 容器 + 两个页签 + 悬浮样式 + 迷你栏）整个在 components/MainTabBar.ets 里
       MainTabBar({
         scroller: this.taskListScroller,
@@ -389,5 +461,18 @@ struct A_Main {
     .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
     .width('100%')
     .height('100%')
+
+      // 首次启动引导：全屏覆盖，完成后写 first_launch_done 不再出现
+      if (this.showOnboarding) {
+        A_Onboarding({
+          onFinish: () => {
+            this.finishOnboarding();
+          }
+        })
+      }
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor(this.themeStore.scheme.surface)
   }
 }

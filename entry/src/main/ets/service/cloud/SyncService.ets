@@ -18,6 +18,7 @@ import { CandidateItem, ServeMessage, apiErrorMessage } from '../backend/Backend
 import { TaskRepository } from '../../repository/TaskRepository';
 import { TaskListStore } from '../../viewmodel/TaskListStore';
 import { Task } from '../../model';
+import { SyncStatus } from './SyncStatus';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'SyncService';
@@ -30,6 +31,8 @@ export class SyncService {
   static lastSyncAt: string = '';
   /** 后端是否已连上（设置页显示用） */
   static connected: boolean = false;
+  /** 用户开关：关掉后不轮询、不注册身份 */
+  static enabled: boolean = true;
 
   private static context: common.Context | undefined = undefined;
   private static timerId: number = -1;
@@ -39,6 +42,20 @@ export class SyncService {
   static init(context: common.Context): void {
     SyncService.context = context;
     BackendConfig.init(context);
+    SyncStatus.instance().reset(SyncService.enabled);
+  }
+
+  /** 设置页开关：关闭立即停轮询；打开立刻拉一次 */
+  static setEnabled(enabled: boolean): void {
+    SyncService.enabled = enabled;
+    if (!enabled) {
+      SyncService.stop();
+      SyncStatus.instance().disabled();
+      return;
+    }
+    SyncStatus.instance().reset(true);
+    SyncService.start();
+    SyncService.syncOnce(true);
   }
 
   static hasIdentity(): boolean {
@@ -100,20 +117,29 @@ export class SyncService {
   }
 
   /** 拉一次候选并落盘；返回新增（本机原来没有的）任务条数 */
-  static async syncOnce(): Promise<number> {
+  static async syncOnce(showBusy: boolean = false): Promise<number> {
     const context: common.Context | undefined = SyncService.context;
     if (context === undefined || SyncService.running) {
       return 0;
+    }
+    if (!SyncService.enabled) {
+      SyncStatus.instance().disabled();
+      return 0;
+    }
+    if (showBusy) {
+      SyncStatus.instance().syncing();
     }
     SyncService.running = true;
     try {
       if (BackendConfig.baseUrl.length === 0) {
         SyncService.connected = false;
         SyncService.lastError = '未配置服务器地址';
+        SyncStatus.instance().offline(SyncService.lastError);
         return 0;
       }
       if (!(await SyncService.ensureIdentity())) {
         SyncService.connected = false;
+        SyncStatus.instance().offline(SyncService.lastError);
         return 0;
       }
       await SyncService.ensureSubscribed(false);
@@ -125,15 +151,18 @@ export class SyncService {
           BackendConfig.clearIdentity(context, true);
           SyncService.lastError = '设备身份已失效，请在设置里重新绑定';
           SyncService.connected = false;
+          SyncStatus.instance().offline(SyncService.lastError);
           SyncService.stop();
           return 0;
         }
         SyncService.lastError = res.ok ? '候选返回为空' : apiErrorMessage(res);
         SyncService.connected = false;
+        SyncStatus.instance().offline(SyncService.lastError);
         return 0;
       }
       SyncService.connected = true;
       SyncService.lastError = '';
+      SyncStatus.instance().online(SyncService.clock());
 
       const candidates: CandidateItem[] = res.data.candidates;
       if (candidates.length === 0) {
@@ -156,6 +185,7 @@ export class SyncService {
       BackendConfig.setCursor(context, res.data.cursor);
       TaskRepository.save(context, store.allTasks());
       SyncService.lastSyncAt = SyncService.clock();
+      SyncStatus.instance().online(SyncService.lastSyncAt);
       hilog.info(DOMAIN, TAG, 'sync ok: %{public}d candidates, +%{public}d new',
         candidates.length, added);
       return added;
@@ -163,6 +193,7 @@ export class SyncService {
       const err = error as Error;
       SyncService.lastError = err.message;
       SyncService.connected = false;
+      SyncStatus.instance().offline(err.message);
       hilog.warn(DOMAIN, TAG, 'sync failed: %{public}s', err.message);
       return 0;
     } finally {
@@ -171,6 +202,9 @@ export class SyncService {
   }
 
   static start(): void {
+    if (!SyncService.enabled) {
+      return;
+    }
     SyncService.stop();
     SyncService.timerId = setInterval(() => {
       SyncService.syncOnce();

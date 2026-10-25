@@ -147,6 +147,12 @@ export struct A_Settings {
   @Local bound: boolean = false;
   @Local bindCode: string = '';
   @Local bindHint: string = '';
+  /** 配对码已过期：显示「重新生成」而不是继续倒计时 */
+  @Local bindExpired: boolean = false;
+  /** 配对码剩余秒数（每 2 秒减一次，用于界面倒计时） */
+  @Local bindLeftSec: number = 0;
+  /** 云端同步开关（关闭即停止轮询） */
+  @Local syncEnabled: boolean = true;
   private bindTimer: number = -1;
   /** 本次「去绑定/重新绑定」的开始时间（用于忽略旧 bound_at） */
   private bindStartedAt: number = 0;
@@ -179,6 +185,7 @@ export struct A_Settings {
     this.loadSettings();
     this.loadBackend();
     this.loadPermissions();
+    this.loadSyncEnabled();
     // 窗口全屏后页面铺到屏幕顶端，顶部让位要补上状态栏高度（见 utils/WindowInsets）
     const context: common.Context | undefined = this.getUIContext().getHostContext();
     if (context !== undefined) {
@@ -496,15 +503,20 @@ export struct A_Settings {
     }
     this.bindCode = res.data.code;
     this.bindHint = res.data.hint;
+    this.bindExpired = false;
+    this.bindLeftSec = res.data.expires_in;
     this.bindPollLeft = Math.max(1, Math.ceil(res.data.expires_in / 2));
     this.bindTimer = setInterval(() => {
       if (this.bindPollLeft <= 0) {
         this.cancelBind();
         this.bindCode = '';
+        this.bindExpired = true;
+        this.bindLeftSec = 0;
         this.toast('配对码已过期，请重新生成');
         return;
       }
       this.bindPollLeft--;
+      this.bindLeftSec = Math.max(0, this.bindLeftSec - 2);
       this.checkBind();
     }, 2000);
   }
@@ -527,6 +539,8 @@ export struct A_Settings {
       BackendConfig.setBound(ctx, true);
     }
     this.bindCode = '';
+    this.bindLeftSec = 0;
+    this.bindExpired = false;
     if (this.bindTimer >= 0) {
       clearInterval(this.bindTimer);
       this.bindTimer = -1;
@@ -600,6 +614,7 @@ export struct A_Settings {
 
   private cancelBind(): void {
     this.bindCode = '';
+    this.bindLeftSec = 0;
     if (this.bindTimer >= 0) {
       clearInterval(this.bindTimer);
       this.bindTimer = -1;
@@ -633,13 +648,51 @@ export struct A_Settings {
     NotificationService.openSettings(ctx as common.UIAbilityContext);
   }
 
-  /** 隐私说明：只讲本机存什么、什么会离开手机 */
-  private showPrivacy(): void {
+  private replayOnboarding(): void {
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    SettingsRepository.setFirstLaunchDone(ctx, false);
+    this.toast('下次启动会显示启动引导');
+  }
+
+  private async loadSyncEnabled(): Promise<void> {    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    this.syncEnabled = await SettingsRepository.getSyncEnabled(ctx, true);
+  }
+
+  private onSyncToggle(isOn: boolean): void {
+    this.syncEnabled = isOn;
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    SettingsRepository.setSyncEnabled(ctx, isOn);
+    SyncService.setEnabled(isOn);
+    this.toast(isOn ? '云端同步已开启' : '云端同步已关闭，不再拉取群消息');
+  }
+
+  /** 云端字段清单：与隐私说明同一口径，不把「本机数据」混进来 */
+  private showCloudFields(): void {
     this.getUIContext().getPromptAction().showDialog({
+      title: '会离开手机的字段',
+      message: '同步开启时，App 会向你的服务器发送：设备标识、绑定关系、群订阅、'
+        + '采纳/忽略反馈计数、Push 令牌（未接入则没有）。'
+        + '\n\n服务器只临时保存群消息原文（内存 30 分钟，不落盘）。'
+        + '\n\n任务名称、备注、原文、草稿、画像只存在本机；原文不会回传。',
+      buttons: [{ text: '知道了', color: this.themeStore.scheme.primary }]
+    });
+  }
+
+  /** 隐私说明：只讲本机存什么、什么会离开手机 */
+  private showPrivacy(): void {    this.getUIContext().getPromptAction().showDialog({
       title: '隐私说明',
-      message: '任务、备注、原文、草稿只存在本机；'
-        + '只有任务名、截止时间、地点等任务字段会随同步上传到你配置的服务器。'
-        + '群消息原文在服务器内存保留 30 分钟后删除，不落盘。'
+      message: '任务、备注、原文、草稿只存在本机。'
+        + '同步开启时只向服务器发送设备标识、绑定关系、群订阅与采纳/忽略计数。'
+        + '群消息原文由服务器临时保留 30 分钟（仅内存、不落盘），不会回传。'
         + '可随时在「删除服务端数据」中清空云端记录。',
       buttons: [{ text: '知道了', color: this.themeStore.scheme.primary }]
     });
@@ -1367,6 +1420,9 @@ export struct A_Settings {
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
                 .fontColor($r('sys.color.ohos_id_color_text_secondary'))
                 .textAlign(TextAlign.Center)
+              Text('剩余 ' + this.bindLeftSec + ' 秒')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor(this.themeStore.scheme.onSurfaceVariant)
               Row({ space: 10 }) {
                 Button({ type: ButtonType.Capsule, stateEffect: true }) {
                   Text('复制配对码')
@@ -1400,6 +1456,85 @@ export struct A_Settings {
             .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP, bottom: 12 })
             .alignItems(HorizontalAlign.Center)
           }
+
+          if (this.bindExpired && this.bindCode.length === 0) {
+            Column({ space: 8 }) {
+              Text('配对码已过期，请重新生成')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor(this.themeStore.scheme.onSurfaceVariant)
+              Button({ type: ButtonType.Capsule, stateEffect: true }) {
+                Text('重新生成')
+                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                  .fontColor(this.themeStore.scheme.onPrimary)
+              }
+              .height(32)
+              .padding({ left: 16, right: 16 })
+              .backgroundColor(this.themeStore.scheme.primary)
+              .borderRadius(16)
+              .onClick(() => {
+                this.startBind();
+              })
+            }
+            .width('100%')
+            .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP, bottom: 12 })
+            .alignItems(HorizontalAlign.Center)
+          }
+
+          this.rowDivider()
+        }
+        .width('100%')
+        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
+        .borderRadius(Theme.RADIUS_CARD)
+        .clip(true)
+
+        // ⑤ 云端数据：字段清单 + 同步开关 + 整包删除
+        Column() {
+          this.sectionTitle('云端数据')
+        }
+        .margin({ top: SECTION_GAP_VP })
+
+        Column() {
+          Row({ space: 8 }) {
+            Column({ space: 2 }) {
+              Text('云端同步')
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              Text('关闭后不再拉取群消息候选')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+            }
+            .layoutWeight(1)
+            .alignItems(HorizontalAlign.Start)
+
+            Toggle({ type: ToggleType.Switch, isOn: this.syncEnabled })
+              .id('syncEnabledToggle')
+              .onChange((isOn: boolean) => {
+                this.onSyncToggle(isOn);
+              })
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+
+          this.rowDivider()
+          Row({ space: 8 }) {
+            Text('会离开手机的字段')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+              .maxLines(1)
+            Text('查看')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.showCloudFields();
+          })
 
           this.rowDivider()
           Row() {
@@ -1468,9 +1603,6 @@ export struct A_Settings {
           .onClick(() => {
             this.clearAllTasks();
           })
-
-          this.rowDivider()
-          this.infoRow($r('app.string.settings_cloud_off'), '')
         }
         .width('100%')
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
@@ -1501,6 +1633,24 @@ export struct A_Settings {
           .alignItems(VerticalAlign.Center)
           .onClick(() => {
             this.showPrivacy();
+          })
+
+          this.rowDivider()
+          Row() {
+            Text('重新查看启动引导')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+            Text('下次启动')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.replayOnboarding();
           })
 
           this.rowDivider()

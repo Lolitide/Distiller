@@ -75,6 +75,8 @@ export struct AddTaskSheet {
    * 页面层可以把它落盘，下次点「＋」继续编辑。
    */
   @Require @Param draft: AddTaskDraft;
+  /** 大于 0 时自动触发一次 AI 预填（系统分享带入内容后使用） */
+  @Param autoParseKey: number = 0;
 
   aboutToDisappear(): void {
     // 划掉半模态 / 切页导致销毁：把当前填写内容存起来（保存成功后会 clear）
@@ -221,12 +223,32 @@ export struct AddTaskSheet {
   @Local parseErrorCode: string = '';
   @Local parseErrorMsg: string = '';
 
+  aboutToAppear(): void {
+    if (this.autoParseKey > 0) {
+      this.aiFill();
+    }
+  }
+
+  @Monitor('autoParseKey')
+  onAutoParseKeyChanged(): void {
+    if (this.autoParseKey > 0) {
+      this.aiFill();
+    }
+  }
+
   /**
    * AI 预填：文本/截图 → 后端 `/parse` → 把名称/时间/优先级/标签/地点填进草稿。
    * **只预填、不保存**；用户看过再点「保存」。
    */
   private async aiFill(): Promise<void> {
     if (this.aiBusy) {
+      return;
+    }
+    if (this.draft.sourceTab === AddTaskSource.SCREENSHOT) {
+      if (this.draft.imageUri.length === 0) {
+        return;
+      }
+    } else if (this.draft.rawText.trim().length === 0) {
       return;
     }
     this.aiBusy = true;

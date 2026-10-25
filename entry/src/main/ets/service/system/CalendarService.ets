@@ -5,7 +5,7 @@
  * 失败不阻断任务保存 —— 提醒仍由代理提醒负责，日历只是多一层可见性。
  */
 import { calendarManager } from '@kit.CalendarKit';
-import { common } from '@kit.AbilityKit';
+import { abilityAccessCtrl, common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Task } from '../../model';
@@ -16,6 +16,26 @@ const ACCOUNT_NAME: string = '知了';
 const EVENT_MINUTES: number = 30;
 
 export class CalendarService {
+  /** 首次引导里单独申请日历权限；默认不申请，用户点开关才调。 */
+  static async ensurePermission(context: common.UIAbilityContext): Promise<boolean> {
+    try {
+      const manager = abilityAccessCtrl.createAtManager();
+      const result = await manager.requestPermissionsFromUser(context,
+        ['ohos.permission.READ_CALENDAR', 'ohos.permission.WRITE_CALENDAR']);
+      for (let i = 0; i < result.authResults.length; i++) {
+        if (result.authResults[i] !== 0) {
+          return false;
+        }
+      }
+      return true;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.warn(DOMAIN, TAG, 'request calendar permission failed: %{public}d %{public}s',
+        err.code, err.message);
+      return false;
+    }
+  }
+
   private static account: calendarManager.CalendarAccount = {
     name: ACCOUNT_NAME,
     type: calendarManager.CalendarType.LOCAL,
