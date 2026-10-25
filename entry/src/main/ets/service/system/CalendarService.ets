@@ -5,7 +5,7 @@
  * 失败不阻断任务保存 —— 提醒仍由代理提醒负责，日历只是多一层可见性。
  */
 import { calendarManager } from '@kit.CalendarKit';
-import { abilityAccessCtrl, common } from '@kit.AbilityKit';
+import { abilityAccessCtrl, bundleManager, common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Task } from '../../model';
@@ -20,12 +20,22 @@ export class CalendarService {
   static async ensurePermission(context: common.UIAbilityContext): Promise<boolean> {
     try {
       const manager = abilityAccessCtrl.createAtManager();
-      const result = await manager.requestPermissionsFromUser(context,
+      await manager.requestPermissionsFromUser(context,
         ['ohos.permission.READ_CALENDAR', 'ohos.permission.WRITE_CALENDAR']);
-      for (let i = 0; i < result.authResults.length; i++) {
-        if (result.authResults[i] !== 0) {
-          return false;
-        }
+      // 不能只看 request 的 authResults（有些系统版本已授权时返回空数组，会被误判成功）：
+      // 再向令牌服务逐个确认，设置页读到的必须是同一份真实状态。
+      const info = bundleManager.getBundleInfoForSelfSync(
+        bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT | bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION);
+      const tokenId: number = info.appInfo.accessTokenId;
+      const readStatus: abilityAccessCtrl.GrantStatus =
+        await manager.checkAccessToken(tokenId, 'ohos.permission.READ_CALENDAR');
+      const writeStatus: abilityAccessCtrl.GrantStatus =
+        await manager.checkAccessToken(tokenId, 'ohos.permission.WRITE_CALENDAR');
+      hilog.info(DOMAIN, TAG, 'calendar grant read=%{public}d write=%{public}d', readStatus, writeStatus);
+      if (readStatus !== abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED
+        || writeStatus !== abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
+        hilog.warn(DOMAIN, TAG, 'calendar permission not granted');
+        return false;
       }
       return true;
     } catch (error) {

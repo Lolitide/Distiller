@@ -263,6 +263,16 @@ export interface PushTokenData {
   push_ready: boolean;
 }
 
+/** 转发给机器人的一条待确认文本（纯内存，App 取走即删） */
+export interface ForwardItem {
+  text: string;
+  created_at: number;
+}
+
+export interface ForwardPendingData {
+  items: ForwardItem[];
+}
+
 export interface FeedbackBody {
   candidate_id: string;
   action: string;

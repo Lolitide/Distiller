@@ -12,7 +12,7 @@
  *
  * 时间：CSV 用本地时区的 `YYYY-MM-DD HH:mm`（给人看）；JSON 保留**毫秒时间戳原值**（给机器/回灌用）。
  */
-import { Task, TaskLevel, TaskPriority, TaskSource } from '../model';
+import { Task, TaskLevel, TaskPriority, TaskSource, TaskStatus } from '../model';
 import { TaskListViewModel } from './TaskListViewModel';
 
 /** CSV 列名（顺序即列序）。**这就是白名单**：不在这个数组里的字段不会进 CSV */
@@ -249,4 +249,143 @@ export class TaskExportViewModel {
     }
     return source;
   }
+
+  /** 解析导入 JSON（只认本应用导出的 schema=1；不合规的行跳过，不猜字段） */
+  static parseJson(text: string): TaskImportParseResult {
+    const out: TaskImportParseResult = new TaskImportParseResult();
+    let bundle: ImportBundle;
+    try {
+      bundle = JSON.parse(text) as ImportBundle;
+    } catch (error) {
+      out.message = '不是有效的 JSON 文件';
+      return out;
+    }
+    if (bundle === null || bundle === undefined || !Array.isArray(bundle.tasks)) {
+      out.message = '文件里没有任务列表（需要知了导出的 JSON）';
+      return out;
+    }
+    const rows: ImportRow[] = bundle.tasks;
+    const now: number = Date.now();
+    for (let i = 0; i < rows.length; i++) {
+      const row: ImportRow = rows[i];
+      if (row === null || row === undefined || typeof row.name !== 'string' || row.name.trim().length === 0) {
+        continue;
+      }
+      if (row.status === TaskStatus.DELETED) {
+        continue;
+      }
+      const task: Task = new Task();
+      task.id = 0;
+      task.clientTaskId = 'import-' + now + '-' + i;
+      task.name = row.name.trim();
+      task.status = TaskExportViewModel.importStatus(row.status);
+      task.priority = TaskExportViewModel.importPriority(row.priority);
+      task.level = TaskExportViewModel.importLevel(row.level);
+      task.note = typeof row.note === 'string' && row.note.length > 0 ? row.note : undefined;
+      task.rawText = typeof row.rawText === 'string' && row.rawText.length > 0 ? row.rawText : undefined;
+      task.rawJson = typeof row.rawJson === 'string' && row.rawJson.length > 0 ? row.rawJson : undefined;
+      task.dueAt = typeof row.dueAt === 'number' && row.dueAt > 0 ? row.dueAt : undefined;
+      task.dueText = typeof row.dueText === 'string' ? row.dueText : undefined;
+      task.place = typeof row.place === 'string' && row.place.length > 0 ? row.place : undefined;
+      task.who = typeof row.who === 'string' && row.who.length > 0 ? row.who : undefined;
+      task.category = typeof row.category === 'string' && row.category.length > 0 ? row.category : undefined;
+      task.source = TaskExportViewModel.importSource(row.source);
+      task.tags = Array.isArray(row.tags) ? row.tags : [];
+      task.createdAt = typeof row.createdAt === 'number' && row.createdAt > 0 ? row.createdAt : now;
+      task.finishedAt = typeof row.finishedAt === 'number' && row.finishedAt > 0 ? row.finishedAt : undefined;
+      task.alarm = 0;
+      out.tasks.push(task);
+    }
+    out.ok = out.tasks.length > 0;
+    if (!out.ok) {
+      out.message = '没有可导入的任务';
+    }
+    return out;
+  }
+
+  private static importStatus(status: number | undefined): TaskStatus {
+    if (status === TaskStatus.COMPLETED) {
+      return TaskStatus.COMPLETED;
+    }
+    if (status === TaskStatus.IN_PROGRESS) {
+      return TaskStatus.IN_PROGRESS;
+    }
+    if (status === TaskStatus.EXPIRED) {
+      return TaskStatus.EXPIRED;
+    }
+    return TaskStatus.CONFIRMED;
+  }
+
+  private static importPriority(priority: number | undefined): TaskPriority {
+    if (priority === TaskPriority.URGENT) {
+      return TaskPriority.URGENT;
+    }
+    if (priority === TaskPriority.IMPORTANT) {
+      return TaskPriority.IMPORTANT;
+    }
+    return TaskPriority.NORMAL;
+  }
+
+  private static importLevel(level: number | undefined): TaskLevel | undefined {
+    if (level === TaskLevel.EASY) {
+      return TaskLevel.EASY;
+    }
+    if (level === TaskLevel.MEDIUM) {
+      return TaskLevel.MEDIUM;
+    }
+    if (level === TaskLevel.HARD) {
+      return TaskLevel.HARD;
+    }
+    return undefined;
+  }
+
+  private static importSource(source: string | undefined): TaskSource | undefined {
+    if (source === TaskSource.PASTE) {
+      return TaskSource.PASTE;
+    }
+    if (source === TaskSource.SHARE) {
+      return TaskSource.SHARE;
+    }
+    if (source === TaskSource.BOT) {
+      return TaskSource.BOT;
+    }
+    if (source === TaskSource.VOICE) {
+      return TaskSource.VOICE;
+    }
+    if (source === TaskSource.MANUAL) {
+      return TaskSource.MANUAL;
+    }
+    return undefined;
+  }
+}
+
+/** 导入结果：解析失败也给一句人话 */
+export class TaskImportParseResult {
+  ok: boolean = false;
+  message: string = '';
+  tasks: Task[] = [];
+}
+
+interface ImportRow {
+  name?: string;
+  status?: number;
+  priority?: number;
+  level?: number;
+  category?: string;
+  source?: string;
+  tags?: string[];
+  dueAt?: number;
+  dueText?: string;
+  place?: string;
+  who?: string;
+  createdAt?: number;
+  finishedAt?: number;
+  note?: string;
+  rawText?: string;
+  rawJson?: string;
+}
+
+interface ImportBundle {
+  schema?: number;
+  tasks?: ImportRow[];
 }

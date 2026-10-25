@@ -174,10 +174,137 @@ export class TextExtractService {
       return result;
     }
 
+    // Kit 不可用（部分真机/模拟器）时用本地规则兜底：至少把常见「明天下午三点」「文治书院」抽出来。
+    const rule: TextExtractResult | undefined = TextExtractService.extractByRules(trimmed);
+    if (rule !== undefined) {
+      return rule;
+    }
+
     result.ok = false;
     result.code = failureCode.length > 0 ? failureCode : 'unsupported';
     result.message = failureMessage.length > 0 ? failureMessage : '手机本地不支持实体抽取';
     return result;
+  }
+
+  /**
+   * 规则兜底：不依赖任何 Kit。
+   * 只抽「时间表达 + 带地名词尾的地点」，抽不到就返回 undefined，不猜任务名。
+   */
+  private static extractByRules(text: string): TextExtractResult | undefined {
+    const result: TextExtractResult = new TextExtractResult();
+    result.text = text;
+    const place: string = TextExtractService.rulePlace(text);
+    const time: LocalTimeHint | undefined = TextExtractService.ruleTime(text);
+    if (place.length === 0 && time === undefined) {
+      return undefined;
+    }
+    result.ok = true;
+    result.code = 'local_rules';
+    result.message = '端侧规则抽取（Natural Language Kit 不可用）';
+    result.place = place;
+    result.time = time;
+    return result;
+  }
+
+  private static rulePlace(text: string): string {
+    const match: RegExpMatchArray | null =
+      text.match(/([\u4e00-\u9fa5]{2,10}(?:书院|校区|食堂|广场|公寓|教学楼|图书馆|体育馆|报告厅|会议室|教室|门口))/);
+    return match !== null ? match[1] : '';
+  }
+
+  private static ruleTime(text: string): LocalTimeHint | undefined {
+    const match: RegExpMatchArray | null = text.match(
+      /(今天|明天|后天|大后天|本周[一二三四五六日天]|下周[一二三四五六日天])?\s*(上午|下午|晚上|中午|早上)?\s*([0-9]{1,2}|[一二三四五六七八九十]{1,3})\s*[点:：时]\s*(半|[0-9]{1,2}|[一二三四五六七八九十]{1,3})?/
+    );
+    const dateMatch: RegExpMatchArray | null = text.match(/([0-9]{1,2})\s*月\s*([0-9]{1,2})\s*[日号]/);
+    if (match === null && dateMatch === null) {
+      return undefined;
+    }
+    const hint: LocalTimeHint = new LocalTimeHint();
+    hint.text = match !== null ? match[0].trim() : (dateMatch !== null ? dateMatch[0] : '');
+    let hour: number = -1;
+    let minute: number = 0;
+    if (match !== null) {
+      hour = TextExtractService.cnNumber(match[3]);
+      if (match[4] === '半') {
+        minute = 30;
+      } else if (match[4] !== undefined) {
+        minute = TextExtractService.cnNumber(match[4]);
+      }
+      const period: string = match[2] !== undefined ? match[2] : '';
+      if ((period === '下午' || period === '晚上') && hour < 12) {
+        hour += 12;
+      } else if (period === '中午' && hour < 11) {
+        hour += 12;
+      }
+    }
+    if (hour < 0 && dateMatch !== null) {
+      hour = 23;
+      minute = 59;
+    }
+    if (hour < 0) {
+      return hint;
+    }
+    const now: Date = new Date();
+    const target: Date = new Date(now.getTime());
+    let hasDate: boolean = false;
+    if (dateMatch !== null) {
+      const month: number = Number(dateMatch[1]);
+      const day: number = Number(dateMatch[2]);
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        target.setMonth(month - 1, day);
+        hasDate = true;
+      }
+    } else if (match !== null && match[1] !== undefined) {
+      const token: string = match[1];
+      let offset: number = 0;
+      if (token === '明天') {
+        offset = 1;
+      } else if (token === '后天') {
+        offset = 2;
+      } else if (token === '大后天') {
+        offset = 3;
+      }
+      if (offset > 0) {
+        target.setDate(target.getDate() + offset);
+        hasDate = true;
+      } else if (token.startsWith('本周') || token.startsWith('下周')) {
+        const weekdays: string = '一二三四五六日';
+        const idx: number = weekdays.indexOf(token.charAt(2));
+        if (idx >= 0) {
+          const base: number = token.startsWith('本周') ? 0 : 7;
+          const current: number = target.getDay() === 0 ? 6 : target.getDay() - 1;
+          target.setDate(target.getDate() + base + idx - current);
+          hasDate = true;
+        }
+      }
+    }
+    if (!hasDate) {
+      // 只有时刻没有日期：只保留原话，不猜截止日
+      return hint;
+    }
+    target.setHours(hour, minute, 0, 0);
+    hint.at = target.getTime();
+    hint.allDay = dateMatch === null && match !== null && match[3] === undefined;
+    return hint;
+  }
+
+  /** 中文数字 1~59；失败返回 -1 */
+  private static cnNumber(raw: string): number {
+    if (/^[0-9]+$/.test(raw)) {
+      return Number(raw);
+    }
+    const digits: string = '零一二三四五六七八九';
+    if (raw === '十') {
+      return 10;
+    }
+    if (raw.indexOf('十') >= 0) {
+      const parts: string[] = raw.split('十');
+      const tens: number = parts[0].length === 0 ? 1 : digits.indexOf(parts[0]);
+      const ones: number = parts[1].length === 0 ? 0 : digits.indexOf(parts[1]);
+      return tens >= 0 && ones >= 0 ? tens * 10 + ones : -1;
+    }
+    return raw.length === 1 ? digits.indexOf(raw) : -1;
   }
 
   /**

@@ -15,6 +15,9 @@ import { SettingsRepository } from '../repository/SettingsRepository';
 import { SyncService } from '../service/cloud/SyncService';
 import { PushRegistrar } from '../service/cloud/PushRegistrar';
 import { NotificationService } from '../service/system/NotificationService';
+import { BackendConfig } from '../service/backend/BackendConfig';
+import { RelayApi } from '../service/backend/RelayApi';
+import { ForwardPendingData, ForwardItem } from '../service/backend/BackendTypes';
 import { ShareIntake, SharePayload, SHARE_KIND_IMAGE } from '../service/share/ShareIntake';
 import { AddTaskSource } from '../components/AddTaskSourceTabs';
 import { A_Onboarding } from './A_Onboarding';
@@ -103,6 +106,34 @@ struct A_Main {
     });
   }
 
+  /** 从 QQ/其他 App 回到前台：取走「转发给机器人」的文本 */
+  onPageShow(): void {
+    this.pullForwarded();
+  }
+
+  private async pullForwarded(): Promise<void> {
+    if (!BackendConfig.hasIdentity() || BackendConfig.baseUrl.length === 0 || this.showOnboarding) {
+      return;
+    }
+    const res = await RelayApi.forwardPending();
+    if (!res.ok || res.data === undefined) {
+      return;
+    }
+    const data: ForwardPendingData = res.data;
+    if (data.items.length === 0) {
+      return;
+    }
+    const latest: ForwardItem = data.items[data.items.length - 1];
+    this.addDraft.reset();
+    this.addDraft.sourceTab = AddTaskSource.TEXT;
+    this.addDraft.rawText = latest.text;
+    this.shareParseKey = Date.now();
+    this.addSheetShown = true;
+    if (data.items.length > 1) {
+      this.toast('收到 ' + data.items.length + ' 条转发，已打开最新一条');
+    }
+  }
+
   private finishOnboarding(): void {
     this.showOnboarding = false;
     const context: common.Context | undefined = this.getUIContext().getHostContext();
@@ -161,12 +192,7 @@ struct A_Main {
     this.store.setReminderFailureListener((message: string, code: number) => {
       this.onReminderFailure(message, code);
     });
-    // 通知/横幅权限：代理提醒依赖它；被拒后用户仍可从设置页重新打开
-    NotificationService.ensureEnabled(context as common.UIAbilityContext).then((enabled: boolean) => {
-      if (!enabled) {
-        this.showNotificationGuide();
-      }
-    });
+    // 通知权限只在用户主动打开开关时申请（首次引导/设置页）；启动不再弹系统框
     // 提醒/日历对账：启动先清掉系统里残留的「幽灵提醒」再重建，之后每分钟一次
     this.store.resetStaleReminders();
     this.reminderTimer = setInterval(() => {

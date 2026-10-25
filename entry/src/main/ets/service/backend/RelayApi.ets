@@ -11,6 +11,7 @@ import {
   CandidatesData,
   DeletedData,
   FeedbackBody,
+  ForwardPendingData,
   GroupsData,
   HealthData,
   MessagesData,
@@ -116,5 +117,10 @@ export class RelayApi {
   static async setPrefs(skipSelf: boolean): Promise<ApiResult<Record<string, Object>>> {
     return await ApiClient.post<Record<string, Object>>(BASE + '/my/prefs',
       { 'skip_self': skipSelf });
+  }
+
+  /** 取走「转发给机器人」的文本（一次性；纯内存 30 分钟 TTL） */
+  static async forwardPending(): Promise<ApiResult<ForwardPendingData>> {
+    return await ApiClient.get<ForwardPendingData>(BASE + '/forward/pending');
   }
 }

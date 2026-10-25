@@ -38,8 +38,9 @@ import { ToggleSlider } from '../components/ToggleSlider';
 import { M3Switch } from '../components/M3Switch';
 import { Task } from '../model';
 import { TaskListStore } from '../viewmodel/TaskListStore';
-import { TaskExportViewModel } from '../viewmodel/TaskExportViewModel';
+import { TaskExportViewModel, TaskImportParseResult } from '../viewmodel/TaskExportViewModel';
 import { TaskExportResult, TaskExportService } from '../service/system/TaskExportService';
+import { TaskImportFileResult, TaskImportService } from '../service/system/TaskImportService';
 import { WindowInsets } from '../utils/WindowInsets';
 import { BackendConfig } from '../service/backend/BackendConfig';
 import { RelayApi } from '../service/backend/RelayApi';
@@ -163,7 +164,7 @@ export struct A_Settings {
   @Local bindHint: string = '';
   /** 配对码已过期：显示「重新生成」而不是继续倒计时 */
   @Local bindExpired: boolean = false;
-  /** 配对码剩余秒数（每 2 秒减一次，用于界面倒计时） */
+  /** 配对码剩余秒数（每秒减一，界面倒计时） */
   @Local bindLeftSec: number = 0;
   /** 云端同步开关（关闭即停止轮询） */
   @Local syncEnabled: boolean = true;
@@ -171,7 +172,8 @@ export struct A_Settings {
   /** 本次「去绑定/重新绑定」的开始时间（用于忽略旧 bound_at） */
   private bindStartedAt: number = 0;
   /** 绑定轮询剩余次数（按后端 expires_in 算，过期就停并提示重新生成） */
-  private bindPollLeft: number = 0;
+  /** 每 2 秒查一次绑定结果（倒计时按 1 秒走，避免界面两秒一跳） */
+  private bindTick: number = 0;
 
   /* ── 权限管理（通知 / 日历 / 订阅消息）── */
   @Local notifyAllowed: boolean = false;
@@ -251,13 +253,15 @@ export struct A_Settings {
    */
   private async loadCalendarPermission(): Promise<void> {
     try {
-      const flags: number = bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT;
+      const flags: number = bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT
+        | bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION;
       const info = bundleManager.getBundleInfoForSelfSync(flags);
       const at = abilityAccessCtrl.createAtManager();
       // 用异步 checkAccessToken：同步版在本机实测会把已授权的日历读成 DENIED
       const status: abilityAccessCtrl.GrantStatus =
         await at.checkAccessToken(info.appInfo.accessTokenId, 'ohos.permission.WRITE_CALENDAR');
       this.calendarAllowed = status === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+      hilog.info(DOMAIN, TAG, 'settings calendar status=%{public}d allowed=%{public}s', status, String(this.calendarAllowed));
     } catch (error) {
       const err = error as BusinessError;
       hilog.warn(DOMAIN, TAG, 'check calendar permission failed: %{public}s', err.message);
@@ -528,9 +532,9 @@ export struct A_Settings {
     this.bindHint = res.data.hint;
     this.bindExpired = false;
     this.bindLeftSec = res.data.expires_in;
-    this.bindPollLeft = Math.max(1, Math.ceil(res.data.expires_in / 2));
+    this.bindTick = 0;
     this.bindTimer = setInterval(() => {
-      if (this.bindPollLeft <= 0) {
+      if (this.bindLeftSec <= 0) {
         this.cancelBind();
         this.bindCode = '';
         this.bindExpired = true;
@@ -538,10 +542,13 @@ export struct A_Settings {
         this.toast('配对码已过期，请重新生成');
         return;
       }
-      this.bindPollLeft--;
-      this.bindLeftSec = Math.max(0, this.bindLeftSec - 2);
-      this.checkBind();
-    }, 2000);
+      this.bindLeftSec--;
+      this.bindTick++;
+      // UI 每秒更新，查询仍保持 2 秒一次，别把 /bind/status 打得太密
+      if (this.bindTick % 2 === 0) {
+        this.checkBind();
+      }
+    }, 1000);
   }
 
   private async checkBind(): Promise<void> {
@@ -731,6 +738,20 @@ export struct A_Settings {
     const ok: boolean = await PushRegistrar.register();
     const s: PushStatus = this.pushStatus;
     this.toast(ok ? '推送通道已就绪' : (s.advice.length > 0 ? s.message + '：' + s.advice : s.message));
+  }
+
+  /** 推送通道到底怎么验证（没有 AGC 时用户不该被一句「未就绪」卡住） */
+  private showPushHelp(): void {
+    this.getUIContext().getPromptAction().showDialog({
+      title: '推送通道怎么验证',
+      message: '推送分两段，任何一段没开都会显示「未就绪」：\n\n'
+        + '① 手机端：需要 AGC 已开通「推送服务」，并用该应用的 Profile 重新签名，'
+        + 'App 才能取到 Push Token；没有权益时会显示「设备不支持/权益未开通」。\n'
+        + '② 服务端：在电脑上配置 QQBOT_PUSH_SA（服务账号 JSON，含 project_id）后重启后端，'
+        + '`/health` 的 capabilities 里会出现 push，`/push/token` 返回 push_ready=true。\n\n'
+        + '两段都就绪后，这一行显示「已就绪」；此时在群里产生一条新候选，后端会向设备发通知。',
+      buttons: [{ text: '知道了', color: this.themeStore.scheme.primary }]
+    });
   }
 
   /** 云端字段清单：与隐私说明同一口径，不把「本机数据」混进来 */
@@ -1094,8 +1115,30 @@ export struct A_Settings {
     this.toast(result.message.length > 0 ? result.message : '导出失败');
   }
 
-  /** 导出到剪贴板（CSV 口径：白名单列，不把原文贴出去） */
-  private async exportToClipboard(): Promise<void> {
+  /** 导入 JSON 备份：文件选择器 → 解析 → 合并进本机任务表 */
+  private async importTasks(): Promise<void> {
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    const picked: TaskImportFileResult = await TaskImportService.pickJson(ctx);
+    if (picked.cancelled) {
+      return;
+    }
+    if (!picked.ok) {
+      this.toast(picked.message.length > 0 ? picked.message : '读取失败');
+      return;
+    }
+    const parsed: TaskImportParseResult = TaskExportViewModel.parseJson(picked.text);
+    if (!parsed.ok) {
+      this.toast(parsed.message.length > 0 ? parsed.message : '没有可导入的任务');
+      return;
+    }
+    this.store.upsertAll(parsed.tasks);
+    this.toast('已导入 ' + parsed.tasks.length + ' 条任务');
+  }
+
+  /** 导出到剪贴板（CSV 口径：白名单列，不把原文贴出去） */  private async exportToClipboard(): Promise<void> {
     const tasks: Task[] = this.store.allTasks();
     if (tasks.length === 0) {
       this.toast('没有可导出的任务');
@@ -1790,6 +1833,27 @@ export struct A_Settings {
           this.rowDivider()
 
           Row() {
+            Text('导入任务（JSON）')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+              .maxLines(1)
+              .textAlign(TextAlign.Start)
+            Text('选择文件')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.importTasks();
+          })
+
+          this.rowDivider()
+
+          Row() {
             Text($r('app.string.settings_clear_tasks'))
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
               .fontColor($r('sys.color.ohos_id_color_warning'))
@@ -1905,6 +1969,24 @@ export struct A_Settings {
           .alignItems(VerticalAlign.Center)
           .onClick(() => {
             this.retryPush();
+          })
+
+          this.rowDivider()
+          Row() {
+            Text('推送验证说明')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+              .layoutWeight(1)
+            Text('查看')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.showPushHelp();
           })
         }
         .width('100%')

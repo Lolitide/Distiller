@@ -236,6 +236,9 @@ export struct AddTaskSheet {
   aboutToAppear(): void {
     if (this.autoParseKey > 0) {
       this.aiFill();
+    } else {
+      this.parseErrorCode = '';
+      this.parseErrorMsg = '';
     }
   }
 
@@ -243,6 +246,10 @@ export struct AddTaskSheet {
   onAutoParseKeyChanged(): void {
     if (this.autoParseKey > 0) {
       this.aiFill();
+    } else {
+      // 半模态是常驻组件：上次分享失败的红卡不能带到下一次普通新建
+      this.parseErrorCode = '';
+      this.parseErrorMsg = '';
     }
   }
 
@@ -435,8 +442,10 @@ export struct AddTaskSheet {
   /** 解析提示条要不要出现：低可信，或者有没识别出来的字段 */
   @Computed
   get showParseEvidence(): boolean {
+    // 只有「确实来自解析」的草稿才谈未识别字段；普通新建空白表单不提示
+    const parsed: boolean = this.draft.certainty > 0 || this.draft.parsedMissing.length > 0;
     const low: boolean = this.draft.certainty > 0 && this.draft.certainty < 60;
-    return low || this.missingFieldText.length > 0;
+    return parsed && (low || this.missingFieldText.length > 0);
   }
 
   /** 解析依据：低可信提示 ＋ 未识别字段（确认闸的一部分：看得见「为什么这么填」） */
