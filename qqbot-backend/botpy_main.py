@@ -208,6 +208,7 @@ class MyClient(botpy.Client):
                 return (
                     "绑定成功 ✅\n"
                     "回到「知了」App，在「订阅管理」里勾选你想接收通知的群。\n"
+                    "之后直接把要添加的消息发给我，App 会自动放进「待确认消息」。\n"
                     "（发的配对码 5 分钟内有效，只能使用一次）"
                 )
             reason = result.get("reason")
