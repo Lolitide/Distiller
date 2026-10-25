@@ -1196,14 +1196,19 @@ export struct A_Settings {
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
               Text(this.notifyAllowed ? '已开启' : '去开启')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                // 「已开启」＝**状态**，取色与任务列表 ChipGroup 里**选中 chip** 同一套 M3 角色
+                // （`secondaryContainer` 底 + `onSecondaryContainer` 字，见 components/TaskFilterChips.ets 的
+                //  `itemStyle.selectedBackgroundColor / selectedFontColor`）；原来用的 `primaryContainer`
+                // 在蓝主题下是一块很亮的青色，比旁边的文字抢眼太多（作者 2026-10-25 截图指出）。
+                // 「去开启」是**动作**，仍用 `primary` 实底，保持可点的视觉引导。
                 .fontColor(this.notifyAllowed
-                  ? this.themeStore.scheme.onPrimaryContainer
+                  ? this.themeStore.scheme.onSecondaryContainer
                   : this.themeStore.scheme.onPrimary)
             }
             .height(34)
             .padding({ left: 14, right: 14 })
             .backgroundColor(this.notifyAllowed
-              ? this.themeStore.scheme.primaryContainer
+              ? this.themeStore.scheme.secondaryContainer
               : this.themeStore.scheme.primary)
             .borderRadius(17)
             .onClick(() => {
@@ -1231,14 +1236,15 @@ export struct A_Settings {
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
               Text(this.calendarAllowed ? '已授权' : '去授权')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                // 同「通知权限」：已授权＝状态 → 与 ChipGroup 选中 chip 同色（secondaryContainer / onSecondaryContainer）
                 .fontColor(this.calendarAllowed
-                  ? this.themeStore.scheme.onPrimaryContainer
+                  ? this.themeStore.scheme.onSecondaryContainer
                   : this.themeStore.scheme.onPrimary)
             }
             .height(34)
             .padding({ left: 14, right: 14 })
             .backgroundColor(this.calendarAllowed
-              ? this.themeStore.scheme.primaryContainer
+              ? this.themeStore.scheme.secondaryContainer
               : this.themeStore.scheme.primary)
             .borderRadius(17)
             .onClick(() => {
