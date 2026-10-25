@@ -26,6 +26,7 @@ import { TaskMetaCard } from '../components/TaskMetaCard';
 import { TaskInfoCard } from '../components/TaskInfoCard';
 import { TaskTagsCard } from '../components/TaskTagsCard';
 import { TaskNoteCard } from '../components/TaskNoteCard';
+import { TaskRawTextCard } from '../components/TaskRawTextCard';
 import { TaskMediaCard } from '../components/TaskMediaCard';
 import { TaskAlarm, TaskStatus } from '../model';
 import { NAV_STACK_KEY, TaskDetailParam } from '../viewmodel/TaskNavParams';
@@ -407,6 +408,21 @@ export struct B_TaskDetail {
               right: CONTENT_SIDE_PADDING_VP,
               top: CONTENT_GAP_VP
             })
+
+            // 第七块：**原文对照**（`rawText`，字段表第 6 项「原文」）。
+            // 紧接着备注卡：一张是"人写的总结"、一张是"机器读的原话"，放一起才是对照。
+            // 只读 ＋ 可折叠 ＋ 可复制；`rawText` 为空时整卡不渲染（手建且没填原文的任务）。
+            if (this.param.task.rawText !== undefined && this.param.task.rawText.trim().length > 0) {
+              Column() {
+                TaskRawTextCard({ task: this.param.task })
+              }
+              .width('100%')
+              .padding({
+                left: CONTENT_SIDE_PADDING_VP,
+                right: CONTENT_SIDE_PADDING_VP,
+                top: CONTENT_GAP_VP
+              })
+            }
 
             // 第七块：更多信息卡（状态 / 难易程度 / 类型 / 地点 / 链接 / 置信度 / 创建于 / 完成于）
             // **挪到最后**（2026-10-19「详情部分的显示优先级、分组可做优化调整」）：

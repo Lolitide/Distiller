@@ -169,6 +169,30 @@
       "value": "未识别：%s"
     },
     {
+      "name": "raw_text_title",
+      "value": "原文"
+    },
+    {
+      "name": "raw_text_expand",
+      "value": "展开"
+    },
+    {
+      "name": "raw_text_collapse",
+      "value": "收起"
+    },
+    {
+      "name": "raw_text_copy",
+      "value": "复制原文"
+    },
+    {
+      "name": "raw_text_copied",
+      "value": "已复制原文"
+    },
+    {
+      "name": "raw_text_copy_failed",
+      "value": "复制失败"
+    },
+    {
       "name": "deleted_count",
       "value": "已删除 %d 项"
     },
