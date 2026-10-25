@@ -45,6 +45,14 @@ import { BackendConfig } from '../service/backend/BackendConfig';
 import { RelayApi } from '../service/backend/RelayApi';
 import { apiErrorMessage, GroupItemDto } from '../service/backend/BackendTypes';
 import { SyncService } from '../service/cloud/SyncService';
+import { PushRegistrar } from '../service/cloud/PushRegistrar';
+import {
+  PUSH_PHASE_FAILED,
+  PUSH_PHASE_READY,
+  PUSH_PHASE_REGISTERED,
+  PUSH_PHASE_UNAVAILABLE,
+  PushStatus
+} from '../service/cloud/PushStatus';
 import { NotificationService } from '../service/system/NotificationService';
 import { PermissionEvents } from '../service/system/PermissionEvents';
 import { TaskRepository } from '../repository/TaskRepository';
@@ -105,6 +113,8 @@ const SHEET_GROUPS: number = 4;
 export struct A_Settings {
   /** 任务 store：清空任务 + 提醒提前量同步 */
   @Require @Param store: TaskListStore;
+  /** 推送通道状态（FE-76）：`PushStatus` 是可观察单例，端侧/云端两段失败原因都在这 */
+  private pushStatus: PushStatus = PushStatus.instance();
 
   // 2026-10-25：原来这里还有一个 `@Require @Param scroller: Scroller`，唯一的用途是交给
   // `HdsNavigation.bindToScrollable` 做「大标题随滚动收缩」。三个页签统一改成固定 MINI 标题后
@@ -685,7 +695,42 @@ export struct A_Settings {
     }
     SettingsRepository.setSyncEnabled(ctx, isOn);
     SyncService.setEnabled(isOn);
+    if (isOn) {
+      // 刚打开同步：顺手把推送令牌也报一次（FE-76；没服务器/没身份时它自己会降级成「未启用」）
+      PushRegistrar.register();
+    }
     this.toast(isOn ? '云端同步已开启' : '云端同步已关闭，不再拉取群消息');
+  }
+
+  /**
+   * 「推送通道」右侧那一句：
+   *  · 失败 → 直接显示原因（官方错误码翻出来的那句话，如"推送权益未开通…"）
+   *  · 就绪 → 已就绪 + 最近一次成功时间
+   *  · 未启用 → 显示原因（没配服务器 / 没身份）
+   */
+  @Computed
+  get pushLine(): string {
+    const s: PushStatus = this.pushStatus;
+    if (s.phase === PUSH_PHASE_FAILED) {
+      return s.message;
+    }
+    if (s.phase === PUSH_PHASE_READY) {
+      return s.updatedAt.length > 0 ? s.label + ' · ' + s.updatedAt : s.label;
+    }
+    if (s.phase === PUSH_PHASE_UNAVAILABLE) {
+      return s.message.length > 0 ? s.message : s.label;
+    }
+    if (s.phase === PUSH_PHASE_REGISTERED) {
+      return s.label;
+    }
+    return s.label;
+  }
+
+  /** 点「推送通道」那行：重新取 token 并上报；失败时把「怎么修」一并说出来 */
+  private async retryPush(): Promise<void> {
+    const ok: boolean = await PushRegistrar.register();
+    const s: PushStatus = this.pushStatus;
+    this.toast(ok ? '推送通道已就绪' : (s.advice.length > 0 ? s.message + '：' + s.advice : s.message));
   }
 
   /** 云端字段清单：与隐私说明同一口径，不把「本机数据」混进来 */
@@ -1829,6 +1874,38 @@ export struct A_Settings {
 
           this.rowDivider()
           this.infoRow('提醒状态', this.store.reminderError.length > 0 ? this.store.reminderError : '正常')
+
+          this.rowDivider()
+          // 推送通道（FE-76）：端侧 Push Token + 后端 `push_ready` 两段合成一句话；
+          // 没就绪时点这行重试（失败原因来自官方错误码，见 PushTokenService.mapMessage）
+          Row({ space: 8 }) {
+            Text('推送通道')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+              .maxLines(1)
+            Text(this.pushLine)
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.pushStatus.pushReady
+                ? this.themeStore.scheme.primary
+                : $r('sys.color.ohos_id_color_text_secondary'))
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .constraintSize({ maxWidth: '62%' })
+            if (!this.pushStatus.pushReady) {
+              Text('重试')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor(this.themeStore.scheme.primary)
+                .maxLines(1)
+            }
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.retryPush();
+          })
         }
         .width('100%')
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)

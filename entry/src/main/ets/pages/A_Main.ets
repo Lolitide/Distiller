@@ -13,6 +13,7 @@ import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
 import { DraftRepository } from '../repository/DraftRepository';
 import { SettingsRepository } from '../repository/SettingsRepository';
 import { SyncService } from '../service/cloud/SyncService';
+import { PushRegistrar } from '../service/cloud/PushRegistrar';
 import { NotificationService } from '../service/system/NotificationService';
 import { ShareIntake, SharePayload, SHARE_KIND_IMAGE } from '../service/share/ShareIntake';
 import { AddTaskSource } from '../components/AddTaskSourceTabs';
@@ -176,6 +177,10 @@ struct A_Main {
     SettingsRepository.getSyncEnabled(context).then((enabled: boolean) => {
       // 关掉同步就不轮询；打开会立即拉一次
       SyncService.setEnabled(enabled);
+      if (enabled) {
+        // FE-76：同步开着才去取 Push Token 并上报（`push_ready` 由后端告诉）
+        PushRegistrar.register();
+      }
     });
   }
 
