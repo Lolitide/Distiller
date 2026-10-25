@@ -1,8 +1,8 @@
 /**
  * service/ai —— AI 能力子域
  *
- * 规划中的成员（见 docs/开发指南.md §9.1）：
- *   TextExtractService  实体与时间抽取（Natural Language Kit）
+ * 已落地成员（见 docs/开发指南.md §9.1）：
+ *   TextExtractService  实体与时间抽取（Natural Language Kit）—— 端侧兜底，抽「时间 + 地点」
  *   OcrService          图片文字识别（Core Vision Kit）
  *   SpeechService       语音转文字（Core Speech Kit）
  *
@@ -12,3 +12,4 @@
  */
 export { OcrService } from './OcrService';
 export { SpeechCallbacks, SpeechService } from './SpeechService';
+export { LocalTimeHint, TextExtractResult, TextExtractService } from './TextExtractService';

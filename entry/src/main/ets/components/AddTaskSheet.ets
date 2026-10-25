@@ -24,6 +24,7 @@ import { LengthMetrics } from '@kit.ArkUI';
 import { Task } from '../model';
 import { CandidateItem } from '../service/backend/BackendTypes';
 import { ManualParseResult, ManualParseService } from '../service/cloud/ManualParseService';
+import { TextExtractResult, TextExtractService } from '../service/ai/TextExtractService';
 import { DraftRepository } from '../repository/DraftRepository';
 import { common } from '@kit.AbilityKit';
 import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
@@ -220,6 +221,11 @@ export struct AddTaskSheet {
   }
 
   @Local aiBusy: boolean = false;
+  /**
+   * 端侧实体抽取（FE-36）这台设备能不能用 —— 不能用（模拟器）时给失败卡补一句说明。
+   * 每次 AI 预填开始时重置。
+   */
+  @Local localExtractUnavailable: boolean = false;
   /** 用户点了「知道了」后本次不再显示低可信提示 */
   @Local lowHintDismissed: boolean = false;
   /** 解析失败：分类展示 + 重试/手动填写（FE-41） */
@@ -255,6 +261,7 @@ export struct AddTaskSheet {
       return;
     }
     this.aiBusy = true;
+    this.localExtractUnavailable = false;
     try {
       let result: ManualParseResult;
       if (this.draft.sourceTab === AddTaskSource.SCREENSHOT) {
@@ -263,8 +270,31 @@ export struct AddTaskSheet {
         result = await ManualParseService.parseText(this.draft.rawText);
       }
       if (!result.ok || result.candidate === undefined) {
+        // 后端不可用（没配服务器 / 断网 / 解析失败）→ **端侧实体抽取兜底**（FE-36）：
+        // 用 Natural Language Kit 在本机把「时间 + 地点」抽出来先填进表单，用户核对后照样能存。
+        // 抽不到就沿用原来的分类错误卡（重试 / 手动填写），不会更差。
+        const localText: string = result.text.length > 0 ? result.text : this.draft.rawText;
+        const local: TextExtractResult = await TextExtractService.extract(localText);
+        if (local.ok && this.draft.applyLocalExtract(local)) {
+          if (this.draft.rawText.trim().length === 0 && local.text.length > 0) {
+            // 截图来源的文字是端侧 OCR 出来的：补成原文，详情页「原文对照」才有东西看
+            this.draft.rawText = local.text;
+          }
+          this.parseErrorCode = '';
+          this.parseErrorMsg = '';
+          const hasTime: boolean = local.time !== undefined && local.time.text.length > 0;
+          const hasPlace: boolean = local.place.length > 0;
+          const what: string = hasTime && hasPlace ? '时间与地点' : (hasTime ? '时间' : '地点');
+          const long: string = local.chunkCount > 1 ? '（长消息已切 ' + local.chunkCount + ' 段）' : '';
+          this.toast('没连上服务器，已用手机本地抽出' + what + long + '，请核对');
+          return;
+        }
         this.parseErrorCode = result.code !== undefined ? result.code : 'unknown';
         this.parseErrorMsg = result.message.length > 0 ? result.message : '没能识别出任务内容';
+        // 端侧兜底也没起来（模拟器 / 设备不支持）→ 让错误卡在末尾补一句，用户才知道
+        // "为什么连本地都没抽出来"（真正的文案拼接在 `parseErrorText()` 里做，
+        // 因为那张卡按 `parseErrorCode` 分类，不一定用 `parseErrorMsg`）
+        this.localExtractUnavailable = local.code === 'unsupported';
         return;
       }
       this.parseErrorCode = '';
@@ -298,6 +328,12 @@ export struct AddTaskSheet {
 
   /** 解析失败的可执行文案（按错误码分类） */
   private parseErrorText(): string {
+    const base: string = this.parseErrorBaseText();
+    // 端侧兜底也不可用时补一句（模拟器上就是这种情况），否则用户会以为"连本地都没试"
+    return this.localExtractUnavailable ? base + '（这台设备上也没法用本地抽取）' : base;
+  }
+
+  private parseErrorBaseText(): string {
     if (this.parseErrorCode === 'no_server') {
       return '还没有配置服务器地址，先去设置里填上再解析。';
     }

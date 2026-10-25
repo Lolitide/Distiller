@@ -27,6 +27,7 @@ import {
   TaskStep
 } from '../model';
 import { CandidateItem, RepeatRuleDto } from '../service/backend/BackendTypes';
+import { LocalTimeHint, TextExtractResult } from '../service/ai/TextExtractService';
 
 /** 「未设置」的哨兵（时间戳不可能为 0；档位取不到就是 -1） */
 const UNSET_NUMBER: number = 0;
@@ -413,6 +414,36 @@ export class AddTaskDraft {
       this.certainty = 0;
     }
     this.parsedMissing = c.missing_fields !== undefined ? c.missing_fields.slice() : [];
+  }
+
+  /**
+   * 用**端侧实体抽取**（`service/ai/TextExtractService`，FE-36）的结果补空字段。
+   *
+   * 为什么只"补空"：这条路径是后端解析失败时的兜底，用户可能已经手填了一部分；
+   * 端侧结果没有后端那么准，**不该覆盖用户输入**。
+   * 时间口径：`time.at > 0` 才写 `dueAt`（只有模糊时刻/只有时刻没日期时 `at` 是 0，绝不瞎猜日期）；
+   * `time.text`（原话，如「本周五 18:00」）总是写进 `dueText` —— 它是溯源字段，也给卡片文案用。
+   *
+   * @returns 是否真的补到了东西（调用方据此决定要不要提示"已用本地抽取"）
+   */
+  applyLocalExtract(result: TextExtractResult): boolean {
+    let touched: boolean = false;
+    const time: LocalTimeHint | undefined = result.time;
+    if (time !== undefined) {
+      if (this.dueText.length === 0 && time.text.length > 0) {
+        this.dueText = time.text;
+        touched = true;
+      }
+      if (this.dueAt === UNSET_NUMBER && time.at > 0) {
+        this.dueAt = time.at;
+        touched = true;
+      }
+    }
+    if (this.place.length === 0 && result.place.length > 0) {
+      this.place = result.place;
+      touched = true;
+    }
+    return touched;
   }
 
   /** 草稿归零（保存成功后调用，下次打开半模态是干净的） */
