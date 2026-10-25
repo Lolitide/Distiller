@@ -403,12 +403,14 @@ export struct B_TaskDetail {
               top: CONTENT_GAP_VP
             })
 
-            // 第七块：更多信息卡（难易程度 / 类型 / 地点 / 链接 / 置信度 / 创建于 / 完成于）
+            // 第七块：更多信息卡（状态 / 难易程度 / 类型 / 地点 / 链接 / 置信度 / 创建于 / 完成于）
             // **挪到最后**（2026-10-19「详情部分的显示优先级、分组可做优化调整」）：
             // 这张卡里一半是只读读数（置信度、两个时间戳），属于"平时不看"，压到页面底部；
             // 上面几块才是用户每天要动的：属性 → 分类标记 → 备注。
+            // 「状态」是本卡第一行（需求方 2026-10：「添加到重要性那个 card 里面的第一个」），
+            // 它要 `store` —— 状态写回只走 `store.setStatus`。
             Column() {
-              TaskInfoCard({ task: this.param.task })
+              TaskInfoCard({ task: this.param.task, store: this.param.store })
             }
             .width('100%')
             .padding({

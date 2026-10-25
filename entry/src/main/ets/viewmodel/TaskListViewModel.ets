@@ -38,6 +38,15 @@ const TIME_SEPARATOR: string = ':';
 /** 重要程度的中文（直接显示原词，需求方 2026-10-14 定） */
 const PRIORITY_LABELS: string[] = ['普通', '重要', '紧急'];
 
+/**
+ * 状态（`TaskStatus`）的中文，**下标即枚举值**（0 待确认 / 1 已确认 / 2 进行中 / 3 已完成 / 4 已过期 / 5 已删除）。
+ *
+ * 与 `PRIORITY_LABELS` 同一条既有口径：这里是纯中文常量数组而不是 `app.string.*` 资源，
+ * 因为这些文案要喂给 `SegmentRow` 的 `options: string[]`（它只吃字符串）；
+ * 状态文案进资源表这件事随「选项文案全部资源化」那笔欠账一起做。
+ */
+const STATUS_LABELS: string[] = ['待确认', '已确认', '进行中', '已完成', '已过期', '已删除'];
+
 /* ── 重复标识文案（`repeatLabel` 用）── */
 /** 1~7 ＝ 周一~周日。取值顺序与官方 `RecurrenceRule.daysOfWeek` 一致（第 1 天是周一） */
 const WEEKDAY_SHORT_CN: string[] = ['一', '二', '三', '四', '五', '六', '日'];
@@ -347,5 +356,18 @@ export class TaskListViewModel {
   /** 重要程度的中文原词 */
   static priorityLabel(priority: TaskPriority): string {
     return PRIORITY_LABELS[priority];
+  }
+
+  /**
+   * 状态的中文原词（六态都有）。
+   *
+   * 详情页「状态」分段、无障碍文本都读它 —— 一处定义，避免「进行中」这类文案在
+   * 组件里各抄一遍出现「进行中 / 正在做」两种说法。
+   */
+  static statusLabel(status: TaskStatus): string {
+    if (status < 0 || status >= STATUS_LABELS.length) {
+      return '';
+    }
+    return STATUS_LABELS[status];
   }
 }

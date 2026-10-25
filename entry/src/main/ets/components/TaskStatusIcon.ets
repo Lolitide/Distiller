@@ -32,12 +32,35 @@ export struct TaskStatusIcon {
     return this.task.status === TaskStatus.COMPLETED;
   }
 
+  /**
+   * 是否「进行中」（六态状态机的第 2 态）。
+   *
+   * 之前这个状态**只在枚举与 Mock 里存在**（审计 P2：没有任何写入点），所以图标只区分
+   * 「完成 / 未完成」两态就够用；现在详情页能把它推进去，卡片上就必须看得见，
+   * 否则用户点完「进行中」回到列表，屏幕上没有任何变化。
+   */
+  @Computed
+  get inProgress(): boolean {
+    return this.task.status === TaskStatus.IN_PROGRESS;
+  }
+
   @Computed
   get symbol(): Resource {
     if (this.selectionMode) {
       return this.selected ? $r('sys.symbol.checkmark_square_fill') : $r('sys.symbol.square');
     }
-    return this.completed ? $r('sys.symbol.checkmark_circle') : $r('sys.symbol.circle_dashed');
+    if (this.completed) {
+      return $r('sys.symbol.checkmark_circle');
+    }
+    // 进行中＝**半填充圆**（`circle_lefthalf_inset_filled`：外圈描边 + 左半实心），
+    // 与「虚线圆 / 对勾圆」同一族、同一个描边粗细，读起来就是"做了一半"。
+    // ⚠️ 选型是**在设备上逐个渲染比出来的**（`.cache/probe-2-row-left.png`）：
+    //    `circle_fill_half` 在这个字号下只渲染成一颗小实心点（比虚线圆小一圈，像项目符号）；
+    //    `play_circle` 的 ▶ 会被读成"点我开始"（而这里点它是完成），`clock` / `hourglass` 偏"等待"。
+    if (this.inProgress) {
+      return $r('sys.symbol.circle_lefthalf_inset_filled');
+    }
+    return $r('sys.symbol.circle_dashed');
   }
 
   @Computed
@@ -45,16 +68,29 @@ export struct TaskStatusIcon {
     if (this.selectionMode) {
       return this.selected ? this.themeStore.scheme.primary : $r('sys.color.icon_primary');
     }
-    return this.completed ? $r('sys.color.icon_secondary') : $r('sys.color.icon_primary');
+    if (this.completed) {
+      return $r('sys.color.icon_secondary');
+    }
+    // 进行中用 M3 primary：与铃铛开启态、页签选中态同一套高亮语言（不是裸色值）
+    if (this.inProgress) {
+      return this.themeStore.scheme.primary;
+    }
+    return $r('sys.color.icon_primary');
   }
 
-  /** 无障碍文本：选择态说"选择/取消选择"，普通态说"标记完成/取消完成" */
+  /** 无障碍文本：选择态说"选择/取消选择"，普通态说"标记完成/取消完成"，进行中额外播报当前状态 */
   @Computed
   get accessibilityLabel(): Resource {
     if (this.selectionMode) {
       return this.selected ? $r('app.string.action_deselect_task') : $r('app.string.action_select_task');
     }
-    return this.completed ? $r('app.string.action_uncomplete_task') : $r('app.string.action_complete_task');
+    if (this.completed) {
+      return $r('app.string.action_uncomplete_task');
+    }
+    if (this.inProgress) {
+      return $r('app.string.action_complete_in_progress_task');
+    }
+    return $r('app.string.action_complete_task');
   }
 
   build() {

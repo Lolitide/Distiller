@@ -622,27 +622,75 @@ export class TaskListStore {
    *  · 「响铃提醒」的**用户意图**是 `alarm`（第 16 项），所以完成时把 `alarm` 置 OFF、退回时按
    *    「有提醒时间才开」恢复成 ON；`reminderId`（已发布句柄）跟着清空 —— 它由 `ReminderService` 给，
    *    页面里不许凭空造。
+   *
+   * 2026-10 起**不再自己写字段**，一律转 `setStatus`（状态流转的唯一写入口）：
+   * 否则「点圆圈完成」和「详情页状态分段选完成」会各自实现一份 `finishedAt` 口径，迟早漂移。
    */
   toggleComplete(task: Task): void {
     if (task.status === TaskStatus.COMPLETED) {
       const previous: TaskStatus | undefined = this.statusBeforeCompleted.get(task.id);
-      task.status = previous === undefined ? TaskStatus.CONFIRMED : previous;
-      task.finishedAt = undefined;
+      this.setStatus(task, previous === undefined ? TaskStatus.CONFIRMED : previous);
+      return;
+    }
+    this.setStatus(task, TaskStatus.COMPLETED);
+  }
+
+  /**
+   * 用户可写的四态，**数组顺序就是详情页「状态」分段的顺序**。
+   * 已过期（4）只有系统能写；已删除（5）走 `deleteTask`（软删不可逆，不允许从这里复活）。
+   */
+  static readonly USER_STATUSES: TaskStatus[] = [
+    TaskStatus.PENDING_CONFIRM,
+    TaskStatus.CONFIRMED,
+    TaskStatus.IN_PROGRESS,
+    TaskStatus.COMPLETED
+  ];
+
+  /**
+   * **六态状态机里用户可写那部分的唯一写入口**（待确认 / 已确认 / 进行中 / 已完成）。
+   *
+   * 为什么必须收口成一个方法：这次审计的原始缺陷正是「`IN_PROGRESS` 只有定义与 Mock、没有任何写入点」——
+   * 各页面各自 `task.status = ...` 的结果就是状态机在某些态上根本跑不起来。
+   * 现在详情页的状态分段、卡片的圆圈都走这里，规则只有一份。
+   *
+   * 落地规则：
+   *  · **只接受 `USER_STATUSES` 里的四态**；已过期（系统写）、已删除（软删）一律拒绝；
+   *  · 目标与当前相同 → 不算改动（不落盘、不触发刷新）；
+   *  · 进入 **已完成**：写 `finishedAt`、记下"完成前状态"（点圆圈能退回）、自动关响铃
+   *    （`alarm` 置 OFF、`reminderId` 清空）；
+   *  · 从 **已完成** 离开：清 `finishedAt`、按「有提醒时间才开」恢复响铃（与 `toggleComplete` 旧行为一致）；
+   *  · 已过期 / 已完成的任务改成 待确认 / 已确认 / 进行中 是允许的（"过期了但我还要做"、"手滑点完成"）。
+   *
+   * @returns 是否真的写了（页面拿它决定要不要弹提示）
+   */
+  setStatus(task: Task, status: TaskStatus): boolean {
+    if (TaskListStore.USER_STATUSES.indexOf(status) < 0) {
+      return false;
+    }
+    if (task.status === TaskStatus.DELETED || task.status === status) {
+      return false;
+    }
+    const wasCompleted: boolean = task.status === TaskStatus.COMPLETED;
+    if (status === TaskStatus.COMPLETED) {
+      this.statusBeforeCompleted.set(task.id, task.status);
+      task.status = status;
+      task.finishedAt = Date.now();
+      task.alarm = TaskAlarm.OFF;
+      task.reminderId = undefined;
+      this.persist();
+      return true;
+    }
+    if (wasCompleted) {
       this.statusBeforeCompleted.delete(task.id);
-      // 退回未完成时把响铃提醒重新打开（需求方 2026-10-14）：只有带提醒时间的任务才有这个开关
+      // 从完成态退回时把响铃提醒重新打开（需求方 2026-10-14）：只有带提醒时间的任务才有这个开关
       if (task.remindAt !== undefined) {
         task.alarm = TaskAlarm.ON;
       }
-      this.persist();
-      return;
     }
-    this.statusBeforeCompleted.set(task.id, task.status);
-    task.status = TaskStatus.COMPLETED;
-    task.finishedAt = Date.now();
-    // 完成时自动关掉响铃提醒：用户意图置 OFF，已发布句柄一并撤销
-    task.alarm = TaskAlarm.OFF;
-    task.reminderId = undefined;
+    task.status = status;
+    task.finishedAt = undefined;
     this.persist();
+    return true;
   }
 
   /**

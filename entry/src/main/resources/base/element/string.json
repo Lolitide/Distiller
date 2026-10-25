@@ -137,6 +137,14 @@
       "value": "取消完成"
     },
     {
+      "name": "action_complete_in_progress_task",
+      "value": "进行中，点击标记完成"
+    },
+    {
+      "name": "task_status_caption",
+      "value": "状态"
+    },
+    {
       "name": "deleted_count",
       "value": "已删除 %d 项"
     },
