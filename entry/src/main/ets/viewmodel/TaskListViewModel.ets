@@ -14,7 +14,7 @@
  *   **「重要程度」已从这条链里移除**（需求方 2026-10-15：「description 里面的重要程度不显示了」）——
  *   它改用**卡片底色**表达，见 `components/TaskCard.ets` 的 `cardBackground`。
  */
-import { RepeatFrequency, RepeatRule, Task, TaskAlarm, TaskPriority, TaskStatus } from '../model';
+import { LOW_CERTAINTY_THRESHOLD, RepeatFrequency, RepeatRule, Task, TaskAlarm, TaskPriority, TaskStatus } from '../model';
 
 const DAY_MS: number = 24 * 60 * 60 * 1000;
 const HOUR_MS: number = 60 * 60 * 1000;
@@ -369,5 +369,47 @@ export class TaskListViewModel {
       return '';
     }
     return STATUS_LABELS[status];
+  }
+
+  /**
+   * **低可信判定**（卡片角标 / 详情置信度行 / AI 预填提示三处共用，判定口径只此一份）。
+   *
+   * · `undefined` ＝ **不知道**（用户手建的任务、后端没给）→ **不标**：
+   *   把"没有置信度"当成"低可信"会让所有手动建的任务都挂警示角标；
+   * · 有值且 `< LOW_CERTAINTY_THRESHOLD`（默认 60）→ 低可信。
+   */
+  static isLowCertainty(certainty: number | undefined): boolean {
+    if (certainty === undefined) {
+      return false;
+    }
+    return certainty < LOW_CERTAINTY_THRESHOLD;
+  }
+
+  /**
+   * `missingFields` 里的**契约字段名** → 人话（给「未识别：地点、对象」这类提示用）。
+   *
+   * 认不出来的字段名**原样返回**，不吞掉 —— 后端将来加了新字段，界面上至少还能看见那个名字，
+   * 不会被静默丢掉。
+   */
+  static missingFieldLabel(field: string): string {
+    if (field === 'dueAt') {
+      return '到期时间';
+    }
+    if (field === 'place') {
+      return '地点';
+    }
+    if (field === 'who') {
+      return '对象';
+    }
+    if (field === 'source') {
+      return '来源';
+    }
+    if (field === 'category') {
+      return '类型';
+    }
+    if (field === 'tags') {
+      return '标签';
+    }
+    return field;
   }
 }

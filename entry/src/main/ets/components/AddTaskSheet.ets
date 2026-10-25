@@ -34,6 +34,7 @@ import { AddTaskRecorder } from './AddTaskRecorder';
 import { AddTaskScreenshotPicker } from './AddTaskScreenshotPicker';
 import { AddTaskSource, AddTaskSourceTabs } from './AddTaskSourceTabs';
 import { AddTaskTextInput } from './AddTaskTextInput';
+import { ParseConfidenceHint } from './ParseConfidenceHint';
 
 /** 标题行左右内边距（vp）：与下面内容区对齐（官方 `padding_level8` = 16vp） */
 const HEADER_SIDE_PADDING_VP: number = 16;
@@ -305,6 +306,13 @@ export struct AddTaskSheet {
           // —— 任务名称输入框：三种来源共用（名称与来源无关），紧跟在内容区下面 ——
           AddTaskNameInput({ draft: this.draft })
             .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
+
+          // —— AI 预填结果提示：置信度偏低 / 哪些字段没识别出来（只在 AI 预填过之后出现）——
+          // 位置在名称与属性芯片之间：用户看完"填了什么"（名称）之后、动手改之前，先知道哪里要核对。
+          if (this.draft.hasParseHint) {
+            ParseConfidenceHint({ draft: this.draft })
+              .margin({ top: LengthMetrics.resource($r('sys.float.padding_level4')) })
+          }
 
           // —— 属性芯片行：截止日期 / 提醒我 / 重复 / 重要程度 / 来源 / ＋添加标签 / AI 预填 ——
           // AI 预填与「＋ 添加标签」同一行、同一种动作芯片（不再单独占一行）。

@@ -73,6 +73,13 @@ const TAG_CHIP_VERTICAL_PADDING_VP: number = 1;
 /** 标签胶囊圆角（vp）：取其高度的一半，做成完整胶囊 */
 const TAG_CHIP_RADIUS_VP: number = 8;
 
+/**
+ * 低可信角标尺寸（vp）：与重复标识同档（16），比铃铛（20）小一档 —— 它是**提示**，不是操作。
+ * 图形用 `exclamationmark_circle`（描边）+ 官方警示色，与「重要程度」那套红圈区分开：
+ * 那个是用户自己选的档位，这个是"机器没把握、请你核对"。
+ */
+const LOW_CERTAINTY_ICON_SIZE_VP: number = 16;
+
 /* ── 重要性标识（字段表 §2.1 的三态图形）── */
 /** 圈内那个感叹号 */
 const PRIORITY_MARK: string = '!';
@@ -267,13 +274,27 @@ export struct TaskCard {
     return this.task.priority === TaskPriority.URGENT;
   }
 
+  /**
+   * **低可信**：AI 解析置信度低于阈值（见 `model/Models.ets` 的 `LOW_CERTAINTY_THRESHOLD`）。
+   *
+   * 卡片原本对 `certainty` **一个字都没用** —— 解析得准不准，用户在列表上看不出来，
+   * 只有点进详情、滑到最底那张卡才能看到一个百分数。这里补一个第二行角标：
+   * 一眼能看出"这条是机器猜的，值得点进去核对"。
+   */
+  @Computed
+  get lowCertainty(): boolean {
+    return TaskListViewModel.isLowCertainty(this.task.certainty);
+  }
+
   /** 自定义文字区之后，卡片的无障碍文本要自己拼（HDS 不再从 primaryText/description 取） */
   @Computed
   get accessibilityLabel(): string {
     const priorityText: string = this.showPriorityBadge
       ? `${TaskListViewModel.priorityLabel(this.task.priority)} ` : '';
     const repeatText: string = this.repeatLabel === '' ? '' : `${this.repeatLabel} `;
-    return `${priorityText}${this.task.name} ${this.dueLabel} ${repeatText}`;
+    // 低可信要读出来：读屏用户看不到那个角标，但它决定这条要不要点进去核对
+    const lowText: string = this.lowCertainty ? '置信度偏低 ' : '';
+    return `${priorityText}${this.task.name} ${this.dueLabel} ${repeatText}${lowText}`;
   }
 
   @Builder
@@ -391,6 +412,18 @@ export struct TaskCard {
           .fontColor(this.textColor)
           .maxLines(1)
           .flexShrink(1)
+
+        // ③-b 低可信角标（置信度 < 阈值时出现，见 `lowCertainty`）。
+        //    放在截止文案右边：这一格本来是空着的（Blank 撑开），加它不会挤动左边任何元素；
+        //    6vp 间距、16vp 描边图标、警示色，与"重要程度红圈"同色系但形状不同（那个是实心/空心圆）。
+        if (this.lowCertainty) {
+          SymbolGlyph($r('sys.symbol.exclamationmark_circle'))
+            .fontSize(LOW_CERTAINTY_ICON_SIZE_VP)
+            .fontColor([$r('sys.color.warning')])
+            .margin({ left: SECOND_LINE_GAP_VP })
+            .flexShrink(0)
+            .accessibilityText($r('app.string.card_low_certainty'))
+        }
 
         // 右侧弹性空白：剩下的空间留给 C 区（重复槽 + 铃铛）
         Blank()

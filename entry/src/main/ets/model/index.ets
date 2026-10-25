@@ -22,5 +22,6 @@ export {
   TaskAlarm,
   TaskSource,
   RepeatFrequency,
-  TASK_CATEGORY_PRESETS
+  TASK_CATEGORY_PRESETS,
+  LOW_CERTAINTY_THRESHOLD
 } from './Models';

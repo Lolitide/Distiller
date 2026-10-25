@@ -31,6 +31,8 @@ import { CandidateItem, RepeatRuleDto } from '../service/backend/BackendTypes';
 /** 「未设置」的哨兵（时间戳不可能为 0；档位取不到就是 -1） */
 const UNSET_NUMBER: number = 0;
 const UNSET_INDEX: number = -1;
+/** 置信度「没给」的哨兵：0 是合法置信度（等于"完全不可信"），不能拿它当未设置 */
+const UNSET_CERTAINTY: number = -1;
 
 /**
  * 重复档位 → 契约里的 `RepeatFrequency`（顺序与 chips / 详情页的 `REPEAT_OPTIONS` 一致：
@@ -90,6 +92,10 @@ interface DraftSnapshot {
   linkUrl: string;
   steps: DraftStepSnapshot[];
   repeat?: DraftRepeatSnapshot;
+  /** AI 预填的置信度（-1 ＝ 不是 AI 预填）；随草稿落盘，关掉半模态再打开提示还在 */
+  certainty: number;
+  /** 后端声明的缺失字段 */
+  missingFields: string[];
 }
 
 @ObservedV2
@@ -144,9 +150,62 @@ export class AddTaskDraft {
   @Trace linkUrl: string = '';
   @Trace steps: TaskStep[] = [];
 
+  /**
+   * **AI 预填的置信度**（0~100 整数）；`-1` ＝ 不是 AI 预填、或后端没给。
+   *
+   * 之前 `applyParsed()` **完全不读 `certainty`** —— 候选带着 30% 的可信度被填进表单，
+   * 界面照样一句"已自动填写，请确认后保存"，用户以为填得挺准，存下来的任务也把 `certainty` 丢了。
+   * 现在它留在这里：表单据此给低可信提示（`ParseConfidenceHint`），保存时写回 `Task.certainty`。
+   */
+  @Trace certainty: number = UNSET_CERTAINTY;
+
+  /**
+   * 后端声明的 `missing_fields`（原样保留，用于**溯源**与"后端认定缺了什么"的提示）。
+   *
+   * 界面上的「未识别」清单**不直接读它** —— 用 `missingHints()` 按**当前草稿**现算：
+   * 用户在表单里把到期时间补上之后，那条提示就该消失，而不是继续挂着后端当初的结论。
+   */
+  @Trace parsedMissing: string[] = [];
+
   /** 名称非空才能保存（「保存」按钮的灰/亮看它） */
   get canSave(): boolean {
     return this.name.trim().length > 0;
+  }
+
+  /** 这份草稿是不是 AI 预填出来的（有置信度或有后端声明缺失字段）—— 决定表单要不要挂提示条 */
+  get hasParseHint(): boolean {
+    return this.certainty !== UNSET_CERTAINTY || this.parsedMissing.length > 0;
+  }
+
+  /**
+   * 表单里该提示「没识别出来」的字段（**按当前草稿现算**，顺序固定：到期 → 地点 → 对象 → 来源）。
+   *
+   * 为什么现算而不是照后端 `missing_fields` 抄：后端那份是"解析那一刻"的结论；
+   * 用户在表单里补了到期时间/来源之后，提示要跟着消失，否则会显示一句已经不成立的话。
+   * 后端声明里**我们认不出来的字段名**仍原样带进来（不吞），交给 `TaskListViewModel.missingFieldLabel` 兜底显示。
+   */
+  missingHints(): string[] {
+    const fields: string[] = [];
+    if (this.dueAt === UNSET_NUMBER) {
+      fields.push('dueAt');
+    }
+    if (this.place.length === 0) {
+      fields.push('place');
+    }
+    if (this.who.length === 0) {
+      fields.push('who');
+    }
+    if (this.sourceIndex === UNSET_INDEX) {
+      fields.push('source');
+    }
+    for (let i = 0; i < this.parsedMissing.length; i++) {
+      const field: string = this.parsedMissing[i];
+      if (fields.indexOf(field) < 0 && field !== 'dueAt' && field !== 'place'
+        && field !== 'who' && field !== 'source') {
+        fields.push(field);
+      }
+    }
+    return fields;
   }
 
   /**
@@ -208,6 +267,10 @@ export class AddTaskDraft {
     if (this.steps.length > 0) {
       task.steps = this.steps;
     }
+    // 置信度：AI 预填过才带（手动建的任务没有"可信度"这回事，留 undefined）
+    if (this.certainty !== UNSET_CERTAINTY) {
+      task.certainty = this.certainty;
+    }
     const urls: string[] = [];
     if (this.imageUri.length > 0) {
       urls.push(this.imageUri);
@@ -228,8 +291,33 @@ export class AddTaskDraft {
     if (this.who.length === 0) {
       missing.push('who');
     }
+    /*
+     * 再把**后端当初声明、而 `toTask` 自己验证不了**的缺失字段接上（如 `category` / `tags`）。
+     *
+     * 「缺失不猜测」的另一面是**不许悄悄抹掉解析层给出的结论**：
+     * 上面四项按最终任务的真实字段重算（用户填了就不算缺），
+     * 认不出的字段名则原样保留 —— 真要在详情页展示 `missingFields` 时才不会凭空少几条。
+     */
+    for (let i = 0; i < this.parsedMissing.length; i++) {
+      const field: string = this.parsedMissing[i];
+      if (missing.indexOf(field) >= 0 || this.fieldFilled(field)) {
+        continue;
+      }
+      missing.push(field);
+    }
     task.missingFields = missing;
     return task;
+  }
+
+  /** 某个「后端声明缺失」的字段，在当前草稿里是否已经补上了（只判表单里能编辑的那几个） */
+  private fieldFilled(field: string): boolean {
+    if (field === 'category') {
+      return this.category.length > 0;
+    }
+    if (field === 'tags') {
+      return this.tags.length > 0;
+    }
+    return false;
   }
 
   /**
@@ -313,6 +401,21 @@ export class AddTaskDraft {
     if (c.repeat_text !== undefined && c.repeat_text.length > 0) {
       this.repeatText = c.repeat_text;
     }
+
+    /*
+     * 置信度 ＋ 缺失字段（后端 `/parse` 的同一次返回里就有，**以前这里一个字都没读**）。
+     *  · `certainty` 是 0~100 整数；缺省时退回 `confidence`（0~1）—— 与 `TaskMapper.candidateToTask`
+     *    同一套换算，免得"同一个候选"在列表里显示一个数、在表单里显示另一个；
+     *  · `missing_fields` 原样存下（提示用现算的 `missingHints()`，这里只做溯源）。
+     */
+    if (c.certainty !== undefined && c.certainty > 0) {
+      this.certainty = Math.round(c.certainty);
+    } else if (c.confidence !== undefined) {
+      this.certainty = Math.round(c.confidence * 100);
+    } else {
+      this.certainty = UNSET_CERTAINTY;
+    }
+    this.parsedMissing = c.missing_fields !== undefined ? c.missing_fields.slice() : [];
   }
 
   /** 草稿归零（保存成功后调用，下次打开半模态是干净的） */
@@ -337,6 +440,8 @@ export class AddTaskDraft {
     this.linkUrl = '';
     this.steps = [];
     this.repeatRule = undefined;
+    this.certainty = UNSET_CERTAINTY;
+    this.parsedMissing = [];
   }
 
   /** 序列化草稿（落盘用）：只存表单字段，不含任何后端数据/身份信息 */
@@ -381,7 +486,9 @@ export class AddTaskDraft {
       repeatText: this.repeatText,
       linkUrl: this.linkUrl,
       steps: steps,
-      repeat: repeat
+      repeat: repeat,
+      certainty: this.certainty,
+      missingFields: this.parsedMissing
     };
     return JSON.stringify(snapshot);
   }
@@ -415,6 +522,9 @@ export class AddTaskDraft {
       this.dueText = s.dueText !== undefined ? s.dueText : '';
       this.repeatText = s.repeatText !== undefined ? s.repeatText : '';
       this.linkUrl = s.linkUrl !== undefined ? s.linkUrl : '';
+      // 旧草稿（这个字段之前没存）→ 按"不是 AI 预填"处理，提示条不出现，与改造前行为一致
+      this.certainty = s.certainty !== undefined ? s.certainty : UNSET_CERTAINTY;
+      this.parsedMissing = s.missingFields !== undefined ? s.missingFields : [];
 
       const steps: TaskStep[] = [];
       if (s.steps !== undefined) {

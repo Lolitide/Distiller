@@ -145,6 +145,30 @@
       "value": "状态"
     },
     {
+      "name": "card_low_certainty",
+      "value": "置信度偏低，建议核对"
+    },
+    {
+      "name": "info_certainty_low",
+      "value": "偏低"
+    },
+    {
+      "name": "parse_hint_certainty_low",
+      "value": "AI 预填，置信度 %d，请核对"
+    },
+    {
+      "name": "parse_hint_title_only",
+      "value": "AI 预填，请核对"
+    },
+    {
+      "name": "parse_hint_certainty_ok",
+      "value": "AI 预填，置信度 %d"
+    },
+    {
+      "name": "parse_hint_missing",
+      "value": "未识别：%s"
+    },
+    {
       "name": "deleted_count",
       "value": "已删除 %d 项"
     },

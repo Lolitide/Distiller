@@ -167,6 +167,17 @@ export struct TaskInfoCard {
     return this.task.certainty !== undefined;
   }
 
+  /**
+   * 置信度是否**偏低**（低于 `LOW_CERTAINTY_THRESHOLD`，判定走 `TaskListViewModel.isLowCertainty`）。
+   *
+   * 之前这里只是把百分数灰/黑两态显示出来 —— 用户看到「30%」也未必知道意味着什么。
+   * 现在低可信时：数值转**警示色** + 行尾补一句「偏低」。
+   */
+  @Computed
+  get certaintyLow(): boolean {
+    return TaskListViewModel.isLowCertainty(this.task.certainty);
+  }
+
   @Computed
   get createdAtLabel(): string {
     return this.stampText(this.task.createdAt);
@@ -441,17 +452,32 @@ export struct TaskInfoCard {
 
       this.rowDivider()
 
-      // ⑥ 置信度（只读：来自解析）
+      // ⑥ 置信度（只读：来自解析）。低于阈值时数值转警示色、紧跟一句「偏低」（见 `certaintyLow`）。
       Row({ space: VALUE_GAP_VP }) {
         this.rowLabel($r('app.string.info_certainty'))
         Scroll() {
-          Text(this.certaintyLabel)
-            .fontSize($r('sys.float.ohos_id_text_size_body1'))
-            .fontColor(this.certaintySet
-              ? $r('sys.color.ohos_id_color_text_primary')
-              : $r('sys.color.ohos_id_color_text_secondary'))
-            .maxLines(1)
-            .textAlign(TextAlign.Start)
+          // 「偏低」紧跟在数值后面（不是甩到行尾）：读起来是一句话「42% 偏低」，
+          // 而不是"左边一个数、右边孤零零一个定性词"。
+          Row({ space: Theme.GAP_S }) {
+            Text(this.certaintyLabel)
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor(this.certaintyLow
+                ? $r('sys.color.warning')
+                : (this.certaintySet
+                  ? $r('sys.color.ohos_id_color_text_primary')
+                  : $r('sys.color.ohos_id_color_text_secondary')))
+              .maxLines(1)
+
+            if (this.certaintyLow) {
+              // 光有百分数，用户不知道"42% 算低"；「偏低」把判断直接说出来
+              Text($r('app.string.info_certainty_low'))
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor($r('sys.color.warning'))
+                .maxLines(1)
+                .accessibilityText($r('app.string.card_low_certainty'))
+            }
+          }
+          .alignItems(VerticalAlign.Center)
         }
         .scrollable(ScrollDirection.Horizontal)
         .scrollBar(BarState.Off)
