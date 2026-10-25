@@ -10,6 +10,7 @@ import { NotificationService } from '../service/system/NotificationService';
 import { CalendarService } from '../service/system/CalendarService';
 import { PermissionEvents } from '../service/system/PermissionEvents';
 import { WindowInsets } from '../utils/WindowInsets';
+import { M3Switch } from '../components/M3Switch';
 
 @ComponentV2
 export struct A_Onboarding {
@@ -101,10 +102,13 @@ export struct A_Onboarding {
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
 
-      Toggle({ type: ToggleType.Switch, isOn: this.notifyOn })
-        .onChange((next: boolean) => {
+      // 开关统一走 M3Switch（裸 Toggle 会用系统蓝，不跟主题色）
+      M3Switch({
+        isOn: this.notifyOn,
+        onToggle: (next: boolean) => {
           this.toggleNotify(next);
-        })
+        }
+      })
     }
     .width('100%')
     .padding(14)
@@ -125,10 +129,13 @@ export struct A_Onboarding {
       .layoutWeight(1)
       .alignItems(HorizontalAlign.Start)
 
-      Toggle({ type: ToggleType.Switch, isOn: this.calendarOn })
-        .onChange((next: boolean) => {
+      // 同上：M3Switch，跟随主题色
+      M3Switch({
+        isOn: this.calendarOn,
+        onToggle: (next: boolean) => {
           this.toggleCalendar(next);
-        })
+        }
+      })
     }
     .width('100%')
     .padding(14)

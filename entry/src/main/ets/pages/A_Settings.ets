@@ -1525,11 +1525,16 @@ export struct A_Settings {
             .layoutWeight(1)
             .alignItems(HorizontalAlign.Start)
 
-            Toggle({ type: ToggleType.Switch, isOn: this.syncEnabled })
-              .id('syncEnabledToggle')
-              .onChange((isOn: boolean) => {
+            // ⚠️ 必须用 `M3Switch`，不能写裸 `Toggle`：`Toggle` 的选中轨道默认取
+            // `ohos_id_color_emphasize`（系统蓝），换了主题色也不会变（2026-10-25 作者截图指出）。
+            // 这一行是合并 `feature/mvp-completion` 时带进来的裸 Toggle，已纠正。
+            M3Switch({
+              isOn: this.syncEnabled,
+              onToggle: (isOn: boolean) => {
                 this.onSyncToggle(isOn);
-              })
+              }
+            })
+            .id('syncEnabledToggle')
           }
           .width('100%')
           .height(ROW_HEIGHT_VP)
