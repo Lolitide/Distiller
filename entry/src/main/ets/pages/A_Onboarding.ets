@@ -8,6 +8,7 @@ import { common } from '@kit.AbilityKit';
 import { ThemeStore } from '../utils/Theme';
 import { NotificationService } from '../service/system/NotificationService';
 import { CalendarService } from '../service/system/CalendarService';
+import { WindowInsets } from '../utils/WindowInsets';
 
 @ComponentV2
 export struct A_Onboarding {
@@ -17,6 +18,20 @@ export struct A_Onboarding {
   @Local notifyOn: boolean = false;
   @Local calendarOn: boolean = false;
   @Local busy: boolean = false;
+  /** 状态栏让位：全屏窗口下引导页要自己避开通知栏 */
+  @Local statusBarVp: number = 0;
+
+  aboutToAppear(): void {
+    this.statusBarVp = this.getUIContext().px2vp(WindowInsets.topPxCached());
+    const ctx: common.Context | undefined = this.getUIContext().getHostContext();
+    if (ctx !== undefined) {
+      WindowInsets.topPx(ctx).then((px: number) => {
+        if (px > 0) {
+          this.statusBarVp = this.getUIContext().px2vp(px);
+        }
+      });
+    }
+  }
 
   private hostContext(): common.Context | undefined {
     return this.getUIContext().getHostContext();
@@ -129,7 +144,7 @@ export struct A_Onboarding {
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
-      .padding({ top: 24, bottom: 16 })
+      .padding({ top: 8, bottom: 16 })
 
       Scroll() {
         Column({ space: 12 }) {
@@ -200,7 +215,11 @@ export struct A_Onboarding {
     }
     .width('100%')
     .height('100%')
-    .padding({ left: 20, right: 20 })
+    .padding({
+      left: 20,
+      right: 20,
+      top: this.statusBarVp + 12
+    })
     .backgroundColor(this.themeStore.scheme.surface)
   }
 }
