@@ -52,7 +52,8 @@ export struct M3Switch {
       .selectedColor(this.themeStore.scheme.primary)
       .switchStyle({
         unselectedColor: this.themeStore.scheme.surfaceContainerHighest,
-        pointColor: this.isOn ? this.themeStore.scheme.onPrimary : this.themeStore.scheme.outline
+        // 滑块统一纯白：之前用 onPrimary/outline 会因状态延迟显示成黑圆
+        pointColor: Color.White
       })
       .onChange((isOn: boolean) => {
         this.onToggle(isOn);

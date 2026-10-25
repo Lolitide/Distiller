@@ -64,7 +64,9 @@ export class ShareIntake {
       let payload: SharePayload | undefined = undefined;
       for (let i = 0; i < records.length; i++) {
         const record: systemShare.SharedRecord = records[i];
-        if (record.uri !== undefined && record.uri.length > 0 && record.utd.indexOf('image') >= 0) {
+        // 图片的 UTD 可能是 general.jpeg / general.png，不一定含 "image" 字样；
+        // 只要给了 uri，就按图片处理（文本分享不会带 uri）。
+        if (record.uri !== undefined && record.uri.length > 0) {
           const image: SharePayload = new SharePayload();
           image.kind = SHARE_KIND_IMAGE;
           image.uri = record.uri;

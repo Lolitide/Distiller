@@ -5,6 +5,7 @@
  */
 import { common } from '@kit.AbilityKit';
 import { fileIo, picker } from '@kit.CoreFileKit';
+import { util } from '@kit.ArkTS';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 
@@ -32,7 +33,7 @@ export class TaskImportService {
         result.cancelled = true;
         return result;
       }
-      result.text = fileIo.readTextSync(uris[0]);
+      result.text = TaskImportService.readText(uris[0]);
       result.ok = result.text.length > 0;
       if (!result.ok) {
         result.message = '文件是空的';
@@ -47,6 +48,30 @@ export class TaskImportService {
       }
       result.message = '读取失败：' + err.code;
       return result;
+    }
+  }
+
+  /** picker 返回的是 file URI；`readTextSync(uri)` 在真机上会失败，必须 open + read */
+  private static readText(uri: string): string {
+    let file: fileIo.File | undefined = undefined;
+    try {
+      file = fileIo.openSync(uri, fileIo.OpenMode.READ_ONLY);
+      const size: number = fileIo.statSync(file.fd).size;
+      if (size <= 0) {
+        return '';
+      }
+      const buffer: ArrayBuffer = new ArrayBuffer(size);
+      fileIo.readSync(file.fd, buffer);
+      const decoder: util.TextDecoder = util.TextDecoder.create('utf-8');
+      return decoder.decodeToString(new Uint8Array(buffer));
+    } finally {
+      if (file !== undefined) {
+        try {
+          fileIo.closeSync(file);
+        } catch (error) {
+          // 关闭失败不影响已读到内容
+        }
+      }
     }
   }
 }

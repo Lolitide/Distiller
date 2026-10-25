@@ -109,6 +109,15 @@ struct A_Main {
   /** 从 QQ/其他 App 回到前台：取走「转发给机器人」的文本 */
   onPageShow(): void {
     this.pullForwarded();
+    // 热启动分享/冷启动竞态兜底：若监听没接住，这里再取一次
+    const pending: SharePayload | undefined = ShareIntake.consumePending();
+    if (pending !== undefined) {
+      this.openShare(pending);
+    }
+    const shareError: string = ShareIntake.consumeError();
+    if (shareError.length > 0) {
+      this.toast(shareError);
+    }
   }
 
   private async pullForwarded(): Promise<void> {
