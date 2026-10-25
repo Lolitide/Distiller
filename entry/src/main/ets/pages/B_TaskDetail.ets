@@ -364,18 +364,28 @@ export struct B_TaskDetail {
           Column() {
             // 第一块正文：状态圆圈 + 可编辑任务名
             //
-            // 与顶部标题栏的距离（2026-10-25 需求方：「任务详情页的任务名称和上面的导航栏距离有点远 改小一些」）：
-            // 上一轮（2026-10-22）为了「一行与标题离得太近」在这里加了 **24vp**，加上 `nameRow` 自带的
-            // `CONTENT_GAP_VP`(16vp)，标题栏下沿 → 任务名墨迹共 **40vp**（布局探针实测 332 → 472px，
-            // 密度 3.5）。这次收到 **8vp**，总距离 **24vp**（≈84px）：仍然和标题分得开，
-            // 又不会在标题下面空出一条。
+            // 与顶部标题栏的距离（2026-10-25 第二轮，需求方：「把任务名称和导航栏的间隔再减小一点」）：
+            // 上一轮收到 24vp（外层 8 + `nameRow` 自带的 `CONTENT_GAP_VP` 16），仍嫌远 →
+            // 现在**去掉外层那 8vp，只留 `nameRow` 自带的 16vp**（标题栏下沿 → 任务名墨迹 ≈56px）。
+            // 再想更近就直接调 `nameRow` 的 `padding.top`，外面不要再叠一层。
             Column() {
               this.nameRow()
             }
             .width('100%')
-            .padding({ top: 8 })
+
+            // 第二块：步骤（需求方 2026-10-16 的 4 张交互图，见 `TaskStepsSection` 顶部注释）
+            Column() {
+              TaskStepsSection({ task: this.param.task })
+            }
+            .width('100%')
+            .padding({
+              left: CONTENT_SIDE_PADDING_VP,
+              right: CONTENT_SIDE_PADDING_VP,
+              top: CONTENT_GAP_VP
+            })
 
             // 采纳 / 忽略（FE-75）：只对来自后端候选的任务显示。
+            // 2026-10-25 需求方：「把有用/忽略放到添加步骤下面」——从任务名下方搬到这里。
             // ⚠️ 这里原来还有一颗「开始执行 / 标记完成」按钮（MVP 支的状态入口）；
             // 合并后状态统一由下方「更多信息卡 → 状态」那段承担（六态全在，且能来回改），
             // 免得同一页出现两个改状态的地方。
@@ -404,17 +414,6 @@ export struct B_TaskDetail {
               .padding({ left: CONTENT_SIDE_PADDING_VP, right: CONTENT_SIDE_PADDING_VP, top: 8 })
               .justifyContent(FlexAlign.Start)
             }
-
-            // 第二块：步骤（需求方 2026-10-16 的 4 张交互图，见 `TaskStepsSection` 顶部注释）
-            Column() {
-              TaskStepsSection({ task: this.param.task })
-            }
-            .width('100%')
-            .padding({
-              left: CONTENT_SIDE_PADDING_VP,
-              right: CONTENT_SIDE_PADDING_VP,
-              top: CONTENT_GAP_VP
-            })
 
             // 第二块之后：图片 / 文件 / 扫码链接（步骤下方、提醒上方）
             if ((this.param.task.urls !== undefined && this.param.task.urls.length > 0)
