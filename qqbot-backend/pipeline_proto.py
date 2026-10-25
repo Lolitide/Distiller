@@ -566,7 +566,8 @@ _TITLE_HEAD_RE = re.compile(
 )
 _TITLE_TAIL_RE = re.compile(
     r"(?:请准时参加|请务必参加|请同学们?(?:准时)?参加|请知悉|请相互转告"
-    r"|收到请回复|特此通知|谢谢(?:配合|大家)?|感谢配合|以上)[!！。.，,]*$"
+    r"|收到请回复|特此通知|谢谢(?:配合|大家)?|感谢配合|以上"
+    r"|的?通知|公告|公示)[!！。.，,]*$"
 )
 _TITLE_PURE_TIME_RE = re.compile(
     r"^(?:(?:今天|明天|后天|大后天|昨天|本周|这周|下周|周末"
@@ -575,13 +576,66 @@ _TITLE_PURE_TIME_RE = re.compile(
     r"|\d{1,2}月\d{1,2}[日号]|\d{1,2}[:：]\d{2}|\d{1,2}点(?:半|\d{1,2}分)?)"
     r"[、，,]?)+$"
 )
-_TITLE_MAX = 24
+_TITLE_MAX = 12
+
+
+# 裁剪标题时**不许劈开**的常见词（校园通知高频）。
+# 「关于评选国家奖学金申请」裁到 12 字会剩一个「申」——把断点挪到词首即可。
+_TITLE_WORD_GUARD: tuple[str, ...] = (
+    "奖学金", "助学金", "奖学金申请", "入党积极分子", "体质健康", "健康测试",
+    "申请", "报名", "通知", "公告", "公示", "材料", "名单", "表格", "截止",
+    "考试", "测试", "补考", "重修", "答辩", "讲座", "竞赛", "比赛", "活动",
+    "会议", "班会", "课程", "作业", "实验", "培训", "面试", "提交", "领取",
+    "缴费", "评选", "表彰", "报告", "论文", "实习", "招聘", "返校", "开会",
+    "教学楼", "体育馆", "图书馆", "实验室", "辅导员", "班主任"
+)
+
+
+def _cut_before_word(s: str, limit: int) -> int:
+    """如果 `limit` 这个断点正好劈开一个常见词，返回该词的起始下标；否则返回 limit。"""
+    for w in _TITLE_WORD_GUARD:
+        start = s.find(w, max(0, limit - len(w) + 1))
+        if 0 <= start < limit < start + len(w):
+            return start
+    return limit
+
+
+def clip_title(text: str, limit: int = _TITLE_MAX) -> str:
+    """把标题裁到 `limit` 个字以内，尽量在标点/括号/**词边界**处断开。
+
+    为什么不能直接 `s[:12]`：长通知的前 12 字多半是「关于组织2026年秋季学」这种半截话，
+    更糟的是把「申请」「材料」劈成单字（「…奖学金申」）。
+    优先级：标点/括号 > 常见词边界 > 硬切。
+    """
+    s = (text or "").strip()
+    if limit <= 0:
+        return s
+    # 以「2026年…」开头的长标题：年份对识别这件事没有帮助，去掉后往往刚好放得下
+    if len(s) > limit:
+        m = re.match(r"^(\d{4})年", s)
+        if m:
+            rest = s[m.end():].strip()
+            if len(rest) >= 4:
+                s = rest
+    if len(s) <= limit:
+        return s
+    cut = s[:limit]
+    floor = max(2, limit // 2)
+    for sep in ("，", "、", "。", "；", "：", "（", "(", " ", "-", "—"):
+        idx = cut.rfind(sep)
+        if idx >= floor:
+            return cut[:idx].strip()
+    # 没有标点：先挪开"被劈开的词"，再硬切
+    safe = _cut_before_word(s, limit)
+    if safe < limit and safe >= floor:
+        return s[:safe].strip()
+    return cut.rstrip("的得了和与及在对为我你他她它们")
 
 
 def extract_title(text: str, kind: str = "") -> str:
-    """规则路径的标题：按**分句**取，不从句子中段裁剪。
+    """规则路径的标题：按**分句**取，不从句子中段裁剪（最终裁到 `_TITLE_MAX`）。
 
-    模型路径不走这里（模型自己产 `title`，本函数只服务规则回退与 `build_event`）。
+    模型路径不走这里（模型自己产 `title`，由 `clip_title` 统一收口）。
     """
     s = (text or "").strip()
     if not s:
@@ -606,11 +660,14 @@ def extract_title(text: str, kind: str = "") -> str:
             continue
         cand = c if not out else out + "，" + c
         if len(cand) > _TITLE_MAX:
+            # 第一条就超长：**别丢掉它**，用清洗后的这条裁一下（比原始前缀好）
+            if not out:
+                out = c
             break
         out = cand
     if out:
-        return out[:_TITLE_MAX]
-    return s[:_TITLE_MAX]
+        return clip_title(out)
+    return clip_title(s)
 
 
 def build_event(

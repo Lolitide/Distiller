@@ -408,10 +408,12 @@ def _to_payload(ev: RULES.Event, engine: str, category: str,
     """
     its = list(items or [])
     text = ev.one_line if summary is None else summary
-    # 单条消息最多一个动作，作为唯一子步骤（副卡片圆圈读 done）
+    # 单条消息最多一个动作，作为唯一子步骤（副卡片圆圈读 done）。
+    # 超过 15 字的动作不放进 steps —— 那是整句原文，不是步骤。
     steps: list[dict[str, Any]] = []
-    if (ev.action or "").strip():
-        steps.append({"content": ev.action.strip(), "done": 0})
+    action = (ev.action or "").strip()
+    if action and len(action) <= 15:
+        steps.append({"content": action, "done": 0})
     cf = card_fields.card_fields(
         kind=ev.kind,
         title=ev.title,
@@ -435,7 +437,7 @@ def _to_payload(ev: RULES.Event, engine: str, category: str,
         "engine": engine,
         "kind": ev.kind,
         "category": category,
-        "title": ev.title,
+        "title": RULES.clip_title(ev.title),
         "action": ev.action,
         "summary": text,
         "items": its,

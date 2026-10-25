@@ -234,6 +234,9 @@ class RelayStore:
             # 设备级 Push Token（只用于发通知，不含任何消息内容）。
             # 归到「匿名设备标识」一类：它无法反查用户身份，也不含正文。
             "push_tokens": {},  # device_id -> {token, updated_at}
+            # 设备级偏好（只有开关，不含任何内容）。
+            # skip_self 默认 **True**：不把绑定用户自己发的群消息放进窗口/候选/推送。
+            "prefs": {},        # device_id -> {"skip_self": bool}
         }
 
     # -- 读写 --------------------------------------------------------
@@ -338,6 +341,7 @@ class RelayStore:
             "bound": True,
             "user_openid_tail": ("…" + openid[-4:]) if openid else "",
             "bound_at": b.get("bound_at"),
+            "bound_at_ms": b.get("bound_at_ms"),
             "source": b.get("source"),
         }
 
@@ -362,6 +366,7 @@ class RelayStore:
             self._data["bindings"][device_id] = {
                 "user_openid": user_openid,
                 "bound_at": _now(),
+                "bound_at_ms": int(time.time() * 1000),
                 "source": source,
             }
             # 换绑（换 QQ 号）：把旧号已获得的群授权复制给新号，
@@ -537,6 +542,7 @@ class RelayStore:
                         "user_openid": openid,
                         "user_openid_tail": ("…" + openid[-4:]) if openid else "",
                         "bound_at": b.get("bound_at"),
+            "bound_at_ms": b.get("bound_at_ms"),
                         "subscriptions": sorted(
                             (self._data["subscriptions"].get(device_id) or {}).keys()
                         ),
@@ -553,7 +559,45 @@ class RelayStore:
                 "bindings": 1 if device_id in self._data["bindings"] else 0,
                 "subscriptions": len(self._data["subscriptions"].get(device_id) or {}),
                 "queue_items": WINDOW.size(),
+                "skip_self": self.skip_self_of(device_id),
             }
+
+    # -- 设备偏好 ----------------------------------------------------
+
+    def set_skip_self(self, device_id: str, skip: bool) -> bool:
+        """设置「不订阅自己发的消息」。默认 True。"""
+        with _lock:
+            self.reload()
+            if not device_id or device_id not in self._data["devices"]:
+                return False
+            self._data.setdefault("prefs", {})[device_id] = {"skip_self": bool(skip)}
+            self._flush()
+            return True
+
+    def skip_self_of(self, device_id: str) -> bool:
+        """该设备的 skip_self（默认 **True**：不把自己发的消息当候选）。"""
+        with _lock:
+            self.reload()
+            item = (self._data.get("prefs") or {}).get(device_id or "") or {}
+            return bool(item.get("skip_self", True))
+
+    def should_skip_self_message(self, sender_openid: str) -> bool:
+        """这条消息是不是「某个开着 skip_self 的绑定用户」自己发的。
+
+        入窗时就丢掉（而不是事后过滤）：候选流是全群共享的一份，
+        事后再按设备过滤会让不同设备的 `rev_seq` 对不上。
+        """
+        if not sender_openid:
+            return False
+        with _lock:
+            self.reload()
+            prefs = self._data.get("prefs") or {}
+            for device_id, binding in self._data["bindings"].items():
+                if str(binding.get("user_openid") or "") != sender_openid:
+                    continue
+                if bool((prefs.get(device_id) or {}).get("skip_self", True)):
+                    return True
+        return False
 
     # -- 推送令牌 ----------------------------------------------------
     # 只存「设备 -> Push Token」，用于后台发通知；不含任何消息内容。
@@ -624,6 +668,7 @@ class RelayStore:
             self._data["devices"].pop(device_id, None)
             self._data["subscriptions"].pop(device_id, None)
             self._data["push_tokens"].pop(device_id, None)
+            (self._data.get("prefs") or {}).pop(device_id, None)
             self._data["bind_codes"] = {
                 k: v
                 for k, v in self._data["bind_codes"].items()
@@ -710,6 +755,11 @@ def ingest_group_message(
         "mentions": list(mentions) if isinstance(mentions, (list, tuple)) else [],
     }
     subscribers = len(STORE.subscribers_of(group_openid))
+
+    # 「不订阅自己发的消息」（设备默认开）：在**入窗之前**就丢掉。
+    # 候选流是全群共享的一份，事后再按设备过滤会让不同设备的 rev_seq 对不上。
+    if sender_openid and STORE.should_skip_self_message(sender_openid):
+        return {"seq": None, "subscribers": subscribers, "reason": "self_skipped"}
 
     # 解析放到后台线程，避免拖慢机器人推送（推送侧 HTTP 超时只有 3 秒）。
     # worker 解析完再把消息放进窗口，这样 App 拉到的**第一条就带 parse**，

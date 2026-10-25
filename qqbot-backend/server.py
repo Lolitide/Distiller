@@ -688,6 +688,7 @@ RELAY_PATHS = {
     "/device/register",
     "/bind/code",
     "/bind/status",
+    "/bind/reset",
     "/groups",
     "/subscribe",
     "/unsubscribe",
@@ -699,6 +700,7 @@ RELAY_PATHS = {
     "/feedback",
     "/profile",
     "/push/token",
+    "/my/prefs",
     "/my/data",
     "/dev/ingest",
     "/internal/ingest",
@@ -1322,6 +1324,11 @@ async def handle_relay_api(
     if path == "/bind/status":
         return OK, _ok(relay.STORE.bind_status(device_id))
 
+    if path == "/bind/reset":
+        # 重新绑定：先清掉本设备旧绑定，否则前端刚生成新码就会读到旧 bound=true
+        relay.STORE.unbind(device_id)
+        return OK, _ok({"bound": False})
+
     if path == "/groups":
         groups = await _run_db(lambda: api_relay_groups(device_id))
         # 顺手把还没查到名字的群问一次平台（有缓存，失败会自动回退成尾号）
@@ -1574,7 +1581,12 @@ async def handle_relay_api(
         candidate = await _run_db(
             lambda: candidate_engine.build_manual_candidate(joined, source=channel)
         )
-        return OK, _ok({"candidate": candidate, "text": joined})
+        return OK, _ok({
+            "candidate": candidate,
+            "text": joined,
+            # 降级标记：解析走规则回退时为 true，前端可提示「降级解析」
+            "degraded": bool(candidate.get("degraded")),
+        })
 
     if path == "/candidates":
         # v2 候选流：后端做「去重 + 聚类 + 综合总结」，App 按 candidate_id upsert。
@@ -1610,6 +1622,17 @@ async def handle_relay_api(
                 "changed": len(changed),
             }
         )
+
+    if path == "/my/prefs":
+        # 设备偏好：目前只有「不订阅自己发的消息」（默认开）。
+        if method != "POST":
+            return BAD_REQUEST, _err("bad_request", "my/prefs 只支持 POST")
+        skip = payload.get("skip_self")
+        if not isinstance(skip, bool):
+            return BAD_REQUEST, _err("bad_request", "skip_self 必须是布尔值")
+        if not relay.STORE.set_skip_self(device_id, skip):
+            return HTTPStatus.NOT_FOUND, _err("not_found", "设备不存在")
+        return OK, _ok({"skip_self": skip})
 
     if path == "/my/data":
         if method == "DELETE":

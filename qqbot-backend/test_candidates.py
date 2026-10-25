@@ -419,5 +419,31 @@ _no_title = CE._dedupe_candidates([
 check("没标题没地点不合并（没法判断）", len(_no_title) == 2, str(len(_no_title)))
 
 print()
+print("十三、同群两条无关通知不能被并成一条（体质测试 vs 积极分子）")
+print("=" * 78)
+_notice_a = msg(
+    "关于2026年秋季学生体质健康测试的通知，请各班同学于10月25日前完成测试，地点在体育馆",
+    "2026-10-20 10:00:00", "n_body_a")
+_notice_b = msg(
+    "关于确定第62期入党积极分子名单的通知，请各班同学于10月20日前确认信息，名单见附件",
+    "2026-10-20 10:06:00", "n_body_b")
+_split = CE.build_candidates([_notice_a, _notice_b])
+check("两条不相干通知 -> 两条候选", len(_split) == 2,
+      str([(c["title"], c["candidate_id"]) for c in _split]))
+check("两条的标题不同", len(_split) == 2 and _split[0]["title"] != _split[1]["title"],
+      str([c["title"] for c in _split]))
+check("标题都不超过 12 字", all(len(c["title"]) <= 12 for c in _split),
+      str([(c["title"], len(c["title"])) for c in _split]))
+
+_merged_same = CE._dedupe_candidates([
+    _cand("t1", "体质测试通知", "体育馆", "2026-10-25", 1),
+    _cand("t2", "学生体质测试", "体育馆", "2026-10-25", 2),
+])
+check("标题相近的同一事件 -> 合并", len(_merged_same) == 1,
+      str([c["candidate_id"] for c in _merged_same]))
+check("合并保留信息量更大的", _merged_same and _merged_same[0]["candidate_id"] == "t2",
+      _merged_same and _merged_same[0]["candidate_id"])
+
+print()
 print("失败项：", FAILS if FAILS else "无，全部通过")
 sys.exit(1 if FAILS else 0)

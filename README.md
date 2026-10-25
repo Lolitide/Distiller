@@ -45,7 +45,7 @@ qqbot-backend/
 ├── web/index.html          # Web 控制台（单文件）
 ├── console.bat             # 生产启动（127.0.0.1）
 ├── console-dev.bat         # 联调启动（0.0.0.0 + 允许注入假消息）
-├── test_*.py               # 11 个测试
+├── test_*.py               # 13 个测试
 └── requirements.txt
 ```
 
@@ -100,6 +100,8 @@ cd qqbot-backend
 .venv\Scripts\python.exe -X utf8 test_botpy_attachments.py
 .venv\Scripts\python.exe -X utf8 test_profile_api.py
 .venv\Scripts\python.exe -X utf8 test_push_api.py
+.venv\Scripts\python.exe -X utf8 test_parse_degraded.py
+.venv\Scripts\python.exe -X utf8 test_auth_codes.py
 .venv\Scripts\python.exe -X utf8 test_llm_e2e.py    # 需要本机 Ollama
 ```
 

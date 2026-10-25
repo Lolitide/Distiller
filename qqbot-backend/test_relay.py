@@ -43,6 +43,13 @@ check("注册返回 device_id/token", bool(device_id) and bool(token))
 check("正确令牌鉴权通过", relay.STORE.auth(device_id, token) is True)
 check("错误令牌鉴权失败", relay.STORE.auth(device_id, "bad-token") is False)
 check("未知设备鉴权失败", relay.STORE.auth("dev_nope", token) is False)
+# 「不订阅自己发的消息」默认开（设备偏好只存开关，不含内容）
+check("skip_self 默认开", relay.STORE.skip_self_of(device_id) is True,
+      str(relay.STORE.skip_self_of(device_id)))
+check("关掉 skip_self", relay.STORE.set_skip_self(device_id, False) is True
+      and relay.STORE.skip_self_of(device_id) is False)
+check("再打开 skip_self", relay.STORE.set_skip_self(device_id, True) is True
+      and relay.STORE.skip_self_of(device_id) is True)
 
 # ---------------------------------------------------------------- 绑定流程
 code = relay.STORE.mint_bind_code(device_id)["code"]

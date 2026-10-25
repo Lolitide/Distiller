@@ -69,6 +69,7 @@ SCHEMA: dict[str, Any] = {
         "deadline": {"type": "string"},
         "summary": {"type": "string"},
         "items": {"type": "array", "items": {"type": "string"}},
+        "steps": {"type": "array", "items": {"type": "string"}},
         "tags": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["kind", "category", "title", "action", "time_text", "place", "who", "deadline",
@@ -109,6 +110,9 @@ SYSTEM = """你是消息整理助手。先判断这条 QQ 群消息属于哪一�
 7. items 是原文里提到的【必须携带/准备的物品、材料，以及关键注意事项】，
    例如“准考证”“身份证”“电池”；每条必须逐字取自原文、不超过 14 字，最多 5 条；
    原文没提就输出空数组 []
+8. steps 是完成这件事的**执行步骤**：0~3 条，每条不超过 15 字，按先后顺序；
+   只写具体动作（如“确认报名时间”“准备身份证”），不要重复标题；
+   原文没有足够信息就输出 []，**不要编造条件**
 只输出 JSON，不要输出解释。"""
 
 # 簇（Thread）级 prompt：一次看多行文本，产出**一条**综合候选。
@@ -137,6 +141,9 @@ THREAD_SYSTEM = """你是消息整理助手。下面给你的是**同一个话�
    （例“传智杯比赛在后天举行。”）。可以润色、连词成句，但**不得改写或新增原文里的
    时间、地点、数字、人名**，也不能补充原文没说的判断。
 7. items 是原文里提到的必须携带/准备的物品、材料与关键注意事项，逐字取自原文、每条≤14字、最多5条；没有就输出 []
+8. steps 是完成这件事的**执行步骤**：2~5 条，每条不超过 15 字，按先后顺序；
+   只写具体动作（如“确认报名时间”“准备身份证”“提交申请表”），不要重复标题、
+   不要照抄整句原文；原文信息不足就输出 []，**不要编造原文没有的条件**
 只输出 JSON，不要输出解释。"""
 
 # 两套 prompt 共用同一份黑话表
@@ -453,6 +460,18 @@ def validate(obj: dict[str, Any], source: str, evidence_title: bool = False) -> 
             if flat and flat in src_flat and flat not in items:
                 items.append(flat[:14])
     out["items"] = items[:5]
+
+    # steps：执行步骤是"总结"，不要求原文子串；但要去空、去重、限长限量，
+    # 防止模型写成长段落或者复读标题。
+    steps: list[str] = []
+    steps_raw = obj.get("steps")
+    if isinstance(steps_raw, list):
+        for s in steps_raw[:6]:
+            t = _despace(str(s or "")).strip(" ：:、-—~～")
+            if len(t) < 2 or t in steps:
+                continue
+            steps.append(t[:15])
+    out["steps"] = steps[:5]
 
     out["summary"] = summary[:160]
 

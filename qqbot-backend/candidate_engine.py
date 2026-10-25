@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """知了 · v2 候选管道：群消息 -> 候选任务（去重 + 聚类 + 综合总结）。
 
 对应契约：
@@ -207,13 +207,36 @@ def _keywords_of(text: str) -> set[str]:
 
 
 def _entities_of(msg: _Msg) -> set[str]:
+    """聚类用的实体：**只用地点**。
+
+    刻意不含 `timeText`（两条无关通知同属「今天/本周」是常态），
+    也不含 `who`：规则抽出来的 who 在校园通知里几乎都是「请各班同学」这种泛称，
+    两条毫不相干的公文会因此被并成一条（实测：体质测试 + 积极分子名单）。
+    具体人物的接续由关键词/问答规则负责。
+    """
     p = msg.parse
     out: set[str] = set()
-    for key in ("place", "who", "timeText"):
-        value = str(p.get(key) or "").strip()
-        if value:
-            out.add(value)
+    place = str(p.get("place") or "").strip()
+    if len(place) >= 2:
+        out.add(place)
     return out
+
+
+def _kw_merge_signal(a: set[str], b: set[str]) -> bool:
+    """关键词是否强到足以判定「说的是同一件事」。
+
+    `_keywords` 是 2~4 字滑窗的 top-4，两条无关的中文通知几乎必然共享
+    「通知/同学/各班同」这类片段 —— 之前「共享任意一个关键词就合并」
+    就是这么把「体质测试」和「积极分子」并成一条的。
+    现在只认两种强证据：**共享 4 字片段**，或整体 Jaccard ≥0.5。
+    3 字片段（如「各班同」）不算——它太容易同时出现在两条公文里。
+    """
+    inter = a & b
+    if not inter:
+        return False
+    if any(len(k) >= 4 for k in inter):
+        return True
+    return _jaccard(a, b) >= 0.5
 
 
 def _is_question(text: str) -> bool:
@@ -331,14 +354,20 @@ def _cluster(units: list[_Unit]) -> list[_Cluster]:
         question = _is_question(rep.text)
 
         target: _Cluster | None = None
-        # A) 共享信号（同群、30 分钟内）
+        # A) 共享信号（同群、30 分钟内）。判据刻意保守：只要"像同一个话题"就并，
+        #    会把同一小时内两条互不相干的通知并成一条（实测：体质测试 + 积极分子名单）。
         for c in clusters:
             if c.group_openid != gid:
                 continue
             gap = abs((t - RULES._parse_ts(c.last_ts)).total_seconds())
             if gap > THREAD_GAP_MINUTES * 60:
                 continue
-            if (c.tags & tags) or (c.keywords & kw) or (c.concepts & concepts) or (c.entities & entities):
+            same_tag: bool = bool(c.tags & tags)
+            same_kw: bool = _kw_merge_signal(c.keywords, kw)
+            # 概念要共享 **2 个以上**：只共享「教务」这种大类的两条通知不是一件事
+            same_concept: bool = len(c.concepts & concepts) >= 2
+            same_entity: bool = bool(c.entities & entities)
+            if same_tag or same_kw or same_concept or same_entity:
                 target = c
                 break
 
@@ -434,6 +463,10 @@ def _rule_steps(cluster: _Cluster) -> list[dict[str, Any]]:
         if rep.kind not in _ACTIONABLE:
             continue
         action = str(rep.parse.get("action") or "").strip()
+        # 规则兜底也不能把整句原文当步骤：超过 15 字的一律丢弃
+        # （实测「入党积极分子公示名单…」这类公文会被整段抄成一步）
+        if len(action) > 15:
+            continue
         if action and action not in seen:
             seen.add(action)
             out.append({"content": action, "done": 0})
@@ -614,10 +647,16 @@ def _build_from_llm(
         if leaked:
             log.info("summary 复述了被清空的编造值 %s，回退规则总结", leaked)
             summary = _rule_summary(cluster, best, time_note=time_text)
+    model_steps: list[dict[str, Any]] = []
+    for s in (obj.get("steps") or [])[:5]:
+        content = str(s).strip()
+        if content:
+            model_steps.append({"content": content[:15], "done": 0})
     return {
         "kind": kind,
         "title": (str(obj.get("title") or "").strip()[:24] or str(best.rep.parse.get("title") or "")[:24]),
         "summary": summary,
+        "steps": model_steps,
         "time_text": time_text,
         "time_normalized": time_norm,
         "time_unresolved": time_unres,
@@ -628,6 +667,7 @@ def _build_from_llm(
         "tags": model_tags[:8] or _merge_tags(cluster, best),
         "confidence": round(conf, 2),
         "engine": "llm",
+        "degraded": False,
     }
 
 
@@ -648,6 +688,7 @@ def _build_from_rules(cluster: _Cluster, best: _Unit, base: datetime) -> dict[st
         "tags": _merge_tags(cluster, best),
         "confidence": round(best.rep.confidence, 2),
         "engine": "rules",
+        "degraded": True,
     }
 
 
@@ -660,13 +701,18 @@ def _build_candidate(cluster: _Cluster, now: datetime) -> dict[str, Any] | None:
 
     if core["kind"] == KIND_IGNORE:
         return None
+    # 标题统一收口到 12 字（模型可能给长句；规则路径已在 extract_title 里裁过）
+    core["title"] = RULES.clip_title(str(core.get("title") or ""))
 
     msgs = cluster.msgs
     senders = list(dict.fromkeys(m.sender for m in msgs if m.sender))
     msg_ids = [m.msg_id for m in msgs if m.msg_id][:MAX_MSG_IDS]
     timestamps = [m.timestamp for m in msgs if m.timestamp]
 
-    steps = _rule_steps(cluster)
+    # 步骤优先用模型总结的（有逻辑、按先后顺序）；模型没给才退回「抽动作」
+    steps = core.get("steps") or _rule_steps(cluster)
+    if not steps:
+        steps = _rule_steps(cluster)
     due_at = _due_at_ms(core["time_normalized"])
     repeat, repeat_text = repeat_rules_of(best.rep.text)
 
@@ -700,6 +746,7 @@ def _build_candidate(cluster: _Cluster, now: datetime) -> dict[str, Any] | None:
         "tags": core["tags"],
         "confidence": core["confidence"],
         "engine": core["engine"],
+        "degraded": bool(core.get("degraded", core.get("engine") != "llm")),
         "source": {
             "group_openid": cluster.group_openid,
             "group_label": cluster.group_label,
@@ -727,30 +774,82 @@ def _richness(c: dict) -> tuple[int, float, int]:
     return (int(src.get("count") or 0), float(c.get("confidence") or 0), len(str(c.get("summary") or "")))
 
 
+def _lcs_len(a: str, b: str) -> int:
+    """最长公共子串长度（标题很短，O(n*m) 足够）。"""
+    if not a or not b:
+        return 0
+    best = 0
+    prev = [0] * (len(b) + 1)
+    for i in range(1, len(a) + 1):
+        cur = [0] * (len(b) + 1)
+        for j in range(1, len(b) + 1):
+            if a[i - 1] == b[j - 1]:
+                cur[j] = prev[j - 1] + 1
+                if cur[j] > best:
+                    best = cur[j]
+        prev = cur
+    return best
+
+
+def _title_similar(a: str, b: str) -> bool:
+    """两个（已去标点的）标题是否像同一件事。
+
+    用于跨簇合并：模型两次生成的标题未必逐字相同
+    （「体质测试通知」vs「学生体质测试」），只比相等会漏合并、留下重复卡片。
+    用最长公共子串判定：≥4 字且覆盖较短标题的 60% 以上。
+    """
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    if len(a) >= 4 and len(b) >= 4 and (a in b or b in a):
+        return True
+    lcs = _lcs_len(a, b)
+    return lcs >= 4 and lcs >= int(0.6 * min(len(a), len(b)))
+
+
+def _same_event(a: dict, b: dict) -> bool:
+    gid_a = str((a.get("source") or {}).get("group_openid") or "")
+    gid_b = str((b.get("source") or {}).get("group_openid") or "")
+    if gid_a != gid_b:
+        return False
+    t_a = str(a.get("time_normalized") or "")
+    t_b = str(b.get("time_normalized") or "")
+    if t_a and t_b and t_a != t_b:
+        return False
+    p_a = _norm_key(str(a.get("place") or ""))
+    p_b = _norm_key(str(b.get("place") or ""))
+    if p_a and p_b and p_a != p_b:
+        return False
+    title_a = _norm_key(str(a.get("title") or ""))
+    title_b = _norm_key(str(b.get("title") or ""))
+    return _title_similar(title_a, title_b)
+
+
 def _dedupe_candidates(items: list[dict]) -> list[dict]:
-    """同一群 + 同一时间 + 同一地点 + 同一标题的候选只留一条。
+    """同一群 + 同一时间 + 同一地点 + **相近标题**的候选只留一条。
 
     为什么需要：同一件事被拆到两个簇（比如隔了半小时又有人补一句），
     会变成两张几乎一样的卡片。保留信息量更大（来源消息更多）的那条。
-    只看标题/地点都不够——「开会」每天都有，所以**时间必须相同**才合并。
+    标题用相似度而不是逐字相等——模型每次生成的标题会有措辞差异。
+    只看标题/地点都不够——「开会」每天都有，所以**时间不同不合并**。
     """
-    best: dict[tuple[str, str, str, str], int] = {}
     out: list[dict] = []
     for c in items:
         title = _norm_key(str(c.get("title") or ""))
         place = _norm_key(str(c.get("place") or ""))
-        gid = str((c.get("source") or {}).get("group_openid") or "")
         if not title and not place:
             out.append(c)  # 没标题没地点，无法判断重复，保持原样
             continue
-        key = (gid, title, str(c.get("time_normalized") or ""), place)
-        idx = best.get(key)
-        if idx is None:
-            best[key] = len(out)
+        merged = False
+        for i in range(len(out)):
+            if _same_event(out[i], c):
+                if _richness(c) > _richness(out[i]):
+                    out[i] = c
+                merged = True
+                break
+        if not merged:
             out.append(c)
-            continue
-        if _richness(c) > _richness(out[idx]):
-            out[idx] = c
     return out
 
 
@@ -822,6 +921,8 @@ def build_manual_candidate(text: str, source: str = "manual",
     if core["engine"] == "rules" and core["kind"] == KIND_CHAT:
         if any(m in text for m in RULES._TASK_MARKERS) or RULES.parse_time(text, now):
             core["kind"] = KIND_TODO
+    # 与窗口候选同一口径：标题不超过 12 字
+    core["title"] = RULES.clip_title(str(core.get("title") or ""))
 
     steps = _rule_steps(cluster)
     due_at = _due_at_ms(core["time_normalized"])
@@ -857,6 +958,7 @@ def build_manual_candidate(text: str, source: str = "manual",
         "tags": core["tags"],
         "confidence": core["confidence"],
         "engine": core["engine"],
+        "degraded": bool(core.get("degraded", core.get("engine") != "llm")),
         # 手动来源没有群：group_openid 为空；通道（manual / manual_text /
         # manual_image / manual_file…）放 group_label，前端据此填 Task.sourceKind
         "source": {
