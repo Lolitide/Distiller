@@ -125,6 +125,16 @@ class MyClient(botpy.Client):
             )
 
             code = relay.parse_bind_command(content)
+            if (code is None and content not in ("解绑", "unbind", "状态", "帮助")
+                    and len(content) >= 4 and user_openid):
+                # 降级入口：QQ 分享面板不列第三方应用时，用户把消息发给机器人单聊。
+                count = relay.enqueue_forward(user_openid, content)
+                if count > 0:
+                    await message.reply(
+                        content="已收到，回到「知了」App 会自动打开确认页。\n"
+                                "（图片暂不支持转发，请在 App 里用截图来源）"
+                    )
+                    return
             reply = self._bind_reply(code, user_openid, content)
             await message.reply(content=reply)
         except Exception:

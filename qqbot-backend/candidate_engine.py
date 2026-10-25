@@ -470,6 +470,18 @@ def _rule_steps(cluster: _Cluster) -> list[dict[str, Any]]:
         if action and action not in seen:
             seen.add(action)
             out.append({"content": action, "done": 0})
+    # 编号列表兜底：模型没给 steps 时，至少把「1. xxx 2. xxx / ①②」拆出来。
+    # 只在这种显式编号里做，避免把普通长句切成步骤。
+    if not out:
+        for u in sorted(cluster.units, key=lambda x: x.rep.ts):
+            text = str(u.rep.text or "")
+            for m in re.finditer(r"(?:^|\n)\s*(?:\d{1,2}[.、)]|[①②③④⑤⑥])\s*([^\n；;]{2,20})", text):
+                content = m.group(1).strip()
+                if content and content not in seen:
+                    seen.add(content)
+                    out.append({"content": content[:15], "done": 0})
+            if len(out) >= 5:
+                break
     return out[:5]
 
 

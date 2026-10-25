@@ -683,6 +683,45 @@ class RelayStore:
 
 STORE = RelayStore()
 
+# ------------------------------------------------------------------ 「转发给机器人」待确认队列
+#
+# QQ 的系统分享面板不把第三方应用列入分享目标（部分版本只允许转发给 QQ 好友/群），
+# 于是提供降级入口：用户把消息**转发/发送给机器人单聊**，机器人把它放进这个**纯内存**
+# 队列（30 分钟 TTL，不落盘），App 回到前台时取走并打开确认面。
+#
+# 只支持文本：图片附件需要机器人登录态下载，当前不缓存图片，避免把正文/图片写进
+# 进程外的任何文件。
+
+_FORWARD_LOCK = threading.Lock()
+_FORWARD_TTL = 30 * 60
+_FORWARDS: dict[str, list[dict]] = {}
+
+
+def enqueue_forward(user_openid: str, text: str) -> int:
+    """把一条转发文本放进该用户已绑定设备的队列，返回设备数。"""
+    content = (text or "").strip()
+    if not content or not user_openid:
+        return 0
+    devices = STORE.devices_of_openid(user_openid)
+    if not devices:
+        return 0
+    now = time.time()
+    with _FORWARD_LOCK:
+        for device_id in devices:
+            _FORWARDS.setdefault(device_id, []).append({
+                "text": content[:2000],
+                "created_at": now,
+            })
+    return len(devices)
+
+
+def take_forwards(device_id: str) -> list[dict]:
+    """取走并清空该设备的转发队列（一次性消费）。"""
+    now = time.time()
+    with _FORWARD_LOCK:
+        items = _FORWARDS.pop(device_id or "", [])
+    return [x for x in items if now - float(x.get("created_at") or 0) <= _FORWARD_TTL]
+
 
 # ------------------------------------------------------------------ 规则过滤
 

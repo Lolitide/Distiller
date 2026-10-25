@@ -689,6 +689,7 @@ RELAY_PATHS = {
     "/bind/code",
     "/bind/status",
     "/bind/reset",
+    "/forward/pending",
     "/groups",
     "/subscribe",
     "/unsubscribe",
@@ -1622,6 +1623,12 @@ async def handle_relay_api(
                 "changed": len(changed),
             }
         )
+
+    if path == "/forward/pending":
+        # 「转发给机器人」的待确认文本：一次性取走；纯内存 30 分钟 TTL
+        if method != "GET":
+            return BAD_REQUEST, _err("bad_request", "forward/pending 只支持 GET")
+        return OK, _ok({"items": relay.take_forwards(device_id)})
 
     if path == "/my/prefs":
         # 设备偏好：目前只有「不订阅自己发的消息」（默认开）。
