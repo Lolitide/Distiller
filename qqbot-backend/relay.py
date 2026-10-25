@@ -697,10 +697,11 @@ _FORWARD_TTL = 30 * 60
 _FORWARDS: dict[str, list[dict]] = {}
 
 
-def enqueue_forward(user_openid: str, text: str) -> int:
-    """把一条转发文本放进该用户已绑定设备的队列，返回设备数。"""
+def enqueue_forward(user_openid: str, text: str, kind: str = "text", url: str = "") -> int:
+    """把一条转发内容放进该用户已绑定设备的队列，返回设备数。"""
     content = (text or "").strip()
-    if not content or not user_openid:
+    link = (url or "").strip()
+    if not user_openid or (not content and not link):
         return 0
     devices = STORE.devices_of_openid(user_openid)
     if not devices:
@@ -709,7 +710,9 @@ def enqueue_forward(user_openid: str, text: str) -> int:
     with _FORWARD_LOCK:
         for device_id in devices:
             _FORWARDS.setdefault(device_id, []).append({
+                "kind": kind,
                 "text": content[:2000],
+                "url": link,
                 "created_at": now,
             })
     return len(devices)

@@ -78,12 +78,52 @@ def _json_safe(value, depth: int = 0):
 
 
 def _json_list(items) -> list:
-    """把 SDK 的附件/mentions 列表转成可 JSON 序列化的普通结构。"""
+    """鎶?SDK 鐨勯檮浠?mentions 鍒楄〃杞垚鍙?JSON 搴忓垪鍖栫殑鏅€氱粨鏋勩€?"""
     if not items:
         return []
     if isinstance(items, (list, tuple)):
         return [_json_safe(item) for item in items]
     return [_json_safe(items)]
+
+
+def _extract_c2c_text(message, content: str) -> str:
+    """QQ「转发」在单聊里常常 content 为空，正文在 ark_data / msg_elements 里。
+
+    只挑常见正文字段，避免把卡片 JSON 整段当任务名。
+    """
+    if content:
+        return content
+    keys = ("prompt", "desc", "description", "title", "text", "content", "summary")
+
+    def pick(obj, depth: int = 0) -> str:
+        if depth > 5 or obj is None:
+            return ""
+        if isinstance(obj, str):
+            s = obj.strip()
+            return s if 2 <= len(s) <= 2000 else ""
+        if isinstance(obj, (list, tuple)):
+            for item in obj:
+                got = pick(item, depth + 1)
+                if got:
+                    return got
+            return ""
+        if isinstance(obj, dict):
+            for k in keys:
+                got = pick(obj.get(k), depth + 1)
+                if got:
+                    return got
+            for v in obj.values():
+                got = pick(v, depth + 1)
+                if got:
+                    return got
+        return ""
+
+    for source in (getattr(message, "ark_data", None), getattr(message, "msg_elements", None),
+                   getattr(message, "raw", None)):
+        got = pick(source)
+        if got:
+            return got
+    return ""
 
 
 class MyClient(botpy.Client):
@@ -116,6 +156,7 @@ class MyClient(botpy.Client):
                 author, "member_openid", None
             )
             content = (getattr(message, "content", "") or "").strip()
+            forward_text = _extract_c2c_text(message, content)
             logger.info("[单聊] %s: %s", getattr(author, "username", None), content)
             logger.info(
                 "  [id诊断] user_openid=%s member_openid=%s union_openid=%s",
@@ -126,21 +167,29 @@ class MyClient(botpy.Client):
 
             code = relay.parse_bind_command(content)
             attachments = _json_list(getattr(message, "attachments", None))
-            if (code is None and user_openid
-                    and content not in ("解绑", "unbind", "状态", "帮助")
-                    and (len(content) >= 4 or attachments)):
-                if not content:
+            bound_devices = relay.STORE.devices_of_openid(user_openid) if user_openid else []
+            if (code is None and user_openid and bound_devices
+                    and content not in ("解绑", "unbind", "状态", "帮助")):
+                if not forward_text:
+                    image_url = ""
+                    for att in attachments:
+                        if isinstance(att, dict) and str(att.get("url") or "").strip():
+                            image_url = str(att.get("url")).strip()
+                            break
+                    if image_url:
+                        relay.enqueue_forward(user_openid, "", "image", image_url)
+                        await message.reply(
+                            content="图片已收到，回到 App 后会加入「待确认消息」并自动识别。"
+                        )
+                        return
                     await message.reply(
                         content="这条消息没有可读取的文字（图片转发暂不支持）。\n"
                                 "请在 App 里「＋ → 截图 → 从相册选择」，或先把文字复制发给我。"
                     )
                     return
-                count = relay.enqueue_forward(user_openid, content)
+                count = relay.enqueue_forward(user_openid, forward_text)
                 if count > 0:
-                    await message.reply(
-                        content="已收到，回到「知了」App 会自动打开确认页。\n"
-                                "（图片暂不支持转发，请在 App 里用截图来源）"
-                    )
+                    await message.reply(content="已收到，会在「待确认消息」里等你确认。")
                     return
             reply = self._bind_reply(code, user_openid, content)
             await message.reply(content=reply)
