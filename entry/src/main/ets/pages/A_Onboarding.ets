@@ -8,6 +8,7 @@ import { common } from '@kit.AbilityKit';
 import { ThemeStore } from '../utils/Theme';
 import { NotificationService } from '../service/system/NotificationService';
 import { CalendarService } from '../service/system/CalendarService';
+import { PermissionEvents } from '../service/system/PermissionEvents';
 import { WindowInsets } from '../utils/WindowInsets';
 
 @ComponentV2
@@ -55,6 +56,8 @@ export struct A_Onboarding {
       }
     } finally {
       this.busy = false;
+      // 设置页可能已在后台挂载：通知它重新查权限
+      PermissionEvents.notifyChanged();
     }
   }
 
@@ -76,6 +79,7 @@ export struct A_Onboarding {
       }
     } finally {
       this.busy = false;
+      PermissionEvents.notifyChanged();
     }
   }
 
@@ -218,7 +222,7 @@ export struct A_Onboarding {
     .padding({
       left: 20,
       right: 20,
-      top: this.statusBarVp + 12
+      top: this.statusBarVp + 30
     })
     .backgroundColor(this.themeStore.scheme.surface)
   }

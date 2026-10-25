@@ -42,6 +42,7 @@ import { RelayApi } from '../service/backend/RelayApi';
 import { apiErrorMessage, GroupItemDto } from '../service/backend/BackendTypes';
 import { SyncService } from '../service/cloud/SyncService';
 import { NotificationService } from '../service/system/NotificationService';
+import { PermissionEvents } from '../service/system/PermissionEvents';
 import { TaskRepository } from '../repository/TaskRepository';
 import { notificationManager } from '@kit.NotificationKit';
 import { abilityAccessCtrl, Permissions } from '@kit.AbilityKit';
@@ -186,6 +187,10 @@ export struct A_Settings {
     this.loadBackend();
     this.loadPermissions();
     this.loadSyncEnabled();
+    // 引导页里授权通知/日历后，这里没有重新走生命周期，靠广播刷新
+    PermissionEvents.setListener(() => {
+      this.loadPermissions();
+    });
     // 窗口全屏后页面铺到屏幕顶端，顶部让位要补上状态栏高度（见 utils/WindowInsets）
     const context: common.Context | undefined = this.getUIContext().getHostContext();
     if (context !== undefined) {
@@ -193,6 +198,10 @@ export struct A_Settings {
         this.statusBarVp = px > 0 ? this.getUIContext().px2vp(px) : 0;
       });
     }
+  }
+
+  aboutToDisappear(): void {
+    PermissionEvents.clearListener();
   }
 
   /* ── 权限管理 ── */
@@ -208,7 +217,7 @@ export struct A_Settings {
    */
   private async loadPermissions(): Promise<void> {
     await this.loadNotifyPermission();
-    this.loadCalendarPermission();
+    await this.loadCalendarPermission();
     await this.loadSubscriptionCount();
   }
 
@@ -227,13 +236,14 @@ export struct A_Settings {
    * （拿 uid 去查永远返回 DENIED —— 这就是"授权了还显示未授权"的根因）。
    * accessTokenId 由 `bundleManager.getBundleInfoForSelfSync().appInfo` 取。
    */
-  private loadCalendarPermission(): void {
+  private async loadCalendarPermission(): Promise<void> {
     try {
       const flags: number = bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT;
       const info = bundleManager.getBundleInfoForSelfSync(flags);
       const at = abilityAccessCtrl.createAtManager();
+      // 用异步 checkAccessToken：同步版在本机实测会把已授权的日历读成 DENIED
       const status: abilityAccessCtrl.GrantStatus =
-        at.checkAccessTokenSync(info.appInfo.accessTokenId, 'ohos.permission.WRITE_CALENDAR');
+        await at.checkAccessToken(info.appInfo.accessTokenId, 'ohos.permission.WRITE_CALENDAR');
       this.calendarAllowed = status === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
     } catch (error) {
       const err = error as BusinessError;
