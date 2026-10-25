@@ -1,4 +1,4 @@
-import { LengthMetrics } from '@kit.ArkUI';
+import { LengthMetrics, SubHeader } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { Task, TaskPriority, TaskStatus } from '../model';
 import { MainTitleBar } from '../components/MainTitleBar';
@@ -404,30 +404,40 @@ export struct A_TaskList {
     return hh + ':' + mm;
   }
 
-  /** 待确认消息（转发/群聊/图片收集）：置顶，带未读数与子卡片 */
+  /** 待确认消息（转发/群聊/图片收集）：组头样式与「今天/明天」一致 */
   @Builder
   pendingSection() {
     Column() {
       Row({ space: 8 }) {
-        Text('待确认消息')
-          .fontSize(('sys.float.ohos_id_text_size_body1'))
-          .fontWeight(FontWeight.Medium)
-          .fontColor(('sys.color.ohos_id_color_text_primary'))
-        if (this.store.pendingUnseenCount() > 0) {
-          Text(String(this.store.pendingUnseenCount()))
-            .fontSize(11)
-            .fontColor(this.themeStore.scheme.onError)
-            .padding({ left: 6, right: 6, top: 1, bottom: 1 })
-            .backgroundColor(this.themeStore.scheme.error)
-            .borderRadius(9)
+        Column() {
+          SubHeader({
+            primaryTitle: '待确认消息',
+            secondaryTitle: this.store.pendingList.length + ' 条待确认'
+          })
         }
-        Blank()
-        Text(this.pendingExpanded ? '收起' : '展开')
-          .fontSize(12)
-          .fontColor(this.themeStore.scheme.primary)
+        .layoutWeight(1)
+
+        // 「数字 + 红点」放在展开箭头左边
+        if (this.store.pendingUnseenCount() > 0) {
+          Row({ space: 4 }) {
+            Column()
+              .width(8)
+              .height(8)
+              .borderRadius(4)
+              .backgroundColor(this.themeStore.scheme.error)
+            Text(String(this.store.pendingUnseenCount()))
+              .fontSize(12)
+              .fontColor(this.themeStore.scheme.error)
+          }
+        }
+
+        SymbolGlyph(this.pendingExpanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
+          .fontSize($r('sys.float.subheader_right_icon_size'))
+          .fontColor([$r('sys.color.icon_primary')])
       }
       .width('100%')
-      .padding(14)
+      .alignItems(VerticalAlign.Center)
+      .padding({ end: LengthMetrics.resource($r('sys.float.padding_level8')) })
       .onClick(() => {
         this.pendingExpanded = !this.pendingExpanded;
       })
@@ -437,8 +447,8 @@ export struct A_TaskList {
           Column({ space: 3 }) {
             Row({ space: 8 }) {
               Text(task.name)
-                .fontSize(('sys.float.ohos_id_text_size_body2'))
-                .fontColor(('sys.color.ohos_id_color_text_primary'))
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .fontColor($r('sys.color.ohos_id_color_text_primary'))
                 .maxLines(1)
                 .textOverflow({ overflow: TextOverflow.Ellipsis })
                 .layoutWeight(1)
@@ -454,11 +464,14 @@ export struct A_TaskList {
             Text((task.pendingSource === 'image' ? '图片转发' : (task.pendingSource === 'forward' ? '转发给机器人' : '群聊收集'))
               + ' · ' + this.pendingTime(task.createdAt))
               .fontSize(11)
-              .fontColor(('sys.color.ohos_id_color_text_secondary'))
+              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
           }
           .width('100%')
-          .padding({ left: 14, right: 14, top: 8, bottom: 8 })
+          .padding(14)
           .alignItems(HorizontalAlign.Start)
+          .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
+          .borderRadius(14)
+          .margin({ left: 16, right: 16, bottom: 8 })
           .onClick(() => {
             this.store.markPendingSeen(task);
             AppStorage.get<NavPathStack>(NAV_STACK_KEY)
@@ -468,10 +481,6 @@ export struct A_TaskList {
       }
     }
     .width('100%')
-    .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
-    .borderRadius(14)
-    .clip(true)
-    .margin({ left: 16, right: 16, bottom: 8 })
   }
 
   /** 同步状态细条（离线 / 同步中 / 已关闭），离线可点重试 */

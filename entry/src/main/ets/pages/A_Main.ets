@@ -251,20 +251,49 @@ struct A_Main {
 
   /** 把分享内容放进「添加任务」确认面，并自动触发一次解析 */
   private openShare(payload: SharePayload): void {
+    // 图片分享：不再拉添加页，直接识别后进「待确认消息」
+    if (payload.kind === SHARE_KIND_IMAGE) {
+      this.imageShareToPending(payload.uri);
+      return;
+    }
     const context: common.Context | undefined = this.getUIContext().getHostContext();
     if (context !== undefined) {
       DraftRepository.clear(context);
     }
     this.addDraft.reset();
-    if (payload.kind === SHARE_KIND_IMAGE) {
-      this.addDraft.sourceTab = AddTaskSource.SCREENSHOT;
-      this.addDraft.imageUri = payload.uri;
-    } else {
-      this.addDraft.sourceTab = AddTaskSource.TEXT;
-      this.addDraft.rawText = payload.text;
-    }
+    this.addDraft.sourceTab = AddTaskSource.TEXT;
+    this.addDraft.rawText = payload.text;
     this.shareParseKey = Date.now();
     this.addSheetShown = true;
+  }
+
+  private async imageShareToPending(uri: string): Promise<void> {
+    let task: Task | undefined = undefined;
+    try {
+      const parsed: ManualParseResult = await ManualParseService.parseImage(uri);
+      if (parsed.ok && parsed.candidate !== undefined) {
+        task = candidateToTask(parsed.candidate, 0, parsed.text, true);
+      } else if (parsed.text.length > 0) {
+        task = new Task();
+        const first: string = parsed.text.split('\n')[0].trim();
+        task.name = first.length > 0 ? first.substring(0, 20) : '图片消息';
+        task.rawText = parsed.text;
+      }
+    } catch (error) {
+      task = undefined;
+    }
+    if (task === undefined) {
+      task = new Task();
+      task.name = '图片消息（待核对）';
+    }
+    task.status = TaskStatus.PENDING_CONFIRM;
+    task.priority = TaskPriority.NORMAL;
+    task.source = TaskSource.SHARE;
+    task.createdAt = Date.now();
+    task.pendingSeen = false;
+    task.pendingSource = 'image';
+    this.store.upsertAll([task]);
+    this.toast('图片已加入「待确认消息」');
   }
 
   /**
