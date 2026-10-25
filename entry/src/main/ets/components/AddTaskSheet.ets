@@ -34,6 +34,7 @@ import { AddTaskAttributeChips } from './AddTaskAttributeChips';
 import { AddTaskNameInput } from './AddTaskNameInput';
 import { AddTaskRecorder } from './AddTaskRecorder';
 import { AddTaskScreenshotPicker } from './AddTaskScreenshotPicker';
+import { AddTaskStepsPreview } from './AddTaskStepsPreview';
 import { AddTaskSource, AddTaskSourceTabs } from './AddTaskSourceTabs';
 import { AddTaskTextInput } from './AddTaskTextInput';
 
@@ -549,6 +550,10 @@ export struct AddTaskSheet {
           if (this.showParseEvidence) {
             this.parseEvidence()
           }
+
+          // FE-77：解析出的子任务（原样保留，可逐条删）—— 以前只在保存后详情页才看得到
+          AddTaskStepsPreview({ draft: this.draft })
+            .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
 
           // —— 任务名称输入框：三种来源共用（名称与来源无关），紧跟在内容区下面 ——
           AddTaskNameInput({ draft: this.draft })
