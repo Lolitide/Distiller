@@ -11,8 +11,10 @@
  * 组件只拿结果、不 import photoAccessHelper（`references/02-编码规约.md` 落位规则 2）。
  * 选图**不需要任何权限**：系统 picker 是安全组件，返回的 URI 带持久授权（见 `MediaPickService` 顶部注释）。
  *
- * ⚠️ 还没做的：选中截图之后的**文字识别（OCR）与字段抽取** —— 那是下一步，
- * 要按项目纪律走 `service/ai`（Core Vision Kit 的 OCR **不支持模拟器、且必须动态 import**）。
+ * ⚠️ 本组件**只管选图与预览**。OCR 与字段抽取已经接通（FE-37，2026-10-25 核对）：
+ * 选完图点「AI 预填」→ `AddTaskSheet.aiFill()` → `ManualParseService.parseImage()` ——
+ * **先在本机 OCR**（`OcrService.recognizeUri`，Core Vision Kit，图片不出手机），文字再发后端做抽取；
+ * 本机认不出才回退「上传图片给后端」。
  */
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';

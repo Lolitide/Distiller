@@ -248,6 +248,9 @@ export struct AddTaskSheet {
   /**
    * AI 预填：文本/截图 → 后端 `/parse` → 把名称/时间/优先级/标签/地点填进草稿。
    * **只预填、不保存**；用户看过再点「保存」。
+   *
+   * 截图来源的链路（FE-37）：`ManualParseService.parseImage()` **先在本机 OCR**（Core Vision Kit，
+   * 图片不出手机）→ 文字再发给后端做字段抽取；本机识别不出才回退「上传图片给后端」。
    */
   private async aiFill(): Promise<void> {
     if (this.aiBusy) {
@@ -255,9 +258,12 @@ export struct AddTaskSheet {
     }
     if (this.draft.sourceTab === AddTaskSource.SCREENSHOT) {
       if (this.draft.imageUri.length === 0) {
+        // 以前这里静默 return，点了「AI 预填」什么都不发生 → 用户以为按钮坏了
+        this.toast('先点上面那块选一张截图');
         return;
       }
     } else if (this.draft.rawText.trim().length === 0) {
+      this.toast('先输入或粘贴一段内容');
       return;
     }
     this.aiBusy = true;
@@ -270,23 +276,30 @@ export struct AddTaskSheet {
         result = await ManualParseService.parseText(this.draft.rawText);
       }
       if (!result.ok || result.candidate === undefined) {
-        // 后端不可用（没配服务器 / 断网 / 解析失败）→ **端侧实体抽取兜底**（FE-36）：
-        // 用 Natural Language Kit 在本机把「时间 + 地点」抽出来先填进表单，用户核对后照样能存。
-        // 抽不到就沿用原来的分类错误卡（重试 / 手动填写），不会更差。
-        const localText: string = result.text.length > 0 ? result.text : this.draft.rawText;
+        /*
+         * 失败分两种，别一锅端：
+         *  ① **本机 OCR 已经认出了文字**（截图来源，`result.text` 非空）→ 先把文字存进 `draft.rawText`：
+         *     `rawText` 是任务的「原文」，也是详情页「原文对照」的唯一依据；丢掉等于白识别一遍。
+         *     用户在「文本」页签能看到/编辑它（`AddTaskTextInput` 直接绑 `draft.rawText`）。
+         *  ② 再试**端侧实体抽取**（FE-36，Natural Language Kit）把时间/地点抠出来填进表单。
+         * 两样都不成，才落回分类错误卡（重试 / 手动填写）。
+         */
+        const ocrText: string = result.text.trim();
+        const savedOcr: boolean = ocrText.length > 0 && this.draft.rawText.trim().length === 0;
+        if (savedOcr) {
+          this.draft.rawText = ocrText;
+        }
+        const localText: string = ocrText.length > 0 ? ocrText : this.draft.rawText;
         const local: TextExtractResult = await TextExtractService.extract(localText);
         if (local.ok && this.draft.applyLocalExtract(local)) {
-          if (this.draft.rawText.trim().length === 0 && local.text.length > 0) {
-            // 截图来源的文字是端侧 OCR 出来的：补成原文，详情页「原文对照」才有东西看
-            this.draft.rawText = local.text;
-          }
           this.parseErrorCode = '';
           this.parseErrorMsg = '';
           const hasTime: boolean = local.time !== undefined && local.time.text.length > 0;
           const hasPlace: boolean = local.place.length > 0;
           const what: string = hasTime && hasPlace ? '时间与地点' : (hasTime ? '时间' : '地点');
           const long: string = local.chunkCount > 1 ? '（长消息已切 ' + local.chunkCount + ' 段）' : '';
-          this.toast('没连上服务器，已用手机本地抽出' + what + long + '，请核对');
+          const ocrPart: string = savedOcr ? '已在手机本地识别出文字（存进「原文」），' : '';
+          this.toast('没连上服务器，' + ocrPart + '并抽出' + what + long + '，请核对');
           return;
         }
         this.parseErrorCode = result.code !== undefined ? result.code : 'unknown';
@@ -295,6 +308,10 @@ export struct AddTaskSheet {
         // "为什么连本地都没抽出来"（真正的文案拼接在 `parseErrorText()` 里做，
         // 因为那张卡按 `parseErrorCode` 分类，不一定用 `parseErrorMsg`）
         this.localExtractUnavailable = local.code === 'unsupported';
+        if (savedOcr) {
+          // 至少告诉用户"图上的字没白认"，以及去哪儿继续编辑
+          this.toast('已在手机本地识别出文字，存进「原文」；切到「文本」可继续编辑');
+        }
         return;
       }
       this.parseErrorCode = '';
