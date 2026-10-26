@@ -34,13 +34,28 @@ import { OptionPickerBody } from '../components/OptionPickerBody';
 import { SettingsNavRow } from '../components/SettingsNavRow';
 import { PopupSelector } from '../components/PopupSelector';
 import { ToggleSlider } from '../components/ToggleSlider';
+// 开关统一走 M3 取色的组件（`Toggle` 默认取系统蓝，见 M3Switch 顶部注释）
+import { M3Switch } from '../components/M3Switch';
 import { Task } from '../model';
 import { TaskListStore } from '../viewmodel/TaskListStore';
+import { TaskExportViewModel, TaskImportParseResult } from '../viewmodel/TaskExportViewModel';
+import { TaskExportResult, TaskExportService } from '../service/system/TaskExportService';
+import { TaskImportFileResult, TaskImportService } from '../service/system/TaskImportService';
 import { WindowInsets } from '../utils/WindowInsets';
 import { BackendConfig } from '../service/backend/BackendConfig';
 import { RelayApi } from '../service/backend/RelayApi';
 import { apiErrorMessage, GroupItemDto } from '../service/backend/BackendTypes';
 import { SyncService } from '../service/cloud/SyncService';
+import { PushRegistrar } from '../service/cloud/PushRegistrar';
+import {
+  PUSH_PHASE_FAILED,
+  PUSH_PHASE_READY,
+  PUSH_PHASE_REGISTERED,
+  PUSH_PHASE_UNAVAILABLE,
+  PushStatus
+} from '../service/cloud/PushStatus';
+import { NotificationService } from '../service/system/NotificationService';
+import { PermissionEvents } from '../service/system/PermissionEvents';
 import { TaskRepository } from '../repository/TaskRepository';
 import { notificationManager } from '@kit.NotificationKit';
 import { abilityAccessCtrl, Permissions } from '@kit.AbilityKit';
@@ -99,13 +114,12 @@ const SHEET_GROUPS: number = 4;
 export struct A_Settings {
   /** 任务 store：清空任务 + 提醒提前量同步 */
   @Require @Param store: TaskListStore;
+  /** 推送通道状态（FE-76）：`PushStatus` 是可观察单例，端侧/云端两段失败原因都在这 */
+  private pushStatus: PushStatus = PushStatus.instance();
 
-  /**
-   * 滚动控制器：由 `A_Main` 创建、经 `MainTabBar` 传进来，
-   * `HdsNavigation.bindToScrollable` 要绑同一个对象 —— 不绑的话导航栏大标题
-   * 在设置页滚动时不会收缩，会**静默压在内容上**（实测过）。
-   */
-  @Require @Param scroller: Scroller;
+  // 2026-10-25：原来这里还有一个 `@Require @Param scroller: Scroller`，唯一的用途是交给
+  // `HdsNavigation.bindToScrollable` 做「大标题随滚动收缩」。三个页签统一改成固定 MINI 标题后
+  // 那条绑定已删除、本页也从未读过这个 scroller，于是把它一并去掉（死参数会误导后来的人）。
 
   /** 视觉个性化状态（跨页共享，见 utils/Theme.ets） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
@@ -142,11 +156,26 @@ export struct A_Settings {
   /** 连接状态文案（已连接 / 失败原因） */
   @Local backendState: string = '未连接';
   @Local backendBusy: boolean = false;
+  /** 「导出任务」那一行的格式菜单显隐（FE-60） */
+  @Local exportMenuShown: boolean = false;
   /** 绑定状态与配对码 */
   @Local bound: boolean = false;
   @Local bindCode: string = '';
   @Local bindHint: string = '';
+  /** 配对码已过期：显示「重新生成」而不是继续倒计时 */
+  @Local bindExpired: boolean = false;
+  /** 配对码剩余秒数（每秒减一，界面倒计时） */
+  @Local bindLeftSec: number = 0;
+  /** 云端同步开关（关闭即停止轮询） */
+  @Local syncEnabled: boolean = true;
   private bindTimer: number = -1;
+  /** 本次「去绑定/重新绑定」的开始时间（用于忽略旧 bound_at） */
+  private bindStartedAt: number = 0;
+  /** 绑定轮询剩余次数（按后端 expires_in 算，过期就停并提示重新生成） */
+  /** 每 2 秒查一次绑定结果（倒计时按 1 秒走，避免界面两秒一跳） */
+  private bindTick: number = 0;
+  /** 配对码到期绝对时刻（后台定时器被节流也按真实时间算） */
+  private bindExpireAt: number = 0;
 
   /* ── 权限管理（通知 / 日历 / 订阅消息）── */
   @Local notifyAllowed: boolean = false;
@@ -174,6 +203,11 @@ export struct A_Settings {
     this.loadSettings();
     this.loadBackend();
     this.loadPermissions();
+    this.loadSyncEnabled();
+    // 引导页里授权通知/日历后，这里没有重新走生命周期，靠广播刷新
+    PermissionEvents.setListener(() => {
+      this.loadPermissions();
+    });
     // 窗口全屏后页面铺到屏幕顶端，顶部让位要补上状态栏高度（见 utils/WindowInsets）
     const context: common.Context | undefined = this.getUIContext().getHostContext();
     if (context !== undefined) {
@@ -181,6 +215,10 @@ export struct A_Settings {
         this.statusBarVp = px > 0 ? this.getUIContext().px2vp(px) : 0;
       });
     }
+  }
+
+  aboutToDisappear(): void {
+    PermissionEvents.clearListener();
   }
 
   /* ── 权限管理 ── */
@@ -196,7 +234,7 @@ export struct A_Settings {
    */
   private async loadPermissions(): Promise<void> {
     await this.loadNotifyPermission();
-    this.loadCalendarPermission();
+    await this.loadCalendarPermission();
     await this.loadSubscriptionCount();
   }
 
@@ -215,14 +253,17 @@ export struct A_Settings {
    * （拿 uid 去查永远返回 DENIED —— 这就是"授权了还显示未授权"的根因）。
    * accessTokenId 由 `bundleManager.getBundleInfoForSelfSync().appInfo` 取。
    */
-  private loadCalendarPermission(): void {
+  private async loadCalendarPermission(): Promise<void> {
     try {
-      const flags: number = bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT;
+      const flags: number = bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT
+        | bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION;
       const info = bundleManager.getBundleInfoForSelfSync(flags);
       const at = abilityAccessCtrl.createAtManager();
+      // 用异步 checkAccessToken：同步版在本机实测会把已授权的日历读成 DENIED
       const status: abilityAccessCtrl.GrantStatus =
-        at.checkAccessTokenSync(info.appInfo.accessTokenId, 'ohos.permission.WRITE_CALENDAR');
+        await at.checkAccessToken(info.appInfo.accessTokenId, 'ohos.permission.WRITE_CALENDAR');
       this.calendarAllowed = status === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+      hilog.info(DOMAIN, TAG, 'settings calendar status=%{public}d allowed=%{public}s', status, String(this.calendarAllowed));
     } catch (error) {
       const err = error as BusinessError;
       hilog.warn(DOMAIN, TAG, 'check calendar permission failed: %{public}s', err.message);
@@ -481,6 +522,9 @@ export struct A_Settings {
     if (this.bindCode.length > 0) {
       return;
     }
+    // 重新绑定**不动旧绑定**：只记下开始时间，轮询时用 bound_at 判断是不是这次新绑的。
+    // 这样用户点取消，原来的绑定仍然有效。
+    this.bindStartedAt = Date.now();
     const res = await RelayApi.bindCode();
     if (!res.ok || res.data === undefined) {
       this.toast('生成配对码失败：' + (res.ok ? '返回为空' : apiErrorMessage(res)));
@@ -488,14 +532,40 @@ export struct A_Settings {
     }
     this.bindCode = res.data.code;
     this.bindHint = res.data.hint;
+    this.bindExpired = false;
+    this.bindLeftSec = res.data.expires_in;
+    this.bindExpireAt = Date.now() + res.data.expires_in * 1000;
+    this.bindTick = 0;
     this.bindTimer = setInterval(() => {
-      this.checkBind();
-    }, 2000);
+      // 用绝对到期时刻算，App 在后台被节流后回来也不会少减
+      const left: number = Math.max(0, Math.ceil((this.bindExpireAt - Date.now()) / 1000));
+      this.bindLeftSec = left;
+      if (left <= 0) {
+        this.cancelBind();
+        this.bindCode = '';
+        this.bindExpired = true;
+        this.bindLeftSec = 0;
+        this.toast('配对码已过期，请重新生成');
+        return;
+      }
+      this.bindTick++;
+      // 查询仍保持 2 秒一次，别把 /bind/status 打得太密
+      if (this.bindTick % 2 === 0) {
+        this.checkBind();
+      }
+    }, 1000);
   }
 
   private async checkBind(): Promise<void> {
     const res = await RelayApi.bindStatus();
     if (!res.ok || res.data === undefined || !res.data.bound) {
+      return;
+    }
+    // 旧绑定也会返回 bound=true：必须拿到「本次开始之后」的绑定时刻才算成功；
+    // 拿不到时刻（旧数据/解析失败）一律忽略，避免一生成码就自动成功。
+    const boundAt: number = res.data.bound_at_ms !== undefined
+      ? res.data.bound_at_ms : this.parseBoundAt(res.data.bound_at);
+    if (boundAt <= 0 || boundAt < this.bindStartedAt - 2000) {
       return;
     }
     this.bound = true;
@@ -504,20 +574,88 @@ export struct A_Settings {
       BackendConfig.setBound(ctx, true);
     }
     this.bindCode = '';
+    this.bindLeftSec = 0;
+    this.bindExpired = false;
     if (this.bindTimer >= 0) {
       clearInterval(this.bindTimer);
       this.bindTimer = -1;
     }
     this.toast('绑定成功，正在同步群消息');
+    await this.autoSubscribeAll();
     await SyncService.refreshAfterBind();
+  }
+
+  /**
+   * 绑定成功后：默认订阅机器人所在的所有群，并弹出群选择列表（全部勾选）。
+   * 用户可以在这里取消不想订阅的群；订阅失败不影响绑定本身。
+   */
+  private async autoSubscribeAll(): Promise<void> {
+    const first = await RelayApi.groups();
+    if (!first.ok || first.data === undefined) {
+      return;
+    }
+    const visible: GroupItemDto[] = [];
+    for (let i = 0; i < first.data.groups.length; i++) {
+      const g: GroupItemDto = first.data.groups[i];
+      if (!g.bot_present) {
+        continue;
+      }
+      visible.push(g);
+      if (!g.subscribed) {
+        await RelayApi.subscribe(g.group_openid);
+      }
+    }
+    if (visible.length === 0) {
+      this.toast('机器人还没加入任何群，先在 QQ 群里把它拉进去');
+      return;
+    }
+    // 重新拉一次，让开关显示后端真实状态（全部已订阅）
+    const second = await RelayApi.groups();
+    if (second.ok && second.data !== undefined) {
+      const fresh: GroupItemDto[] = [];
+      for (let i = 0; i < second.data.groups.length; i++) {
+        if (second.data.groups[i].bot_present) {
+          fresh.push(second.data.groups[i]);
+        }
+      }
+      this.groupList = fresh;
+    } else {
+      this.groupList = visible;
+    }
+    this.refreshSubscribedCount();
+    this.sheetKind = SHEET_GROUPS;
+    this.sheetShown = true;
+  }
+
+  /** 从当前 groupList 统计已订阅数，更新「订阅消息管理」行 */
+  private refreshSubscribedCount(): void {
+    let count: number = 0;
+    for (let i = 0; i < this.groupList.length; i++) {
+      if (this.groupList[i].subscribed) {
+        count++;
+      }
+    }
+    this.subscribedCount = count;
+  }
+
+  /** 后端 `bound_at` 是本地时间字符串 `YYYY-MM-DD HH:mm:ss`；解析失败返回 0（按旧逻辑处理） */
+  private parseBoundAt(text: string | undefined): number {
+    if (text === undefined || text.length === 0) {
+      return 0;
+    }
+    const ms: number = Date.parse(text.replace(' ', 'T'));
+    return Number.isNaN(ms) ? 0 : ms;
   }
 
   private cancelBind(): void {
     this.bindCode = '';
+    this.bindLeftSec = 0;
+    this.bindExpireAt = 0;
     if (this.bindTimer >= 0) {
       clearInterval(this.bindTimer);
       this.bindTimer = -1;
     }
+    // 取消重新绑定：旧绑定没有被解掉，保持原来的状态
   }
 
   /** 复制配对码到剪贴板（用户要粘贴到 QQ 私聊里发给机器人） */
@@ -537,7 +675,113 @@ export struct A_Settings {
     }
   }
 
-  /** 删除服务端数据（设备/绑定/订阅/推送 Token）并清本机任务 */
+  /** 打开系统通知管理（横幅/锁屏/声音都在这里） */
+  private openNotificationSettings(): void {
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    NotificationService.openSettings(ctx as common.UIAbilityContext);
+  }
+
+  private replayOnboarding(): void {
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    SettingsRepository.setFirstLaunchDone(ctx, false);
+    this.toast('下次启动会显示启动引导');
+  }
+
+  private async loadSyncEnabled(): Promise<void> {    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    this.syncEnabled = await SettingsRepository.getSyncEnabled(ctx, true);
+  }
+
+  private onSyncToggle(isOn: boolean): void {
+    this.syncEnabled = isOn;
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    SettingsRepository.setSyncEnabled(ctx, isOn);
+    SyncService.setEnabled(isOn);
+    if (isOn) {
+      // 刚打开同步：顺手把推送令牌也报一次（FE-76；没服务器/没身份时它自己会降级成「未启用」）
+      PushRegistrar.register();
+    }
+    this.toast(isOn ? '云端同步已开启' : '云端同步已关闭，不再拉取群消息');
+  }
+
+  /**
+   * 「推送通道」右侧那一句：
+   *  · 失败 → 直接显示原因（官方错误码翻出来的那句话，如"推送权益未开通…"）
+   *  · 就绪 → 已就绪 + 最近一次成功时间
+   *  · 未启用 → 显示原因（没配服务器 / 没身份）
+   */
+  @Computed
+  get pushLine(): string {
+    const s: PushStatus = this.pushStatus;
+    if (s.phase === PUSH_PHASE_FAILED) {
+      return s.message;
+    }
+    if (s.phase === PUSH_PHASE_READY) {
+      return s.updatedAt.length > 0 ? s.label + ' · ' + s.updatedAt : s.label;
+    }
+    if (s.phase === PUSH_PHASE_UNAVAILABLE) {
+      return s.message.length > 0 ? s.message : s.label;
+    }
+    if (s.phase === PUSH_PHASE_REGISTERED) {
+      return s.label;
+    }
+    return s.label;
+  }
+
+  /** 点「推送通道」那行：重新取 token 并上报；失败时把「怎么修」一并说出来 */
+  private async retryPush(): Promise<void> {
+    const ok: boolean = await PushRegistrar.register();
+    const s: PushStatus = this.pushStatus;
+    this.toast(ok ? '推送通道已就绪' : (s.advice.length > 0 ? s.message + '：' + s.advice : s.message));
+  }
+
+  /** 推送通道到底怎么验证（没有 AGC 时用户不该被一句「未就绪」卡住） */
+  private showPushHelp(): void {
+    this.getUIContext().getPromptAction().showDialog({
+      title: '推送通道怎么验证',
+      message: '推送分两段，任何一段没开都会显示「未就绪」：\n\n'
+        + '① 手机端：需要 AGC 已开通「推送服务」，并用该应用的 Profile 重新签名，'
+        + 'App 才能取到 Push Token；没有权益时会显示「设备不支持/权益未开通」。\n'
+        + '② 服务端：在电脑上配置 QQBOT_PUSH_SA（服务账号 JSON，含 project_id）后重启后端，'
+        + '`/health` 的 capabilities 里会出现 push，`/push/token` 返回 push_ready=true。\n\n'
+        + '两段都就绪后，这一行显示「已就绪」；此时在群里产生一条新候选，后端会向设备发通知。',
+      buttons: [{ text: '知道了', color: this.themeStore.scheme.primary }]
+    });
+  }
+
+  /** 云端字段清单：与隐私说明同一口径，不把「本机数据」混进来 */
+  private showCloudFields(): void {
+    this.getUIContext().getPromptAction().showDialog({
+      title: '会离开手机的字段',
+      message: '同步开启时，App 会向你的服务器发送：设备标识、绑定关系、群订阅、'
+        + '采纳/忽略反馈计数、Push 令牌（未接入则没有）。'
+        + '\n\n服务器只临时保存群消息原文（内存 30 分钟，不落盘）。'
+        + '\n\n任务名称、备注、原文、草稿、画像只存在本机；原文不会回传。',
+      buttons: [{ text: '知道了', color: this.themeStore.scheme.primary }]
+    });
+  }
+
+  /** 隐私说明：只讲本机存什么、什么会离开手机 */
+  private showPrivacy(): void {    this.getUIContext().getPromptAction().showDialog({
+      title: '隐私说明',
+      message: '任务、备注、原文、草稿只存在本机。'
+        + '同步开启时只向服务器发送设备标识、绑定关系、群订阅与采纳/忽略计数。'
+        + '群消息原文由服务器临时保留 30 分钟（仅内存、不落盘），不会回传。'
+        + '可随时在「删除服务端数据」中清空云端记录。',
+      buttons: [{ text: '知道了', color: this.themeStore.scheme.primary }]
+    });
+  }
   private deleteServerData(): void {
     this.getUIContext().getPromptAction().showDialog({
       title: '删除服务端数据',
@@ -656,8 +900,12 @@ export struct A_Settings {
   }
 
   private closeSheet(): void {
+    // 群列表关闭时刷新「订阅消息管理」的计数（一键订阅/勾选后都走这里）
+    if (this.sheetKind === SHEET_GROUPS) {
+      this.loadSubscriptionCount();
+    }
+    // 只收显隐；`sheetKind` 留到 onDisappear 再清，避免内容先消失、遮罩留一层
     this.sheetShown = false;
-    this.sheetKind = SHEET_NONE;
   }
 
   private confirmSheet(): void {
@@ -734,10 +982,12 @@ export struct A_Settings {
                 .layoutWeight(1)
                 .alignItems(HorizontalAlign.Start)
 
-                Toggle({ type: ToggleType.Switch, isOn: g.subscribed })
-                  .onChange((isOn: boolean) => {
+                M3Switch({
+                  isOn: g.subscribed,
+                  onToggle: (isOn: boolean) => {
                     this.toggleGroup(g, isOn);
-                  })
+                  }
+                })
               }
               .width('100%')
               .height(56)
@@ -797,8 +1047,143 @@ export struct A_Settings {
     }
   }
 
-  private clearAllTasks(): void {
-    const total: number = this.store.totalCount;
+  /**
+   * 导出菜单（FE-60）：点「导出任务」那一行弹出。
+   * 三种口径按"给人看 / 给机器看 / 贴到别处"分：CSV 白名单列、JSON 完整（含原文）、复制到剪贴板。
+   */
+  @Builder
+  exportMenu() {
+    Column() {
+      Text('CSV（表格，不含原文）')
+        .width('100%')
+        .height(ROW_HEIGHT_VP)
+        .fontSize($r('sys.float.ohos_id_text_size_body1'))
+        .fontColor($r('sys.color.ohos_id_color_text_primary'))
+        .textAlign(TextAlign.Start)
+        .onClick(() => {
+          this.exportMenuShown = false;
+          this.exportTasks('csv');
+        })
+      Text('JSON（完整，含原文）')
+        .width('100%')
+        .height(ROW_HEIGHT_VP)
+        .fontSize($r('sys.float.ohos_id_text_size_body1'))
+        .fontColor($r('sys.color.ohos_id_color_text_primary'))
+        .textAlign(TextAlign.Start)
+        .onClick(() => {
+          this.exportMenuShown = false;
+          this.exportTasks('json');
+        })
+      Text('复制到剪贴板（CSV）')
+        .width('100%')
+        .height(ROW_HEIGHT_VP)
+        .fontSize($r('sys.float.ohos_id_text_size_body1'))
+        .fontColor($r('sys.color.ohos_id_color_text_primary'))
+        .textAlign(TextAlign.Start)
+        .onClick(() => {
+          this.exportMenuShown = false;
+          this.exportToClipboard();
+        })
+    }
+    .width(240)
+    .padding(8)
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  /**
+   * 导出到文件：`csv` / `json`。
+   *
+   * 走 `TaskExportViewModel`（拼文本）→ `TaskExportService`（系统保存面板 + 落盘），
+   * 页面只管"拿结果报一句话"。用户取消保存时**不提示**（不是失败）。
+   */
+  private async exportTasks(ext: string): Promise<void> {
+    const tasks: Task[] = this.store.allTasks();
+    if (tasks.length === 0) {
+      this.toast('没有可导出的任务');
+      return;
+    }
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      return;
+    }
+    const csv: boolean = ext === 'csv';
+    const content: string = csv ? TaskExportViewModel.buildCsv(tasks) : TaskExportViewModel.buildJson(tasks);
+    const fileName: string = TaskExportViewModel.fileName(ext);
+    const suffix: string = csv ? 'CSV|.csv' : 'JSON|.json';
+    const result: TaskExportResult = await TaskExportService.saveFile(context, fileName, suffix, content);
+    if (result.cancelled) {
+      return;
+    }
+    if (result.ok) {
+      this.toast(`已导出 ${tasks.length} 条任务` + (csv ? '（CSV）' : '（JSON，含原文）'));
+      return;
+    }
+    this.toast(result.message.length > 0 ? result.message : '导出失败');
+  }
+
+  /** 导入 JSON 备份：文件选择器 → 解析 → 合并进本机任务表 */
+  private async importTasks(): Promise<void> {
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    const picked: TaskImportFileResult = await TaskImportService.pickJson(ctx);
+    if (picked.cancelled) {
+      return;
+    }
+    if (!picked.ok) {
+      this.toast(picked.message.length > 0 ? picked.message : '读取失败');
+      return;
+    }
+    const parsed: TaskImportParseResult = TaskExportViewModel.parseJson(picked.text);
+    if (!parsed.ok) {
+      this.toast(parsed.message.length > 0 ? parsed.message : '没有可导入的任务');
+      return;
+    }
+    // 严格去重：所有字段都相同才算同一条；不按 clientTaskId 或名称猜
+    const existing: Task[] = this.store.allTasks();
+    const fresh: Task[] = [];
+    for (let i = 0; i < parsed.tasks.length; i++) {
+      const candidate: Task = parsed.tasks[i];
+      let duplicated: boolean = false;
+      for (let j = 0; j < existing.length; j++) {
+        if (TaskExportViewModel.sameTask(candidate, existing[j])) {
+          duplicated = true;
+          break;
+        }
+      }
+      if (!duplicated) {
+        for (let k = 0; k < fresh.length; k++) {
+          if (TaskExportViewModel.sameTask(candidate, fresh[k])) {
+            duplicated = true;
+            break;
+          }
+        }
+      }
+      if (!duplicated) {
+        fresh.push(candidate);
+      }
+    }
+    this.store.upsertAll(fresh);
+    this.toast('已导入 ' + fresh.length + ' 条任务' + (fresh.length < parsed.tasks.length ? '（已去重）' : ''));
+  }
+
+  /** 导出到剪贴板（CSV 口径：白名单列，不把原文贴出去） */  private async exportToClipboard(): Promise<void> {
+    const tasks: Task[] = this.store.allTasks();
+    if (tasks.length === 0) {
+      this.toast('没有可导出的任务');
+      return;
+    }
+    const content: string = TaskExportViewModel.buildCsv(tasks);
+    const result: TaskExportResult = await TaskExportService.copyToClipboard(content);
+    if (result.ok) {
+      this.toast(`已复制 ${tasks.length} 条任务（CSV）到剪贴板`);
+      return;
+    }
+    this.toast(result.message.length > 0 ? result.message : '复制失败');
+  }
+
+  private clearAllTasks(): void {    const total: number = this.store.totalCount;
     if (total === 0) {
       this.toast($r('app.string.settings_clear_empty'));
       return;
@@ -960,7 +1345,7 @@ export struct A_Settings {
     Column() {
       // **让位放在 Scroll 外面**（2026-10-19 修「滚动后内容压在标题上」）：
       // 原来这段占位是 Scroll 的**内容首项**，滚动时它会带着正文一起上移，
-      // 正文就钻到标题栏/状态栏区域、与「设置」叠字（实测状态栏变成  8:1提醒提前量）。
+      // 正文就钻到标题栏/状态栏区域、与「设置」叠字（实测状态栏变成 8:1提醒提前量）。
       // 放到外面后，**滚动视口本身**从标题栏下方开始，正文永远进不了标题区。
       Row().width('100%').height(TITLE_CLEARANCE_VP + this.statusBarVp)
 
@@ -1022,14 +1407,19 @@ export struct A_Settings {
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
               Text(this.notifyAllowed ? '已开启' : '去开启')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                // 「已开启」＝**状态**，取色与任务列表 ChipGroup 里**选中 chip** 同一套 M3 角色
+                // （`secondaryContainer` 底 + `onSecondaryContainer` 字，见 components/TaskFilterChips.ets 的
+                //  `itemStyle.selectedBackgroundColor / selectedFontColor`）；原来用的 `primaryContainer`
+                // 在蓝主题下是一块很亮的青色，比旁边的文字抢眼太多（作者 2026-10-25 截图指出）。
+                // 「去开启」是**动作**，仍用 `primary` 实底，保持可点的视觉引导。
                 .fontColor(this.notifyAllowed
-                  ? this.themeStore.scheme.onPrimaryContainer
+                  ? this.themeStore.scheme.onSecondaryContainer
                   : this.themeStore.scheme.onPrimary)
             }
             .height(34)
             .padding({ left: 14, right: 14 })
             .backgroundColor(this.notifyAllowed
-              ? this.themeStore.scheme.primaryContainer
+              ? this.themeStore.scheme.secondaryContainer
               : this.themeStore.scheme.primary)
             .borderRadius(17)
             .onClick(() => {
@@ -1057,14 +1447,15 @@ export struct A_Settings {
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
               Text(this.calendarAllowed ? '已授权' : '去授权')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                // 同「通知权限」：已授权＝状态 → 与 ChipGroup 选中 chip 同色（secondaryContainer / onSecondaryContainer）
                 .fontColor(this.calendarAllowed
-                  ? this.themeStore.scheme.onPrimaryContainer
+                  ? this.themeStore.scheme.onSecondaryContainer
                   : this.themeStore.scheme.onPrimary)
             }
             .height(34)
             .padding({ left: 14, right: 14 })
             .backgroundColor(this.calendarAllowed
-              ? this.themeStore.scheme.primaryContainer
+              ? this.themeStore.scheme.secondaryContainer
               : this.themeStore.scheme.primary)
             .borderRadius(17)
             .onClick(() => {
@@ -1133,10 +1524,12 @@ export struct A_Settings {
             .layoutWeight(1)
             .alignItems(HorizontalAlign.Start)
 
-            Toggle({ type: ToggleType.Switch, isOn: this.skipSelf })
-              .onChange((isOn: boolean) => {
+            M3Switch({
+              isOn: this.skipSelf,
+              onToggle: (isOn: boolean) => {
                 this.setSkipSelf(isOn);
-              })
+              }
+            })
           }
           .width('100%')
           .height(64)
@@ -1257,6 +1650,9 @@ export struct A_Settings {
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
                 .fontColor($r('sys.color.ohos_id_color_text_secondary'))
                 .textAlign(TextAlign.Center)
+              Text('剩余 ' + this.bindLeftSec + ' 秒')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor(this.themeStore.scheme.onSurfaceVariant)
               Row({ space: 10 }) {
                 Button({ type: ButtonType.Capsule, stateEffect: true }) {
                   Text('复制配对码')
@@ -1290,6 +1686,90 @@ export struct A_Settings {
             .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP, bottom: 12 })
             .alignItems(HorizontalAlign.Center)
           }
+
+          if (this.bindExpired && this.bindCode.length === 0) {
+            Column({ space: 8 }) {
+              Text('配对码已过期，请重新生成')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor(this.themeStore.scheme.onSurfaceVariant)
+              Button({ type: ButtonType.Capsule, stateEffect: true }) {
+                Text('重新生成')
+                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                  .fontColor(this.themeStore.scheme.onPrimary)
+              }
+              .height(32)
+              .padding({ left: 16, right: 16 })
+              .backgroundColor(this.themeStore.scheme.primary)
+              .borderRadius(16)
+              .onClick(() => {
+                this.startBind();
+              })
+            }
+            .width('100%')
+            .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP, bottom: 12 })
+            .alignItems(HorizontalAlign.Center)
+          }
+
+          this.rowDivider()
+        }
+        .width('100%')
+        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
+        .borderRadius(Theme.RADIUS_CARD)
+        .clip(true)
+
+        // ⑤ 云端数据：字段清单 + 同步开关 + 整包删除
+        Column() {
+          this.sectionTitle('云端数据')
+        }
+        .margin({ top: SECTION_GAP_VP })
+
+        Column() {
+          Row({ space: 8 }) {
+            Column({ space: 2 }) {
+              Text('云端同步')
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              Text('关闭后不再拉取群消息候选')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+            }
+            .layoutWeight(1)
+            .alignItems(HorizontalAlign.Start)
+
+            // ⚠️ 必须用 `M3Switch`，不能写裸 `Toggle`：`Toggle` 的选中轨道默认取
+            // `ohos_id_color_emphasize`（系统蓝），换了主题色也不会变（2026-10-25 作者截图指出）。
+            // 这一行是合并 `feature/mvp-completion` 时带进来的裸 Toggle，已纠正。
+            M3Switch({
+              isOn: this.syncEnabled,
+              onToggle: (isOn: boolean) => {
+                this.onSyncToggle(isOn);
+              }
+            })
+            .id('syncEnabledToggle')
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+
+          this.rowDivider()
+          Row({ space: 8 }) {
+            Text('会离开手机的字段')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+              .maxLines(1)
+            Text('查看')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.showCloudFields();
+          })
 
           this.rowDivider()
           Row() {
@@ -1343,6 +1823,66 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
+          // 「导出任务」：点一下弹格式菜单（FE-60）。CSV/JSON 走系统保存面板，剪贴板走 pasteboard
+          Row({ space: 8 }) {
+            Text('导出任务')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+              .maxLines(1)
+              .textAlign(TextAlign.Start)
+            Text('CSV / JSON / 剪贴板')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+              .maxLines(1)
+            SymbolGlyph($r('sys.symbol.chevron_right'))
+              .fontSize(Theme.FONT_CAPTION)
+              .fontColor([$r('sys.color.icon_tertiary')])
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.exportMenuShown = true;
+          })
+          .bindPopup(this.exportMenuShown, {
+            builder: this.exportMenu(),
+            placement: Placement.Bottom,
+            popupColor: this.themeStore.scheme.surfaceContainerHigh,
+            radius: 16,
+            enableArrow: false,
+            focusable: true,
+            onStateChange: (event) => {
+              if (!event.isVisible) {
+                this.exportMenuShown = false;
+              }
+            }
+          })
+
+          this.rowDivider()
+
+          Row() {
+            Text('导入任务（JSON）')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+              .maxLines(1)
+              .textAlign(TextAlign.Start)
+            Text('选择文件')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.importTasks();
+          })
+
+          this.rowDivider()
+
           Row() {
             Text($r('app.string.settings_clear_tasks'))
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
@@ -1358,9 +1898,6 @@ export struct A_Settings {
           .onClick(() => {
             this.clearAllTasks();
           })
-
-          this.rowDivider()
-          this.infoRow($r('app.string.settings_cloud_off'), '')
         }
         .width('100%')
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
@@ -1376,7 +1913,111 @@ export struct A_Settings {
         Column() {
           this.infoRow('版本', this.versionLabel)
           this.rowDivider()
-          this.infoRow('隐私说明', '未接入')
+          Row() {
+            Text('隐私说明')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+            Text('查看')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.showPrivacy();
+          })
+
+          this.rowDivider()
+          Row() {
+            Text('重新查看启动引导')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+            Text('下次启动')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.replayOnboarding();
+          })
+
+          this.rowDivider()
+          Row() {
+            Text('通知与横幅设置')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+            Text('去开启')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.openNotificationSettings();
+          })
+
+          this.rowDivider()
+          this.infoRow('提醒状态', this.store.reminderError.length > 0 ? this.store.reminderError : '正常')
+
+          this.rowDivider()
+          // 推送通道（FE-76）：端侧 Push Token + 后端 `push_ready` 两段合成一句话；
+          // 没就绪时点这行重试（失败原因来自官方错误码，见 PushTokenService.mapMessage）
+          Row({ space: 8 }) {
+            Text('推送通道')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+              .maxLines(1)
+            Text(this.pushLine)
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.pushStatus.pushReady
+                ? this.themeStore.scheme.primary
+                : $r('sys.color.ohos_id_color_text_secondary'))
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .constraintSize({ maxWidth: '62%' })
+            if (!this.pushStatus.pushReady) {
+              Text('重试')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor(this.themeStore.scheme.primary)
+                .maxLines(1)
+            }
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.retryPush();
+          })
+
+          this.rowDivider()
+          Row() {
+            Text('推送验证说明')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+              .layoutWeight(1)
+            Text('查看')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.showPushHelp();
+          })
         }
         .width('100%')
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)

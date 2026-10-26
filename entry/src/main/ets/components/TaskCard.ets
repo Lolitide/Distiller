@@ -73,6 +73,13 @@ const TAG_CHIP_VERTICAL_PADDING_VP: number = 1;
 /** 标签胶囊圆角（vp）：取其高度的一半，做成完整胶囊 */
 const TAG_CHIP_RADIUS_VP: number = 8;
 
+/**
+ * 低可信角标尺寸（vp）：与重复标识同档（16），比铃铛（20）小一档 —— 它是**提示**，不是操作。
+ * 图形用 `exclamationmark_circle`（描边）+ 官方警示色，与「重要程度」那套红圈区分开：
+ * 那个是用户自己选的档位，这个是"机器没把握、请你核对"。
+ */
+const LOW_CERTAINTY_ICON_SIZE_VP: number = 16;
+
 /* ── 重要性标识（字段表 §2.1 的三态图形）── */
 /** 圈内那个感叹号 */
 const PRIORITY_MARK: string = '!';
@@ -90,6 +97,8 @@ export struct TaskCard {
   @Require @Param task: Task;
   /** 「数据 ＋ 编辑态」store：编辑态与勾选状态从这里读（卡片自己算，ForEach 不用重跑也能刷新） */
   @Require @Param store: TaskListStore;
+  /** 待确认收件箱里的卡片：同款容器/高度，前缀按来源显示图标，右侧留空 */
+  @Param pendingMode: boolean = false;
   @Event onToggleComplete: () => void = () => {};
   @Event onRemindChange: (isOn: boolean) => void = () => {};
   /** 点整卡 → 交给页面去压任务详情页（卡片本身不知道路由） */
@@ -267,13 +276,27 @@ export struct TaskCard {
     return this.task.priority === TaskPriority.URGENT;
   }
 
+  /**
+   * **低可信**：AI 解析置信度低于阈值（见 `model/Models.ets` 的 `LOW_CERTAINTY_THRESHOLD`）。
+   *
+   * 卡片原本对 `certainty` **一个字都没用** —— 解析得准不准，用户在列表上看不出来，
+   * 只有点进详情、滑到最底那张卡才能看到一个百分数。这里补一个第二行角标：
+   * 一眼能看出"这条是机器猜的，值得点进去核对"。
+   */
+  @Computed
+  get lowCertainty(): boolean {
+    return TaskListViewModel.isLowCertainty(this.task.certainty);
+  }
+
   /** 自定义文字区之后，卡片的无障碍文本要自己拼（HDS 不再从 primaryText/description 取） */
   @Computed
   get accessibilityLabel(): string {
     const priorityText: string = this.showPriorityBadge
       ? `${TaskListViewModel.priorityLabel(this.task.priority)} ` : '';
     const repeatText: string = this.repeatLabel === '' ? '' : `${this.repeatLabel} `;
-    return `${priorityText}${this.task.name} ${this.dueLabel} ${repeatText}`;
+    // 低可信要读出来：读屏用户看不到那个角标，但它决定这条要不要点进去核对
+    const lowText: string = this.lowCertainty ? '置信度偏低 ' : '';
+    return `${priorityText}${this.task.name} ${this.dueLabel} ${repeatText}${lowText}`;
   }
 
   @Builder
@@ -384,6 +407,17 @@ export struct TaskCard {
         .height(PRIORITY_BADGE_SIZE_VP)
         .flexShrink(0)
 
+        // ③ 状态标记：进行中在截止文字前显示一个小胶囊（FE-28，卡片要能看出状态变化）
+        if (this.task.status === TaskStatus.IN_PROGRESS) {
+          Text('进行中')
+            .fontSize($r('sys.float.ohos_id_text_size_caption'))
+            .fontColor(this.themeStore.scheme.primary)
+            .padding({ left: 6, right: 6, top: 1, bottom: 1 })
+            .backgroundColor(this.themeStore.scheme.primaryContainer)
+            .borderRadius(6)
+            .flexShrink(0)
+        }
+
         // ③ 截止文字：**整体自然显示**（作者：「后面的所有字（已过期 / 未定时 /
         //    xxx 后截止）直接显示就行」）—— 不再拆「XXX + 后截止」两段、也不再定宽居中。
         Text(this.dueLabel)
@@ -391,6 +425,18 @@ export struct TaskCard {
           .fontColor(this.textColor)
           .maxLines(1)
           .flexShrink(1)
+
+        // ③-b 低可信角标（置信度 < 阈值时出现，见 `lowCertainty`）。
+        //    放在截止文案右边：这一格本来是空着的（Blank 撑开），加它不会挤动左边任何元素；
+        //    6vp 间距、16vp 描边图标、警示色，与"重要程度红圈"同色系但形状不同（那个是实心/空心圆）。
+        if (this.lowCertainty) {
+          SymbolGlyph($r('sys.symbol.exclamationmark_circle'))
+            .fontSize(LOW_CERTAINTY_ICON_SIZE_VP)
+            .fontColor([$r('sys.color.warning')])
+            .margin({ left: SECOND_LINE_GAP_VP })
+            .flexShrink(0)
+            .accessibilityText($r('app.string.card_low_certainty'))
+        }
 
         // 右侧弹性空白：剩下的空间留给 C 区（重复槽 + 铃铛）
         Blank()
@@ -431,23 +477,132 @@ export struct TaskCard {
     .flexShrink(0)
   }
 
+  @Computed
+  get pendingSourceLabel(): string {
+    if (this.task.pendingSource === 'image') {
+      return '图片转发';
+    }
+    if (this.task.pendingSource === 'forward') {
+      return '转发给机器人';
+    }
+    return '群聊收集';
+  }
+
+  @Computed
+  get pendingTimeLabel(): string {
+    const d: Date = new Date(this.task.createdAt);
+    return `${TaskListViewModel.pad2(d.getHours())}:${TaskListViewModel.pad2(d.getMinutes())}`;
+  }
+
+  /** 待确认子卡的左侧图标：按来源区分（转发=机器人，图片=图片，群聊=群聊） */
+  @Computed
+  get pendingIcon(): Resource {
+    if (this.task.pendingSource === 'forward') {
+      return $r('sys.symbol.robot');
+    }
+    if (this.task.pendingSource === 'image') {
+      return $r('sys.symbol.picture');
+    }
+    return $r('sys.symbol.person_2');
+  }
+
+  @Builder
+  pendingPrefix() {
+    SymbolGlyph(this.pendingIcon)
+      .fontSize($r('sys.float.ohos_id_min_circle_button_icon_size'))
+      .fontColor([this.themeStore.scheme.primary])
+      .accessibilityText(this.pendingSourceLabel)
+  }
+
+  /** 与普通卡片两行同构：标题 + 「来源 · 时间 + 未读红点」 */
+  @Builder
+  pendingTextBlock() {
+    Column() {
+      Text(this.task.name)
+        .fontSize($r('sys.float.ohos_id_text_size_body1'))
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.textColor)
+        .lineHeight(`${this.themeStore.lineHeight}vp`)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width('100%')
+        .textAlign(TextAlign.Start)
+
+      Row({ space: 6 }) {
+        Text(this.pendingSourceLabel)
+          .fontSize($r('sys.float.ohos_id_text_size_caption'))
+          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+          .padding({
+            left: TAG_CHIP_SIDE_PADDING_VP,
+            right: TAG_CHIP_SIDE_PADDING_VP,
+            top: TAG_CHIP_VERTICAL_PADDING_VP,
+            bottom: TAG_CHIP_VERTICAL_PADDING_VP
+          })
+          .backgroundColor(this.themeStore.scheme.secondaryContainer)
+          .borderRadius(TAG_CHIP_RADIUS_VP)
+        Text('·')
+          .fontSize($r('sys.float.ohos_id_text_size_caption'))
+          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+        Text(this.pendingTimeLabel)
+          .fontSize($r('sys.float.ohos_id_text_size_caption'))
+          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+        if (this.task.pendingSeen !== true) {
+          Column()
+            .width(8)
+            .height(8)
+            .borderRadius(4)
+            .backgroundColor(this.themeStore.scheme.error)
+        }
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+      .justifyContent(FlexAlign.Start)
+    }
+    .width('100%')
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  pendingSuffixRow() {
+    // 待确认卡片暂时不放任何右侧操作图标
+    Row().width(0).height(0)
+  }
+
+  @Computed
+  get pendingSuffix(): SuffixCustomBuilder {
+    return new SuffixCustomBuilder((): void => {
+      this.pendingSuffixRow();
+    });
+  }
+
   build() {
     HdsListItemCard({
       cardBackgroundColor: this.cardBackground,
       // 卡片高度随「设置 → 视觉个性化 → 卡片密度」变（标准 76 / 紧凑 64）
       cardHeight: this.themeStore.cardHeight,
       prefixItem: new PrefixCustomBuilder((): void => {
-        this.prefixCircle();
+        if (this.pendingMode) {
+          this.pendingPrefix();
+        } else {
+          this.prefixCircle();
+        }
       }),
       textItem: {
         customBuilder: (): void => {
-          this.textBlock();
+          if (this.pendingMode) {
+            this.pendingTextBlock();
+          } else {
+            this.textBlock();
+          }
         }
       },
-      // C 区：铃铛按钮（每一项都有，点它切 alarm）
-      suffixItem: this.suffixButtons,
+      // C 区：铃铛按钮（每一项都有，点它切 alarm）；待确认卡片右侧留空
+      suffixItem: this.pendingMode ? this.pendingSuffix : this.suffixButtons,
       accessibilityOptions: {
-        accessibilityText: this.accessibilityLabel
+        accessibilityText: this.pendingMode
+          ? `${this.task.name} ${this.pendingSourceLabel} ${this.pendingTimeLabel}`
+          : this.accessibilityLabel
       }
     })
     // 整卡可点 → 进任务详情（需求方 2026-10-16）。前缀圆圈与右侧开关各自有 onClick，

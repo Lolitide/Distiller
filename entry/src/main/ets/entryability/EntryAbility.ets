@@ -18,6 +18,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { Theme, ThemeStore } from '../utils/Theme';
 import { SettingsRepository } from '../repository/SettingsRepository';
+import { ShareIntake } from '../service/share/ShareIntake';
 
 const DOMAIN = 0x0000;
 
@@ -33,6 +34,8 @@ export default class EntryAbility extends UIAbility {
     }
     // **首帧之前**把用户个性化设置读进来（同步），否则冷启动会「先默认色、再跳个性化」闪一下
     this.preloadThemeSettings();
+    // 系统分享拉起（冷启动）：拿到内容先暂存，A_Main 上树后取走
+    ShareIntake.handleWant(want);
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
   }
 
@@ -52,6 +55,11 @@ export default class EntryAbility extends UIAbility {
 
   onDestroy(): void {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onDestroy');
+  }
+
+  onNewWant(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    // 应用已在运行时再次分享：不 recreate，直接把内容交给页面
+    ShareIntake.handleWant(want);
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {

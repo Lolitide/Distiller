@@ -1,6 +1,6 @@
-import { LengthMetrics } from '@kit.ArkUI';
+import { LengthMetrics, SubHeader } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
-import { Task } from '../model';
+import { Task, TaskPriority, TaskStatus } from '../model';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { TaskCard } from '../components/TaskCard';
 import { TaskSubCard } from '../components/TaskSubCard';
@@ -9,10 +9,17 @@ import { Theme, ThemeStore } from '../utils/Theme';
 import { WindowInsets } from '../utils/WindowInsets';
 import { GROUP_HEADER_LIST_PULL_UP_VP, TaskGroupHeader } from '../components/TaskGroupHeader';
 import { EmptyHint } from '../components/EmptyHint';
-import { TaskDayGroup } from '../viewmodel/TaskListViewModel';
+import { TaskDayGroup, TaskListViewModel } from '../viewmodel/TaskListViewModel';
 import { TaskFilterChips } from '../components/TaskFilterChips';
 import { ROUTE_TASK_DETAIL, NAV_STACK_KEY, TaskDetailParam } from '../viewmodel/TaskNavParams';
 import { TaskListStore } from '../viewmodel/TaskListStore';
+import { SyncService } from '../service/cloud/SyncService';
+import {
+  SyncStatus,
+  SYNC_PHASE_SYNCING,
+  SYNC_PHASE_OFFLINE,
+  SYNC_PHASE_DISABLED
+} from '../service/cloud/SyncStatus';
 
 /**
  * 列表底部留白（vp）：让**最后一张卡片能滚到悬浮页签栏上方**，不被它压住。
@@ -49,32 +56,22 @@ const CHIPS_BAND_HEIGHT_VP: number = 38;
  */
 const CHIPS_BAND_BOTTOM_GAP_VP: number = 8;
 
-/**
- * Chip 行从「展开位」滑到「收起位」所对应的**滚动跨度**（vp）＝ 标题栏的高度差。
+/*
+ * ── 2026-10-25：Chip 行**回归静态**，不再跟标题栏联动 ──
  *
- * 官方对 FREE 模式的原文（离线文档 `ui-design-hdsnavigation` §`HdsNavigationTitleMode`）：
- * 「FREE：**标题随着内容向上滚动而缩小**……未滚动状态，标题栏高度与 FULL 模式一致；
- *  滚动时，标题栏的最小高度与 MINI 模式一致。」
- * 也就是标题 **112vp → 56vp**，高度差正好 56vp；Chip 行的行程必须与它**逐像素相同**，
- * 两者才可能贴着一块儿走（见 `chipsTopVp`）。
+ * 需求方：「把任务列表的导航栏也改成设置页那样 mainTitle 固定的吧 不需要动画 老有问题」。
+ * 主页标题栏因此从 `FREE`（大标题，随内容上滚缩到 56vp）改成 **`MINI`（固定 56vp）**，
+ * 于是原来那套「Chip 行吃滚动量、与标题 1:1 同步上移、滚过 56vp 钉住」的机制**整体作废**：
+ *   · 标题不动了，Chip 行也就没有"要跟的对象"；
+ *   · 之前反复出问题（标题与 Chips 割裂 / 各走各的）的根源就是**两个独立的运动要像素级对齐**，
+ *     现在把其中一个运动去掉，这类 bug 从结构上消失，而不是再调一次阈值/延迟。
+ *
+ * 所以下面三处一并删掉了：`CHIP_PIN_SPAN_VP`（行程 56vp）、`scrollVp`（每帧滚动量）、
+ * `List.onDidScroll`（把滚动量喂给 Chip 层）。`chipsTopVp` 现在是一个**常量位置**。
  */
-const CHIP_PIN_SPAN_VP: number = MainTitleBar.CONTENT_TOP_OFFSET_VP - MainTitleBar.SUB_PAGE_TITLE_BAR_VP;
 
 const LIST_BOTTOM_CLEARANCE_VP: number = 156;
 
-/**
- * ── Chip 行为沿革（别再退回"阈值 + 延迟 + 独立动画"那一版）──
- *
- * 2026-10-21 第一版：阈值 2vp 判收起 → 延迟 240ms → Chip 自己再动 160ms。
- * 那一版的前提是「HDS 大标题是状态驱动的收起动画、不是连续滚动量」，但**前提是错的**：
- * 官方文档写的是「FREE：标题随着内容向上滚动而缩小」（原文见 `CHIP_PIN_SPAN_VP`），
- * 也就是它跟滚动量走。于是用户看到的就是需求方这次报的现象：
- * 「页面上滑下滑的时候 mainTitle 和 Chips 不是一起运动的，很割裂」——
- * 标题跟着手指走，Chip 行却要等 240ms 才自己飘上去，两个动作各走各的。
- *
- * 现在：**Chip 行直接吃同一个滚动量**（见 `chipsTopVp`），与标题 1:1、逐像素同步，
- * 也不再需要阈值 / 延迟 / 时长这三个魔数。
- */
 /**
  * Chip 行底边圆角（vp）—— 实验性（需求方 2026-10-21 第 3 条）：
  * 让"内容被裁切"的那条边看起来是**圆角矩形的下沿**，而不是一条刀切的直线
@@ -153,7 +150,8 @@ const CARD_ENTER_OFFSET_VP: number = 16;
 export struct A_TaskList {
   /**
    * 列表的滚动控制器，**由外层传进来**（`A_Main` 创建 → `MainTabBar` → 这里）。
-   * `HdsNavigation.bindToScrollable` 要绑同一个对象，标题栏的滚动联动才成立。
+   * 页面自己要用它（列表 `List` 绑定 + 需要时读 `currentOffset()`）；2026-10-25 标题栏改成
+   * 固定 MINI 后，它**不再**交给 `HdsNavigation.bindToScrollable` 做标题联动。
    */
   @Require @Param scroller: Scroller;
   /**
@@ -161,12 +159,11 @@ export struct A_TaskList {
    * 编辑态再传给每张卡片（圆圈 ↔ 方框勾选框）。
    */
   @Require @Param store: TaskListStore;
+  /** 同步状态细条：离线/重试中/同步中 */
+  private syncStatus: SyncStatus = SyncStatus.instance();
 
   /** 视觉个性化状态：卡片间距按密度档取值（紧凑档更紧） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
-
-  /** 列表当前滚动量（vp）—— Chip 行悬浮层的位置就是由它推出来的（见 `chipsTopVp`） */
-  @Local scrollVp: number = 0;
 
   /**
    * 状态栏高度（vp）：窗口全屏后页面铺到屏幕顶端，内容要让开这一截（见 utils/WindowInsets）。
@@ -185,26 +182,16 @@ export struct A_TaskList {
   }
 
   /**
-   * Chip 行悬浮层的顶部位置（vp）—— **与标题收缩逐像素联动**。
+   * Chip 行悬浮层的顶部位置（vp）—— **固定值**，贴在 MINI 标题栏下沿。
    *
-   * 作者 2026-10-19 的要求：「它应该上滑一段距离直到标题不再移动变化时停在那个位置，
-   * 就像和标题的运动绑在一起」。2026-10-21 又要「mainTitle 和 Chips 一起运动，别割裂」。
-   *
-   * 为什么这样写就一定同步：
-   *  · 官方说 FREE 模式的标题「随着内容向上滚动而缩小」，最小高度与 MINI 一致
-   *    → 标题位移的跨度就是 `CHIP_PIN_SPAN_VP`（112−56 ＝ 56vp，见常量注释）；
-   *  · Chip 行现在吃的是**同一个 `Scroller` 的同一个偏移量**（`scrollVp`），行程也正好是这 56vp；
-   *  · 两边跨度和方向完全一致 → 无论 HDS 内部用线性还是缓动，Chip 行都贴着标题一起走，
-   *    滚过 56vp 之后两者同时停住（Chip 行钉在 MINI 标题栏下沿），不会再有第二段动画。
-   *
-   * ⚠️ 不要再退回"到阈值就 animateTo"的写法：那是把一段跟手运动换成了两段独立动画，
-   * 只要时长/延迟与 HDS 对不上，就必然出现"标题先没了、Chip 还在飘"的割裂感（本次要修的就是它）。
+   * 2026-10-25 之前这里是 `112 - 滚动量 + 状态栏`：标题栏是 FREE（大标题会缩），Chip 行要跟它
+   * 1:1 同速上移，滚过 56vp 再钉住 —— 两段运动要对齐，反复出现「标题和 Chips 各走各的」。
+   * 现在标题栏改成 MINI（固定 56vp），没有要跟的对象了，这里退化成纯常量：
+   * **标题栏高度 + 状态栏高度**，取不到状态栏时按 0（下一帧补上）。
    */
   @Computed
   get chipsTopVp(): number {
-    // 只在 [0, 56] 这一段跟手；继续下滑/回弹都不再移动（`Math.max` 顺带兜住橡皮筋回弹产生的负偏移）
-    const progress: number = Math.min(Math.max(this.scrollVp, 0), CHIP_PIN_SPAN_VP);
-    return MainTitleBar.CONTENT_TOP_OFFSET_VP - progress + this.statusBarVp;
+    return MainTitleBar.SUB_PAGE_TITLE_BAR_VP + this.statusBarVp;
   }
 
   /** 底部遮罩的两端色（`GradientDirection.Bottom`：第一项画在**上**边，所以上透下实） */
@@ -235,6 +222,8 @@ export struct A_TaskList {
    * （只画一条露出的下边缘），状态必须活在它外面。
    */
   @Local expandedStepIds: number[] = [];
+  /** 待确认消息卡是否展开 */
+  @Local pendingExpanded: boolean = true;
 
   /** 该任务有没有步骤（决定要不要画堆叠层） */
   private hasSteps(task: Task): boolean {
@@ -341,11 +330,57 @@ export struct A_TaskList {
    *   （实测踩到过：筛「已完成」再删掉那条 → Chip 行消失 → 卡在空筛选里）。
    *   所以这里自己拼「标题栏让位 + Chip 行 + 余下空间居中」，而不是整个列表都不渲染。
    */
+  /** 一键加入演示任务：4 种 tag（通知 ×2 / 作业 / 考试 / 活动），创建时间与 ddl 都错开 */
+  private addSampleTasks(): void {
+    const now: number = Date.now();
+    const hour: number = 3600000;
+    const list: Task[] = [];
+    list.push(this.makeSampleTask('sample-notice-library', '图书馆临时闭馆通知',
+      '因设备检修，今晚 18:00 后闭馆，请提前借还书', '通知', '通知',
+      now - 19 * hour, now + 3 * hour));
+    list.push(this.makeSampleTask('sample-notice-course', '选课系统维护通知',
+      '选课系统本周六 00:00-06:00 维护，期间无法选课', '通知', '通知',
+      now - 15 * hour, now + 26 * hour));
+    list.push(this.makeSampleTask('sample-homework-practice', '提交社会实践材料',
+      '把实践报告和照片打包交给辅导员', '作业', '作业',
+      now - 11 * hour, now + 50 * hour));
+    list.push(this.makeSampleTask('sample-exam-math', '复习高等数学',
+      '重点看极限、导数和积分应用，做两套真题', '考试', '考试',
+      now - 7 * hour, now + 74 * hour));
+    list.push(this.makeSampleTask('sample-activity-club', '社团招新摆摊',
+      '下午三点到东广场集合，带好宣传物料', '活动', '活动',
+      now - 3 * hour, now + 98 * hour));
+    this.store.upsertAll(list);
+  }
+
+  private makeSampleTask(key: string, name: string, note: string, tag: string, category: string,
+    createdAt: number, dueAt: number): Task {
+    const task: Task = new Task();
+    task.clientTaskId = key;
+    task.name = name;
+    task.note = note;
+    task.category = category;
+    task.tags = [tag];
+    task.status = TaskStatus.CONFIRMED;
+    task.priority = TaskPriority.NORMAL;
+    task.createdAt = createdAt;
+    task.dueAt = dueAt;
+    task.dueText = this.sampleDueText(dueAt);
+    return task;
+  }
+
+  private sampleDueText(ms: number): string {
+    const d: Date = new Date(ms);
+    const hh: string = d.getHours() < 10 ? `0${d.getHours()}` : `${d.getHours()}`;
+    const mm: string = d.getMinutes() < 10 ? `0${d.getMinutes()}` : `${d.getMinutes()}`;
+    return `${d.getMonth() + 1}月${d.getDate()}日 ${hh}:${mm}`;
+  }
+
   @Builder
   emptyState() {
     Column() {
       // 顶部让开标题栏（与列表首项同一段留白，保持一致）
-      Row().width('100%').height(MainTitleBar.CONTENT_TOP_OFFSET_VP + this.statusBarVp)
+      Row().width('100%').height(MainTitleBar.SUB_PAGE_TITLE_BAR_VP + this.statusBarVp)
 
       // 顶部筛选 Chip 行（空态下也要在，否则回不去「全部」）
       TaskFilterChips({ store: this.store })
@@ -362,30 +397,156 @@ export struct A_TaskList {
     .height('100%')
   }
 
+  /** 待确认消息组头：与「今天/明天」同一个 SubHeader，展开/收起同一条动画 */
+  @Builder
+  pendingHeader() {
+    Row({ space: 8 }) {
+      Column() {
+        SubHeader({
+          primaryTitle: '待确认消息',
+          secondaryTitle: this.store.pendingList.length + ' 条待确认'
+        })
+      }
+      .layoutWeight(1)
+
+      // 「数字 + 红点」放在展开箭头左边
+      if (this.store.pendingUnseenCount() > 0) {
+        Row({ space: 4 }) {
+          Column()
+            .width(8)
+            .height(8)
+            .borderRadius(4)
+            .backgroundColor(this.themeStore.scheme.error)
+          Text(String(this.store.pendingUnseenCount()))
+            .fontSize(12)
+            .fontColor(this.themeStore.scheme.error)
+        }
+      }
+
+      SymbolGlyph(this.pendingExpanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
+        .fontSize($r('sys.float.subheader_right_icon_size'))
+        .fontColor([$r('sys.color.icon_primary')])
+    }
+    .width('100%')
+    .alignItems(VerticalAlign.Center)
+    .padding({ end: LengthMetrics.resource($r('sys.float.padding_level8')) })
+    .onClick(() => {
+      this.getUIContext().animateTo({
+        duration: GROUP_EXPAND_ANIM_MS,
+        curve: Curve.FastOutSlowIn
+      }, () => {
+        this.pendingExpanded = !this.pendingExpanded;
+      });
+    })
+  }
+
+  /** 待确认子卡片：直接复用普通任务卡容器，只换前缀/右侧图标与第二行文案 */
+  @Builder
+  pendingCard(task: Task) {
+    TaskCard({
+      task: task,
+      store: this.store,
+      pendingMode: true,
+      onOpen: () => {
+        this.store.markPendingSeen(task);
+        AppStorage.get<NavPathStack>(NAV_STACK_KEY)
+          ?.pushPathByName(ROUTE_TASK_DETAIL, new TaskDetailParam(task, this.store, true));
+      }
+    })
+  }
+
+  /** 同步状态细条（离线 / 同步中 / 已关闭），离线可点重试 */
+  @Builder
+  syncBanner() {
+    Row({ space: 8 }) {
+      Text(this.syncStatus.phase === SYNC_PHASE_SYNCING
+        ? '正在同步…'
+        : (this.syncStatus.phase === SYNC_PHASE_DISABLED
+          ? '云端同步已关闭，可在设置里开启'
+          : '离线，数据可能不是最新'))
+        .fontSize(12)
+        .fontColor(this.syncStatus.phase === SYNC_PHASE_OFFLINE
+          ? this.themeStore.scheme.error
+          : this.themeStore.scheme.onSurfaceVariant)
+        .maxLines(1)
+        .layoutWeight(1)
+      if (this.syncStatus.phase === SYNC_PHASE_OFFLINE) {
+        Text('重试')
+          .fontSize(12)
+          .fontColor(this.themeStore.scheme.primary)
+          .onClick(() => {
+            SyncService.syncOnce(true);
+          })
+      }
+    }
+    .width('100%')
+    .height(36)
+    .padding({ left: 12, right: 12 })
+    .backgroundColor(this.syncStatus.phase === SYNC_PHASE_OFFLINE
+      ? this.themeStore.scheme.errorContainer
+      : this.themeStore.scheme.surfaceContainerHigh)
+    .borderRadius(10)
+  }
+
   @Builder
   taskList() {
     List({ scroller: this.scroller }) {
-      // 顶部让开标题栏的这一段，**必须做成列表里的第一项**，不能用 `contentStartOffset`：
-      // `contentStartOffset` 会把内容整体下移，`HdsNavigation` 按滚动偏移算「标题收缩进度」时起点被推后 →
-      // 标题栏会一直保持展开，直到内容整整滚过标题栏高度才「啪」地收起来（实测：内容滚了 119vp 时标题仍是 112vp，
-      // 再滚一点才变成 56vp），也就是需求方 2026-10-16 说的「mainTitle 向左上角移动的动画明显慢于页面上滑」。
-      // 改成列表首项留白（＝官方示例 `Scroll { Column { Blank(标题栏高度) ... } }` 的写法）后，滚动偏移从第一像素
-      // 就开始参与收缩计算 → 标题跟手。（`.cache/nb-report.txt` / `.cache/fn-report.txt` 是改前的量测记录。）
+      // 顶部让开**固定标题栏**的这一段（MINI = 56vp + 状态栏）。做成列表里的第一项而不是
+      // `contentStartOffset`：留白做成项，滚动内容就从这里往下排，不需要再跟导航组件做什么联动
+      //（2026-10-25 标题栏改 MINI 后，原来那段「必须做成首项，否则 HDS 收缩进度算不准」的理由已不存在，
+      //  但**首项留白**这个写法本身仍是官方示例的口径，保留不动、也不引入新风险）。
       ListItem() {
         // `Blank` 只能放进 Row/Column/Flex，所以这里用一行空 `Row` 撑出这段高度。
         // 无障碍不上报这个空项（否则读屏会播报一个空列表项）
-        Row().width('100%').height(MainTitleBar.CONTENT_TOP_OFFSET_VP + this.statusBarVp)
+        Row().width('100%').height(MainTitleBar.SUB_PAGE_TITLE_BAR_VP + this.statusBarVp)
       }
       .accessibilityLevel('no')
 
-      // 2026-10-19：Chip 行**不再作为普通列表项**（那样会随页面滑出屏幕）。
-      // 改成 `build()` 里的**悬浮冻结层**，跟着标题一起上滑、标题收起后停住。
+      // Chip 行**不是列表项**（那样会随页面滑出屏幕），它是 `build()` 里的**悬浮冻结层**，
+      // 位置固定在标题栏下沿（见 `chipsTopVp`）。
       // 这里留出「Chip 行等高 + 它下方的 `CHIPS_BAND_BOTTOM_GAP_VP`」的空档，
       // 让第一张卡片正好从背板下沿之下开始（少留＝被背板压住，多留＝多一条缝）。
       ListItem() {
         Row().width('100%').height(CHIPS_BAND_HEIGHT_VP + CHIPS_BAND_BOTTOM_GAP_VP)
       }
       .accessibilityLevel('no')
+
+      if (this.store.pendingList.length > 0) {
+        ListItemGroup({
+          header: this.pendingHeader()
+        }) {
+          if (this.pendingExpanded) {
+            ForEach(this.store.pendingTasks(), (task: Task) => {
+              ListItem() {
+                Column() {
+                  this.pendingCard(task)
+                }
+                .width('100%')
+              }
+              .width('100%')
+              // 与普通任务卡一致的卡片间距（左右由 HDS 卡片自身留白，不重复加）
+              .margin({ bottom: this.themeStore.listItemSpace })
+              // 展开/收起时与普通分组同一套淡入 + 下移
+              .transition(
+                TransitionEffect.OPACITY
+                  .combine(TransitionEffect.translate({ y: -CARD_ENTER_OFFSET_VP }))
+                  .animation({ duration: GROUP_EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
+              )
+            }, (task: Task) => 'pending-' + task.id)
+          }
+        }
+        .margin({ top: -GROUP_HEADER_LIST_PULL_UP_VP })
+      }
+
+      if (this.syncStatus.showsBanner) {
+        ListItem() {
+          Row() {
+            this.syncBanner()
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, bottom: 6 })
+        }
+      }
 
       ForEach(this.store.groups, (group: TaskDayGroup) => {
         // 当前筛选下这一组一条都没有 → 整组不渲染（组头也不出现）
@@ -508,25 +669,20 @@ export struct A_TaskList {
     .scrollBar(BarState.Off)
     // 让开悬浮页签栏的高度，否则最后一张卡片会被栏压住（见 LIST_BOTTOM_CLEARANCE_VP 的来历）
     .contentEndOffset(LIST_BOTTOM_CLEARANCE_VP)
-    // 把滚动位置喂给 Chip 悬浮层：**每帧都赋值**，位置由 `chipsTopVp` 线性推出。
-    // 这里不要再做"到阈值才改状态 + animateTo"的分支 —— 那会把一段跟手运动拆成两段独立动画，
-    // 与 HDS 标题的节奏对不上就是"标题和 Chips 各走各的"（见 `chipsTopVp` 的说明）。
-    .onDidScroll(() => {
-      // 用 `UIContext.px2vp`，不用全局 `px2vp`（后者已标记废弃）
-      this.scrollVp = this.getUIContext().px2vp(this.scroller.currentOffset().yOffset);
-    })
+    // 2026-10-25：这里原来有个 `.onDidScroll(...)`，把每帧滚动量写进 `scrollVp` 供 Chip 层跟着标题上移。
+    // 标题栏改成固定 MINI 之后不再需要 —— 删掉顺带省掉每帧一次 `@Local` 写入引起的重算。
   }
 
   build() {
     // 有任务＝列表；一条都没有＝官方风格的空状态（两者都是内容区的根，外面套 Stack 保证根节点是容器）
     Stack({ alignContent: Alignment.TopStart }) {
-      if (this.isEmpty) {
+      if (this.isEmpty && this.store.pendingList.length === 0) {
         this.emptyState()
       } else {
         this.taskList()
       }
 
-      if (!this.isEmpty) {
+      if (!this.isEmpty || this.store.pendingList.length > 0) {
         // **底部渐变遮罩**（2026-10-20 恢复）：内容滑到胶囊/＋ 那一带时淡出，而不是在视口底边被齐切。
         // 结构与下面那层一样：外层铺满、内容靠底，`HitTestMode.None` 让滚动/点击穿透给下面的列表。
         Column() {
@@ -545,9 +701,8 @@ export struct A_TaskList {
         .hitTestBehavior(HitTestMode.None)
       }
 
-      // **Chip 行悬浮冻结层**（2026-10-19，作者要求；2026-10-21 第三轮改成**跟手连续**，见 `chipsTopVp`）：
-      // 未滚动时贴在展开的标题栏下方；上滑时**按滚动量 1:1** 与标题一起上移；
-      // 滚过 56vp（正好是标题 112→56 的高度差）后钉在 MINI 标题栏下沿不再动。
+      // **Chip 行悬浮冻结层**（2026-10-19 起）：现在**位置固定**，贴在 MINI 标题栏下沿
+      //（2026-10-25 标题栏改固定小标题后，它不再跟滚动量走，见 `chipsTopVp`）。
       // 底色用页面 `surface`，把从下面滚过的卡片挡住。
       //
       // ⚠️ 2026-10-20 取消全屏沉浸后，这一层的底色**从屏幕顶端（0）开始铺**，不再从标题栏收起线开始：
@@ -562,7 +717,7 @@ export struct A_TaskList {
       // 「上下裁切的边缘是圆角矩形」——于是改成给背板 `borderRadius({bottomLeft, bottomRight})`：
       // 圆角之外的两个角会露出下面滑过的卡片，视觉上就是"内容正滑进一个带圆角的容器"，
       // 比渐隐更利落。底部那条边缘按他给的兜底方案仍用渐变遮罩（见上面那段）。
-      if (!this.isEmpty) {
+      if (!this.isEmpty || this.store.pendingList.length > 0) {
         Column() {
           TaskFilterChips({ store: this.store })
         }
@@ -576,6 +731,29 @@ export struct A_TaskList {
           bottomRight: CHIP_BAND_RADIUS_VP
         })
       }
+
+      // 样例入口：右下角小胶囊，一键塞演示任务（4 种 tag、创建时间与 ddl 都错开）。
+      // 反复点击按 `clientTaskId` 幂等合并，不会堆出重复卡片。
+      Column() {
+        Button({ type: ButtonType.Capsule, stateEffect: true }) {
+          Text('样例')
+            .fontSize(12)
+            .fontColor(this.themeStore.scheme.onSecondaryContainer)
+        }
+        .height(28)
+        .padding({ left: 14, right: 14 })
+        .backgroundColor(this.themeStore.scheme.secondaryContainer)
+        .id('sampleTasksButton')
+        .onClick(() => {
+          this.addSampleTasks();
+        })
+      }
+      .width('100%')
+      .height('100%')
+      .justifyContent(FlexAlign.End)
+      .alignItems(HorizontalAlign.End)
+      .padding({ right: 20, bottom: 96 })
+      .hitTestBehavior(HitTestMode.Transparent)
     }
     .width('100%')
     .height('100%')

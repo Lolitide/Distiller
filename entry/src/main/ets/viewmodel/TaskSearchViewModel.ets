@@ -21,7 +21,24 @@ export enum SearchState {
 export class TaskSearchViewModel {
   /** 关键词是不是空的（只有空白也算空） */
   static isEmptyQuery(query: string): boolean {
-    return query.trim().length === 0;
+    return TaskSearchViewModel.text(query).trim().length === 0;
+  }
+
+  /**
+   * 把可能为 `undefined` 的字符串归一成字符串。
+   *
+   * 🔴 为什么必须有这一层（2026-10-23「搜索页一输入字符就闪退」的**直接触发点**）：
+   * `Task.name` 声明成 `string`，但本机 `preferences` 里的旧数据**没有这个键** ——
+   * 2026-10-17 的 `refactor: 接口字段对齐` 把 `title` 改名成了 `name`（同时 `detail` → `note`），
+   * 旧版本落盘的 JSON 读出来 `name` 就是 `undefined`。这里对它调 `.toLowerCase()` 会抛
+   * `TypeError: Cannot read property toLowerCase of undefined`，而搜索跑在 `@Monitor` 里 ——
+   * 框架把该异常当 RuntimeError 上报，**整个进程退出**，不是"某个组件坏掉"。
+   *
+   * 数据侧已在 `TaskRepository.revive` 做旧字段迁移与兜底；这里是第二道，
+   * 保证以后任何一条脏数据最多是"没搜到"，不会再把 App 带走。
+   */
+  private static text(value: string | undefined): string {
+    return value === undefined ? '' : value;
   }
 
   /**
@@ -33,7 +50,7 @@ export class TaskSearchViewModel {
     if (needle.length === 0) {
       return false;
     }
-    if (task.name.toLowerCase().includes(needle)) {
+    if (TaskSearchViewModel.text(task.name).toLowerCase().includes(needle)) {
       return true;
     }
     const tags: string[] | undefined = task.tags;
@@ -41,22 +58,22 @@ export class TaskSearchViewModel {
       return true;
     }
     const note: string | undefined = task.note;
-    if (note !== undefined && note.toLowerCase().includes(needle)) {
+    if (note !== undefined && TaskSearchViewModel.text(note).toLowerCase().includes(needle)) {
       return true;
     }
     const category: string | undefined = task.category;
-    if (category !== undefined && category.toLowerCase().includes(needle)) {
+    if (category !== undefined && TaskSearchViewModel.text(category).toLowerCase().includes(needle)) {
       return true;
     }
     // 来源：v1 起 `source` 是枚举（paste/share/bot/voice/manual），**显示与检索用的是 `originDetail`**
     const originDetail: string | undefined = task.originDetail;
-    if (originDetail !== undefined && originDetail.toLowerCase().includes(needle)) {
+    if (originDetail !== undefined && TaskSearchViewModel.text(originDetail).toLowerCase().includes(needle)) {
       return true;
     }
     const steps = task.steps;
     if (steps !== undefined) {
       const contents: string[] = [];
-      steps.forEach((step) => contents.push(step.content));
+      steps.forEach((step) => contents.push(TaskSearchViewModel.text(step.content)));
       if (TaskSearchViewModel.anyContains(contents, needle)) {
         return true;
       }
@@ -66,7 +83,7 @@ export class TaskSearchViewModel {
 
   private static anyContains(values: string[], needle: string): boolean {
     for (let i = 0; i < values.length; i++) {
-      if (values[i].toLowerCase().includes(needle)) {
+      if (TaskSearchViewModel.text(values[i]).toLowerCase().includes(needle)) {
         return true;
       }
     }

@@ -28,9 +28,12 @@ export const NAV_STACK_KEY: string = 'appNavPathStack';
 export class TaskDetailParam {
   task: Task;
   store: TaskListStore;
+  /** 待确认消息详情：底部显示「保留 / 忽略」，不显示普通反馈 */
+  pendingMode: boolean;
 
-  constructor(task: Task, store: TaskListStore) {
+  constructor(task: Task, store: TaskListStore, pendingMode: boolean = false) {
     this.task = task;
     this.store = store;
+    this.pendingMode = pendingMode;
   }
 }

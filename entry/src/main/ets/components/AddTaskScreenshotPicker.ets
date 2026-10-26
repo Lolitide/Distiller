@@ -11,14 +11,17 @@
  * 组件只拿结果、不 import photoAccessHelper（`references/02-编码规约.md` 落位规则 2）。
  * 选图**不需要任何权限**：系统 picker 是安全组件，返回的 URI 带持久授权（见 `MediaPickService` 顶部注释）。
  *
- * ⚠️ 还没做的：选中截图之后的**文字识别（OCR）与字段抽取** —— 那是下一步，
- * 要按项目纪律走 `service/ai`（Core Vision Kit 的 OCR **不支持模拟器、且必须动态 import**）。
+ * ⚠️ 本组件**只管选图与预览**。OCR 与字段抽取已经接通（FE-37，2026-10-25 核对）：
+ * 选完图点「AI 预填」→ `AddTaskSheet.aiFill()` → `ManualParseService.parseImage()` ——
+ * **先在本机 OCR**（`OcrService.recognizeUri`，Core Vision Kit，图片不出手机），文字再发后端做抽取；
+ * 本机认不出才回退「上传图片给后端」。
  */
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { MediaPickResult, pickSingleImage } from '../service/system';
 import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
 import { ADD_TASK_CONTENT_HEIGHT_VP } from './AddTaskContentMetrics';
+import { ThemeStore } from '../utils/Theme';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'AddTaskScreenshotPicker';
@@ -35,8 +38,10 @@ const PICK_AREA_HEIGHT_VP: number = ADD_TASK_CONTENT_HEIGHT_VP;
 export struct AddTaskScreenshotPicker {
   /** 表单草稿：选中的图片 URI 存 `draft.imageUri`（保存时作为任务的 `urls` 落进去） */
   @Require @Param draft: AddTaskDraft;
-  /** 防止连点重复拉起 picker（拉起时页面会被系统页盖住，连点会造成两次 select） */
+  /** 防连点重复拉起 picker（拉起时页面会被系统页盖住，连点会造成两次 select） */
   @Local picking: boolean = false;
+  /** 视觉个性化：M3 色系（占位区底色取 `scheme.surfaceContainerLow`，与任务卡片同色） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
 
   /** 拉起系统相册选一张图；取消不动、失败给一次可见反馈 */
   private async pick(): Promise<void> {
@@ -77,10 +82,11 @@ export struct AddTaskScreenshotPicker {
     .width('100%')
     .height(PICK_AREA_HEIGHT_VP)
     .justifyContent(FlexAlign.Center)
-    // 需求方 2026-10-17：「内容区背景太灰了 和 button 那个背景灰一样吧」——
-    // 原来用 `comp_background_secondary`（比页面灰还深一档），改成**来源按钮那条胶囊轨道的灰**
-    // （`segment_button_v2_capsule_button_background`），两块观感统一。
-    .backgroundColor($r('sys.color.segment_button_v2_capsule_button_background'))
+    // 2026-10-25：底色改 M3 容器色（作者：「添加任务 bindSheet 背景没有 md 取色」）。
+    // 历史：`comp_background_secondary`（太深）→ 系统胶囊轨道的冷灰 → M3 容器色 →
+    // 2026-10-25 定稿：**与任务卡片同色** `scheme.surfaceContainerLow`
+    // （作者：「这几个的 bg 颜色改成列表页面 card 的 bg 取色」）。
+    .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
     .borderRadius($r('sys.float.corner_radius_level8'))
     .onClick(() => {
       this.pick();

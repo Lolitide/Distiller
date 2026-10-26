@@ -16,6 +16,7 @@
 import { LengthMetrics } from '@kit.ArkUI';
 import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
 import { ADD_TASK_CONTENT_HEIGHT_VP } from './AddTaskContentMetrics';
+import { ThemeStore } from '../utils/Theme';
 
 /**
  * 文本框高度（vp）＝**三块内容区共用的那一个**（`ADD_TASK_CONTENT_HEIGHT_VP`）。
@@ -28,6 +29,8 @@ const TEXT_AREA_HEIGHT_VP: number = ADD_TASK_CONTENT_HEIGHT_VP;
 export struct AddTaskTextInput {
   /** 表单草稿：原文存 `draft.rawText`（保存时作为 `rawText` 落进任务） */
   @Require @Param draft: AddTaskDraft;
+  /** 视觉个性化：M3 色系（底色取 `scheme.surfaceContainerLow`，与任务卡片同色） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
 
   build() {
     TextArea({ text: this.draft.rawText, placeholder: $r('app.string.add_task_text_hint') })
@@ -37,9 +40,12 @@ export struct AddTaskTextInput {
       .fontSize($r('sys.float.ohos_id_text_size_body1'))
       .fontColor($r('sys.color.ohos_id_color_text_primary'))
       .placeholderColor($r('sys.color.ohos_id_color_text_tertiary'))
-      // 底色与「截图」那块占位区一致（需求方 2026-10-17：「内容区背景太灰了 和 button 那个背景灰一样吧」
-      // → 用**来源按钮那条胶囊轨道的灰**，不用更深的 `comp_background_secondary`）
-      .backgroundColor($r('sys.color.segment_button_v2_capsule_button_background'))
+      // 底色：2026-10-25 两轮定稿 ——
+      //  ① 先去掉系统冷灰 `segment_button_v2_capsule_button_background`（在暖色面板上偏蓝）；
+      //  ② 再按作者「这几个的 bg 颜色改成列表页面 card 的 bg 取色」统一成
+      //     `scheme.surfaceContainerLow` —— 与任务卡片（`TaskCard.cardBackground`）**同一个 M3 角色**。
+      // 层次关系因此与列表页完全一致：面板 = `surface`，块 = `surfaceContainerLow`（深一档）。
+      .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
       .borderRadius($r('sys.float.corner_radius_level8'))
       // 内边距：需求方 2026-10-17「文本状态下的内容区 加点内边距吧」→ 从 `padding_level4`(8vp) 提到
       // `padding_level8`(16vp)，让占位文字与正文都离开边框。

@@ -17,6 +17,10 @@
       "value": "任务列表"
     },
     {
+      "name": "tab_banban",
+      "value": "板板"
+    },
+    {
       "name": "tab_settings",
       "value": "设置"
     },
@@ -133,6 +137,62 @@
       "value": "取消完成"
     },
     {
+      "name": "action_complete_in_progress_task",
+      "value": "进行中，点击标记完成"
+    },
+    {
+      "name": "task_status_caption",
+      "value": "状态"
+    },
+    {
+      "name": "card_low_certainty",
+      "value": "置信度偏低，建议核对"
+    },
+    {
+      "name": "info_certainty_low",
+      "value": "偏低"
+    },
+    {
+      "name": "parse_hint_certainty_low",
+      "value": "AI 预填，置信度 %d，请核对"
+    },
+    {
+      "name": "parse_hint_title_only",
+      "value": "AI 预填，请核对"
+    },
+    {
+      "name": "parse_hint_certainty_ok",
+      "value": "AI 预填，置信度 %d"
+    },
+    {
+      "name": "parse_hint_missing",
+      "value": "未识别：%s"
+    },
+    {
+      "name": "raw_text_title",
+      "value": "原文"
+    },
+    {
+      "name": "raw_text_expand",
+      "value": "展开"
+    },
+    {
+      "name": "raw_text_collapse",
+      "value": "收起"
+    },
+    {
+      "name": "raw_text_copy",
+      "value": "复制原文"
+    },
+    {
+      "name": "raw_text_copied",
+      "value": "已复制原文"
+    },
+    {
+      "name": "raw_text_copy_failed",
+      "value": "复制失败"
+    },
+    {
       "name": "deleted_count",
       "value": "已删除 %d 项"
     },
@@ -147,6 +207,10 @@
     {
       "name": "empty_filtered_task_list",
       "value": "没有符合条件的任务"
+    },
+    {
+      "name": "empty_banban",
+      "value": "还没有带 ddl 的任务。去群消息里收几条，或手动添加一个。"
     },
     {
       "name": "filter_all",
@@ -322,7 +386,7 @@
     },
     {
       "name": "chip_remind_set",
-      "value": "在 %d月%d日 %s 提醒我"
+      "value": "%d月%d日 %s 提醒"
     },
     {
       "name": "chip_repeat",
@@ -623,6 +687,10 @@
     {
       "name": "permission_calendar_reason",
       "value": "用于把任务写成系统日历日程，并在到期前提醒你"
+    },
+    {
+      "name": "permission_mic_reason",
+      "value": "用于把你说的话转成文字，再整理成任务"
     }
   ]
 }

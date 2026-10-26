@@ -18,6 +18,7 @@ import { Task, TaskAlarm, TaskPriority, TaskStatus, TaskStep } from '../model';
 import { TaskDayGroup, TaskListViewModel } from './TaskListViewModel';
 import { SettingsRepository } from '../repository/SettingsRepository';
 import { TaskRepository } from '../repository/TaskRepository';
+import { ReminderCoordinator } from '../service/system/ReminderCoordinator';
 import { common } from '@kit.AbilityKit';
 
 /** 固定筛选项的键（与文案分开：以后"设置里让用户选固定哪几个"就是让用户勾这几个 key） */
@@ -78,6 +79,8 @@ export class TaskListStore {
 
   /** 按天分好组的任务（真实数据；首次启动为空，由 `SyncService` 拉取候选填充） */
   @Trace groups: TaskDayGroup[] = TaskListViewModel.groupByDay([], new Date());
+  /** 待确认消息：不进时间线，但和任务一起落盘 */
+  @Trace pendingList: Task[] = [];
   /** 是否处于编辑（多选）模式 */
   @Trace editing: boolean = false;
   /** 已勾选的任务 id */
@@ -132,7 +135,53 @@ export class TaskListStore {
     this.groups.forEach((group: TaskDayGroup) => {
       group.tasks.forEach((task: Task) => tasks.push(task));
     });
+    this.pendingList.forEach((task: Task) => tasks.push(task));
     return tasks;
+  }
+
+  /** 待确认消息（按收集时间从新到早） */
+  pendingTasks(): Task[] {
+    const list: Task[] = this.pendingList.slice();
+    list.sort((a: Task, b: Task) => b.createdAt - a.createdAt);
+    return list;
+  }
+
+  pendingUnseenCount(): number {
+    let n: number = 0;
+    this.pendingList.forEach((task: Task) => {
+      if (task.pendingSeen !== true) {
+        n++;
+      }
+    });
+    return n;
+  }
+
+  markPendingSeen(task: Task): void {
+    if (task.pendingSeen !== true) {
+      task.pendingSeen = true;
+      this.persist();
+    }
+  }
+
+  confirmPending(task: Task): void {
+    task.status = TaskStatus.CONFIRMED;
+    task.pendingSeen = true;
+    task.userEdited = true;
+    this.rebuildGroups(this.allTasks(), task.id);
+    this.persist();
+    this.reconcileReminders();
+  }
+
+  ignorePending(task: Task): void {
+    const rest: Task[] = [];
+    this.pendingList.forEach((item: Task) => {
+      if (item.id !== task.id) {
+        rest.push(item);
+      }
+    });
+    this.pendingList = rest;
+    this.rebuildGroups(this.allTasks());
+    this.persist();
   }
 
   /**
@@ -142,6 +191,93 @@ export class TaskListStore {
   init(context: common.Context): void {
     this.dataContext = context;
     this.rebuildGroups(TaskRepository.load(context));
+    this.expireOverdue();
+    // 启动即回写一次：把旧 `__ob_` 键文件/迁移数据规整成普通 JSON
+    this.persist();
+  }
+
+  /**
+   * 把「提醒/日历意图」对账到系统句柄。
+   * 失败不影响任务本身：提醒发布失败会把 `alarm` 回滚，并把文案留在 `ReminderCoordinator.lastError`。
+   */
+  async reconcileReminders(): Promise<void> {
+    const ctx: common.Context | undefined = this.dataContext;
+    if (ctx === undefined) {
+      return;
+    }
+    const active: Task[] = this.allTasks().filter((task: Task) => task.status !== TaskStatus.PENDING_CONFIRM);
+    await ReminderCoordinator.reconcile(active, ctx, () => {
+      this.persist();
+    });
+    this.reminderError = ReminderCoordinator.lastError;
+    const code: number = ReminderCoordinator.lastErrorCode;
+    if (this.reminderError.length > 0) {
+      const key: string = code.toString() + '|' + this.reminderError;
+      if (key !== this.lastReminderFailureKey) {
+        this.lastReminderFailureKey = key;
+        if (this.reminderFailureListener !== undefined) {
+          this.reminderFailureListener(this.reminderError, code);
+        }
+      }
+    } else {
+      this.lastReminderFailureKey = '';
+    }
+  }
+
+  /**
+   * 启动清理「幽灵提醒」：重装/清数据后系统里可能残留本应用的提醒（占满 30 条额度），
+   * 任务表里却没有对应句柄。先全部撤销，再按当前任务表重新发布。
+   */
+  async resetStaleReminders(): Promise<void> {
+    const ctx: common.Context | undefined = this.dataContext;
+    if (ctx === undefined) {
+      return;
+    }
+    const cleared: boolean = await ReminderCoordinator.cancelAll();
+    if (cleared) {
+      const tasks: Task[] = this.allTasks();
+      for (let i = 0; i < tasks.length; i++) {
+        tasks[i].reminderId = undefined;
+        tasks[i].reminderAt = undefined;
+      }
+      this.persist();
+    }
+    await this.reconcileReminders();
+  }
+
+  /** 详情页等「直接改字段」的入口在离开/提交时调它，避免重启丢编辑。 */
+  saveNow(): void {
+    // 改期后要能「复活」：到未来 → EXPIRED 退回 CONFIRMED；同时重排 + 重新对账提醒
+    this.expireOverdue();
+    this.rebuildGroups(this.allTasks());
+    this.persist();
+    this.reconcileReminders();
+  }
+
+  /**
+   * 状态机：把已过截止时间且未完成的任务标成 `EXPIRED`；期限被挪回将来的再退回 `CONFIRMED`。
+   *
+   * ⚠️ 合并说明（2026-10-25，`feature/mvp-completion` 并入 `FE/ui`）：这个方法原来在两支分支上
+   * **各写了一份**（本支叫 `syncExpiredStatus`、MVP 支叫 `expireOverdue`，判定几乎相同）。
+   * 现在**只保留一份实现**（`syncExpiredStatus`），这里退化成转发 —— MVP 支的调用点
+   * （`init` / `saveNow` / A_Main 的分钟级定时器）不用改，行为与判定口径也只此一处。
+   *
+   * @returns 改了多少条
+   */
+  expireOverdue(): number {
+    return this.syncExpiredStatus();
+  }
+
+  /**
+   * 状态机：开始执行（待确认 / 已确认 → 进行中）。
+   *
+   * 同样收口到 `setStatus`（状态流转的唯一写入口）：`setStatus` 负责落盘、`finishedAt`、
+   * 以及"完成前状态"记忆与响铃对账，这里只表达"开始执行"这一条业务语义。
+   */
+  startTask(task: Task): void {
+    if (task.status === TaskStatus.CONFIRMED || task.status === TaskStatus.PENDING_CONFIRM) {
+      this.setStatus(task, TaskStatus.IN_PROGRESS);
+    }
   }
 
   /** 落盘：所有改内存态的动作末尾调它。失败只影响下次启动，不影响本次交互。 */
@@ -176,6 +312,12 @@ export class TaskListStore {
     let maxId: number = this.maxIdOf(all);
     for (let i = 0; i < incoming.length; i++) {
       const next: Task = incoming[i];
+      // 没有名称也没有备注的候选不入库，避免本机出现「空壳日程」
+      const nm: string = next.name !== undefined ? next.name.trim() : '';
+      const nt: string = next.note !== undefined ? next.note.trim() : '';
+      if (nm.length === 0 && nt.length === 0) {
+        continue;
+      }
       const key: string | undefined = next.clientTaskId;
       const existed: Task | undefined = (key !== undefined && key.length > 0)
         ? byClient.get(key) : undefined;
@@ -201,6 +343,17 @@ export class TaskListStore {
 
   /** 把后端的新内容并进已存在的任务，但保留用户态字段 */
   private static mergeIncoming(target: Task, src: Task): void {
+    // 用户改过内容的任务不再被 5 秒轮询整块覆盖（FE-79）；只同步服务端派生字段
+    if (target.userEdited === true) {
+      target.certainty = src.certainty;
+      target.missingFields = src.missingFields;
+      target.originDetail = src.originDetail;
+      target.rawJson = src.rawJson;
+      if (src.rawText !== undefined && src.rawText.length > 0) {
+        target.rawText = src.rawText;
+      }
+      return;
+    }
     target.name = src.name;
     target.note = src.note;
     target.dueAt = src.dueAt;
@@ -318,7 +471,17 @@ export class TaskListStore {
 
   /** `refreshGroups` / `addTask` / `upsertAll` 共用的「分组 + 就地复用同一天对象」 */
   private rebuildGroups(all: Task[], expandTaskId?: number): void {
-    const rebuilt: TaskDayGroup[] = TaskListViewModel.groupByDay(all, new Date());
+    const pending: Task[] = [];
+    const rest: Task[] = [];
+    all.forEach((task: Task) => {
+      if (task.status === TaskStatus.PENDING_CONFIRM) {
+        pending.push(task);
+      } else {
+        rest.push(task);
+      }
+    });
+    this.pendingList = pending;
+    const rebuilt: TaskDayGroup[] = TaskListViewModel.groupByDay(rest, new Date());
     const merged: TaskDayGroup[] = [];
     rebuilt.forEach((fresh: TaskDayGroup) => {
       const kept: TaskDayGroup | undefined = this.findGroup(fresh.sortValue, fresh.hasDate);
@@ -366,6 +529,7 @@ export class TaskListStore {
     all.push(task);
     this.rebuildGroups(all, task.id);
     this.persist();
+    this.reconcileReminders();
     // 新任务的标签可能带出新的筛选芯片：这里不用做别的，`chips` 是 `@Computed` 派生的
   }
 
@@ -411,9 +575,10 @@ export class TaskListStore {
     }
     found.status = TaskStatus.DELETED;
     found.alarm = TaskAlarm.OFF;
-    found.reminderId = undefined;
+    // `reminderId` 交给对账器撤销后再清，避免系统里留下一个孤儿提醒
     this.refreshGroups();
     this.persist();
+    this.reconcileReminders();
     return true;
   }
 
@@ -616,27 +781,141 @@ export class TaskListStore {
    *  · 「响铃提醒」的**用户意图**是 `alarm`（第 16 项），所以完成时把 `alarm` 置 OFF、退回时按
    *    「有提醒时间才开」恢复成 ON；`reminderId`（已发布句柄）跟着清空 —— 它由 `ReminderService` 给，
    *    页面里不许凭空造。
+   *
+   * 2026-10 起**不再自己写字段**，一律转 `setStatus`（状态流转的唯一写入口）：
+   * 否则「点圆圈完成」和「详情页状态分段选完成」会各自实现一份 `finishedAt` 口径，迟早漂移。
    */
   toggleComplete(task: Task): void {
     if (task.status === TaskStatus.COMPLETED) {
       const previous: TaskStatus | undefined = this.statusBeforeCompleted.get(task.id);
-      task.status = previous === undefined ? TaskStatus.CONFIRMED : previous;
-      task.finishedAt = undefined;
+      this.setStatus(task, previous === undefined ? TaskStatus.CONFIRMED : previous);
+      return;
+    }
+    this.setStatus(task, TaskStatus.COMPLETED);
+  }
+
+  /**
+   * 用户可写的四态，**数组顺序就是详情页「状态」分段的顺序**。
+   * 已过期（4）只有系统能写；已删除（5）走 `deleteTask`（软删不可逆，不允许从这里复活）。
+   */
+  static readonly USER_STATUSES: TaskStatus[] = [
+    TaskStatus.PENDING_CONFIRM,
+    TaskStatus.CONFIRMED,
+    TaskStatus.IN_PROGRESS,
+    TaskStatus.COMPLETED
+  ];
+
+  /**
+   * **六态状态机里用户可写那部分的唯一写入口**（待确认 / 已确认 / 进行中 / 已完成）。
+   *
+   * 为什么必须收口成一个方法：这次审计的原始缺陷正是「`IN_PROGRESS` 只有定义与 Mock、没有任何写入点」——
+   * 各页面各自 `task.status = ...` 的结果就是状态机在某些态上根本跑不起来。
+   * 现在详情页的状态分段、卡片的圆圈都走这里，规则只有一份。
+   *
+   * 落地规则：
+   *  · **只接受 `USER_STATUSES` 里的四态**；已过期（系统写）、已删除（软删）一律拒绝；
+   *  · 目标与当前相同 → 不算改动（不落盘、不触发刷新）；
+   *  · 进入 **已完成**：写 `finishedAt`、记下"完成前状态"（点圆圈能退回）、自动关响铃
+   *    （`alarm` 置 OFF、`reminderId` 清空）；
+   *  · 从 **已完成** 离开：清 `finishedAt`、按「有提醒时间才开」恢复响铃（与 `toggleComplete` 旧行为一致）；
+   *  · 已过期 / 已完成的任务改成 待确认 / 已确认 / 进行中 是允许的（"过期了但我还要做"、"手滑点完成"）。
+   *
+   * @returns 是否真的写了（页面拿它决定要不要弹提示）
+   */
+  setStatus(task: Task, status: TaskStatus): boolean {
+    if (TaskListStore.USER_STATUSES.indexOf(status) < 0) {
+      return false;
+    }
+    if (task.status === TaskStatus.DELETED || task.status === status) {
+      return false;
+    }
+    const wasCompleted: boolean = task.status === TaskStatus.COMPLETED;
+    if (status === TaskStatus.COMPLETED) {
+      this.statusBeforeCompleted.set(task.id, task.status);
+      task.status = status;
+      task.finishedAt = Date.now();
+      // 完成时自动关响铃：意图置 OFF；已发布句柄**不在这里直接清**，
+      // 交给 `reconcileReminders` 撤销后再清（合并自 MVP 支，否则对账器不知道要撤销哪一条）
+      task.alarm = TaskAlarm.OFF;
+      this.persist();
+      this.reconcileReminders();
+      return true;
+    }
+    if (wasCompleted) {
       this.statusBeforeCompleted.delete(task.id);
-      // 退回未完成时把响铃提醒重新打开（需求方 2026-10-14）：只有带提醒时间的任务才有这个开关
+      // 从完成态退回时把响铃提醒重新打开（需求方 2026-10-14）：只有带提醒时间的任务才有这个开关
       if (task.remindAt !== undefined) {
         task.alarm = TaskAlarm.ON;
       }
-      this.persist();
-      return;
     }
-    this.statusBeforeCompleted.set(task.id, task.status);
-    task.status = TaskStatus.COMPLETED;
-    task.finishedAt = Date.now();
-    // 完成时自动关掉响铃提醒：用户意图置 OFF，已发布句柄一并撤销
-    task.alarm = TaskAlarm.OFF;
-    task.reminderId = undefined;
+    task.status = status;
+    task.finishedAt = undefined;
     this.persist();
+    this.reconcileReminders();
+    return true;
+  }
+
+  /**
+   * **系统侧「已过期」扫描** —— 六态里唯一「只有系统能写」的那一态（`EXPIRED = 4`）。
+   *
+   * 为什么要有它：全仓此前**没有任何 EXPIRED 的写入点** —— 它只出现在 `mock/MockTasks` 的假数据里，
+   * 而 `TaskListViewModel.dueLabel` 只是**按 `due <= now` 现场显示**「已过期」文案、`status` 从不落地。
+   * 于是「已过期」根本不是真实状态：筛选、组头计数、详情页状态分段、落盘都看不到它。
+   *
+   * 本方法**双向**同步，两条方向缺一不可：
+   *   ① **到期未完成**（`dueAt <= now`，当前状态 ∈ 待确认 / 已确认 / 进行中）→ 写 `EXPIRED`；
+   *   ② **已经是 EXPIRED 但期限被挪到将来（或清空）** → 回到 `CONFIRMED`。
+   *      没有 ② 会留下一个永久的假过期：`dueLabel` **先看 `status === EXPIRED`**（见那里的分支），
+   *      用户把期限往后改，卡片上仍会一直显示「已过期」。
+   *
+   * 明确**不碰**的三类：
+   *   · `COMPLETED` —— `dueLabel` 的完成态分支（`COMPLETED` 时返回空串、不显示剩余时间）就靠这条守住：
+   *     已完成的任务即使早过了截止时间，也不该被改写成「已过期」；
+   *   · `DELETED` —— 软删不可逆；
+   *   · 没有 `dueAt` 的任务 —— 没期限就没有「过期」可言（`dueText` 只是原文，不拿来猜时刻）。
+   *
+   * 过期时顺手关提醒：`alarm` 置 OFF、`reminderId` 清空（已经过期了再响没有意义）。
+   * TODO(需求方): 真接 `service/system/ReminderService` 后，这里要先**撤销已发布的提醒**再改状态。
+   *
+   * @param now 判定基准（毫秒）；默认取当前时刻，测试/走查可以喂固定值
+   * @returns 改了多少条（0 ＝ 全都没变，此时不落盘、不重新分组）
+   */
+  syncExpiredStatus(now: number = Date.now()): number {
+    let changed: number = 0;
+    const all: Task[] = this.allTasks();
+    for (let i = 0; i < all.length; i++) {
+      const task: Task = all[i];
+      if (task.status === TaskStatus.COMPLETED || task.status === TaskStatus.DELETED) {
+        continue;
+      }
+      const due: number | undefined = task.dueAt;
+      const overdue: boolean = due !== undefined && due <= now;
+      if (task.status === TaskStatus.EXPIRED) {
+        // ② 反向：期限挪到将来 / 被清空 → 复活成「已确认」，否则界面会一直停在「已过期」
+        if (!overdue) {
+          task.status = TaskStatus.CONFIRMED;
+          changed++;
+        }
+        continue;
+      }
+      if (!overdue) {
+        continue;
+      }
+      // ① 正向：到期未完成 → 已过期
+      task.status = TaskStatus.EXPIRED;
+      // 已经过期了再响没有意义：意图置 OFF，句柄交给对账器撤销（不在这里直接清 `reminderId`）
+      task.alarm = TaskAlarm.OFF;
+      changed++;
+    }
+    if (changed > 0) {
+      // 排序键是 `dueAt`（没动，组内顺序不变），但状态变了要让所有按 status 派生的读数跟上
+      // （组头「未完成 x 项」、筛选、卡片图标…），也保证 `groups` 引用是最新那一份。
+      this.refreshGroups();
+      this.persist();
+      // 过期即撤提醒：对账器按 `alarm=OFF` 把已发布的提醒收掉
+      this.reconcileReminders();
+    }
+    return changed;
   }
 
   /**
@@ -654,7 +933,9 @@ export class TaskListStore {
   setRemind(task: Task, isOn: boolean): void {
     task.alarm = isOn ? TaskAlarm.ON : TaskAlarm.OFF;
     if (!isOn) {
-      task.reminderId = undefined;
+      // 句柄留给对账器撤销（先撤销、再清 `reminderId`）
+      this.persist();
+      this.reconcileReminders();
       return;
     }
     // 打开提醒时**按设置页的「提醒提前量」把提醒时刻算出来**（2026-10-19：
@@ -666,6 +947,7 @@ export class TaskListStore {
     }
     task.remindAt = due - this.remindLeadMinutes * MINUTE_MS;
     this.persist();
+    this.reconcileReminders();
   }
 
   /**
@@ -676,6 +958,15 @@ export class TaskListStore {
    * `setRemind` 里算 `remindAt` 就是同步的、可预测的。
    */
   @Trace remindLeadMinutes: number = 0;
+  /** 最近一次提醒发布失败的原因（设置页展示；为空表示正常） */
+  @Trace reminderError: string = '';
+  /** 提醒失败回调：页面注册后弹可执行提示（30 条上限 / 通知未开），同一条只弹一次 */
+  private reminderFailureListener: ((message: string, code: number) => void) | undefined = undefined;
+  private lastReminderFailureKey: string = '';
+
+  setReminderFailureListener(listener: (message: string, code: number) => void): void {
+    this.reminderFailureListener = listener;
+  }
 
   /**
    * 点列表副卡片上某一步的圆圈：切换该步的完成态（`done` 存 0/1）。
@@ -761,7 +1052,13 @@ export class TaskListStore {
       return 0;
     }
     const kept: TaskDayGroup[] = [];
+    const removed: Task[] = [];
     this.groups.forEach((group: TaskDayGroup) => {
+      group.tasks.forEach((task: Task) => {
+        if (ids.indexOf(task.id) >= 0) {
+          removed.push(task);
+        }
+      });
       const remain: Task[] = group.tasks.filter((task: Task) => ids.indexOf(task.id) < 0);
       group.tasks = remain;
       if (remain.length > 0) {
@@ -770,6 +1067,13 @@ export class TaskListStore {
     });
     this.groups = kept;
     this.persist();
+    const ctx: common.Context | undefined = this.dataContext;
+    if (ctx !== undefined) {
+      removed.forEach((task: Task) => {
+        task.alarm = TaskAlarm.OFF;
+        ReminderCoordinator.cancelNow(task, ctx);
+      });
+    }
     // 删掉的如果是**最后一个带某标签的任务**，那个标签芯片会跟着消失 → 把筛选键也收回「全部」，
     // 免得界面回到「全部」、列表却还按那个不存在的标签筛（见 `effectiveFilter` 的说明）。
     // 这里顺手把状态写正，`effectiveFilter` 只是兜底。

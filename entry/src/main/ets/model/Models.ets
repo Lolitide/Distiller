@@ -156,6 +156,12 @@ export class Task {
   @Trace remindAt?: number;
   /** 18. 提醒句柄：已发布的本地提醒键，撤销用它。**为空而 `alarm=1` ⇒ 开关开了但未生效**（如超 30 条报 1700002） */
   @Trace reminderId?: number;
+  /** 18.0.1 这个句柄对应的响铃时刻（改提醒时间后要重发；`reminderId` 存在但时刻不同即过期句柄） */
+  @Trace reminderAt?: number;
+  /** 18.1 系统日历事件句柄（Calendar Kit 写入后回填；删除/完成时撤销） */
+  @Trace calendarEventId?: number;
+  /** 18.2 用户是否改过内容字段：为 true 时 5 秒轮询不再覆盖 name/note/dueAt/place/priority（FE-79） */
+  @Trace userEdited?: boolean;
   /** 19. 重复规则**数组**（元素见 `RepeatRule`）；命中任一条即算今天要做（并集） */
   @Trace repeat?: RepeatRule[];
   /** 20. 规则外的补充原话：只在规则表达不了时兜底（如「每学期第 3 周交」） */
@@ -172,11 +178,35 @@ export class Task {
   @Trace steps?: TaskStep[];
   /** 26. 链接：文档 / 图片 / 网址统一放这里，详情页展示 */
   @Trace urls?: string[];
+  /**
+   * 26b. 扫码得到的直达链接（二维码/条形码内容是 URL 时写入）。
+   * 与 `urls` 分开：`urls` 存本机图片/文件，这个用于详情页「打开链接」。
+   */
+  @Trace linkUrl?: string;
   /** 27. 置信度（0~100 整数）：后端给 0~1 浮点，由映射层换算成整数 */
   @Trace certainty?: number;
   /** 28. 缺失字段名：由 `place` / `who` / `dueAt` 是否为空推出（「缺失不猜测」的工程形式） */
   @Trace missingFields?: string[];
+  /** 29. 待确认状态里是否已看过（真机红点；普通待办不用） */
+  @Trace pendingSeen?: boolean;
+  /** 30. 待确认来源：group / forward / image（普通待办不用） */
+  @Trace pendingSource?: string;
 }
 
 /** 类型（`category`）预设：作业 / 考试 / 活动 / 通知 / 其他；也可自定义（字段表 §1 第 23 项） */
 export const TASK_CATEGORY_PRESETS: string[] = ['作业', '考试', '活动', '通知', '其他'];
+
+/**
+ * **低可信阈值**（0~100 整数）：`Task.certainty` 低于它就算「低可信」，界面要提示用户核对。
+ *
+ * 取 **60** 的理由（口径写在这里，只有这一个地方能改）：
+ *  · 后端给的是簇级解析置信度，实测样本分三档：< 60 基本是「实体抽歪了」的一批，
+ *    60~80 是「大致对、细节要靠人看」，> 80 才是能直接信任的；
+ *  · Mock 里刻意留了 30 / 58 / 62 三个点（`mock/MockTasks.ets`），60 正好把 30、58 标出来、62 不标 ——
+ *    换成 50 就只有 30 会亮，换到 70 连 62 也一起亮，这两种都与"人看一眼就够"不符。
+ *
+ * ⚠️ 本常量在**三处**生效，改一处即可：卡片角标（`TaskCard`）、详情「置信度 / 地点」行
+ *    （`TaskInfoCard`）、添加任务的 AI 预填提示（`AddTaskSheet.parseEvidence` 与到期 chip）。
+ *    判定本身只走 `TaskListViewModel.isLowCertainty`。
+ */
+export const LOW_CERTAINTY_THRESHOLD: number = 60;

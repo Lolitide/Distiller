@@ -11,10 +11,13 @@ import {
   CandidatesData,
   DeletedData,
   FeedbackBody,
+  ForwardAckData,
+  ForwardPendingData,
   GroupsData,
   HealthData,
   MessagesData,
   MyData,
+  ParseData,
   PushTokenData,
   RegisterData,
   SubscribeData
@@ -39,6 +42,11 @@ export class RelayApi {
     return await ApiClient.get<BindStatusData>(BASE + '/bind/status');
   }
 
+  /** 重新绑定前清掉旧绑定（否则刚生成新码就会被旧 bound=true 判成功） */
+  static async resetBind(): Promise<ApiResult<Record<string, Object>>> {
+    return await ApiClient.post<Record<string, Object>>(BASE + '/bind/reset', {});
+  }
+
   static async groups(): Promise<ApiResult<GroupsData>> {
     return await ApiClient.get<GroupsData>(BASE + '/groups');
   }
@@ -61,6 +69,25 @@ export class RelayApi {
   static async candidates(after: number, limit: number): Promise<ApiResult<CandidatesData>> {
     return await ApiClient.get<CandidatesData>(
       BASE + '/candidates?after=' + after + '&limit=' + limit);
+  }
+
+  /**
+   * 手动添加：文本 → 候选（无状态，不落盘）。
+   * `source` 只用于后端标记通道（manual / screenshot…），不参与解析。
+   */
+  static async parseText(text: string, source: string): Promise<ApiResult<ParseData>> {
+    return await ApiClient.post<ParseData>(BASE + '/parse', {
+      'text': text,
+      'source': source
+    });
+  }
+
+  /** 手动添加：截图 → 后端多模态 OCR → 候选（`capabilities` 不含 `ocr` 时返回 501） */
+  static async parseImage(imageB64: string, source: string): Promise<ApiResult<ParseData>> {
+    return await ApiClient.post<ParseData>(BASE + '/parse', {
+      'image_b64': imageB64,
+      'source': source
+    });
   }
 
   static async feedback(body: FeedbackBody): Promise<ApiResult<Record<string, Object>>> {
@@ -91,5 +118,15 @@ export class RelayApi {
   static async setPrefs(skipSelf: boolean): Promise<ApiResult<Record<string, Object>>> {
     return await ApiClient.post<Record<string, Object>>(BASE + '/my/prefs',
       { 'skip_self': skipSelf });
+  }
+
+  /** 查看「转发给机器人」的队列（不消费；本地入库成功后再 ack） */
+  static async forwardPending(): Promise<ApiResult<ForwardPendingData>> {
+    return await ApiClient.get<ForwardPendingData>(BASE + '/forward/pending');
+  }
+
+  /** 确认已入库，删除服务端队列项（纯内存 30 分钟 TTL） */
+  static async ackForwards(ids: string[]): Promise<ApiResult<ForwardAckData>> {
+    return await ApiClient.post<ForwardAckData>(BASE + '/forward/ack', { 'ids': ids });
   }
 }

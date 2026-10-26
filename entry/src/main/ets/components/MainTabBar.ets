@@ -27,6 +27,7 @@ import { ThemeStore } from '../utils/Theme';
 import { Theme } from '../utils/Theme';
 import { A_TaskList } from '../pages/A_TaskList';
 import { A_Settings } from '../pages/A_Settings';
+import { C_Banban } from '../pages/C_Banban';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 import { showDeleteConfirmDialog } from '../utils/DeleteConfirmDialog';
 
@@ -60,12 +61,11 @@ const FAB_RELEASE_MS: number = 320;
 @ComponentV2
 export struct MainTabBar {
   /**
-   * 任务列表的 Scroller，由外层 `A_Main` 创建并透传给 `A_TaskList` 的 `List`；
-   * 外层还要用它 `bindToScrollable`（标题栏跟手的前提），所以必须是同一个对象。
+   * 任务列表的 Scroller，由外层 `A_Main` 创建并透传给 `A_TaskList` 的 `List`。
+   * （2026-10-25：标题栏改成固定 MINI 后，它**不再**交给 `HdsNavigation.bindToScrollable`，
+   *  只作为列表自己的滚动控制器。）
    */
   @Require @Param scroller: Scroller;
-  /** 设置页的 Scroller（同上，给 `bindToScrollable` 用） */
-  @Require @Param settingsScroller: Scroller;
   /** 任务列表的「数据 ＋ 编辑态」store：右侧按钮按它切「添加 / 删除」 */
   @Require @Param store: TaskListStore;
   /** 当前页签下标，报给外层：标题栏按钮与标题模式要按页签变 */
@@ -154,7 +154,7 @@ export struct MainTabBar {
           y: this.bounceIndex === tabIndex ? this.bounceScale : 1
         })
     }
-    .width(BAR_WIDTH / 2)
+    .width(BAR_WIDTH / 3)
     .height(BAR_HEIGHT)
     .justifyContent(FlexAlign.Center)
     .accessibilityText(label)
@@ -197,7 +197,7 @@ export struct MainTabBar {
     ]);
   }
 
-  /** 悬浮胶囊（两个页签） */
+  /** 悬浮胶囊（三个页签：任务列表 / 板板 / 设置） */
   @Builder
   tabPill() {
     Row() {
@@ -206,7 +206,15 @@ export struct MainTabBar {
       // 所以不再用另一个 glyph（原来这里是不成套的 `list_checkmark`）。
       this.tabItem(0, $r('sys.symbol.checkmark_circle'), $r('sys.symbol.checkmark_circle_fill'),
         $r('app.string.tab_task_list'))
-      this.tabItem(1, $r('sys.symbol.gearshape'), $r('sys.symbol.gearshape_fill'),
+      // 板板：带 ddl 任务的甘特视图（放在任务与设置之间）
+      // ⚠️ 选中态必须传 `calendar_fill`（2026-10-25 修「选中板板时日历图标不是实心」）：
+      // 原来两个参数都传了未填充的 `calendar`，于是选中时**只有颜色变、形状不变**，
+      // 与左右两个页签（`checkmark_circle`/`_fill`、`gearshape`/`_fill`）的「描边 → 实心」不一致。
+      // `calendar` / `calendar_fill` 是系统符号表里成套的一对（SDK `toolchains/id_defined.json`，
+      // 两项 `"type": "symbol"` 且 order 3192/3193 相邻），不是自造名。
+      this.tabItem(1, $r('sys.symbol.calendar'), $r('sys.symbol.calendar_fill'),
+        $r('app.string.tab_banban'))
+      this.tabItem(2, $r('sys.symbol.gearshape'), $r('sys.symbol.gearshape_fill'),
         $r('app.string.tab_settings'))
     }
     .width(BAR_WIDTH)
@@ -305,8 +313,12 @@ export struct MainTabBar {
         }
 
         TabContent() {
+          C_Banban({ store: this.store })
+        }
+
+        TabContent() {
           // 设置页要 store 只为一件事：「清空全部任务」
-          A_Settings({ store: this.store, scroller: this.settingsScroller })
+          A_Settings({ store: this.store })
         }
       }
       .barHeight(0)

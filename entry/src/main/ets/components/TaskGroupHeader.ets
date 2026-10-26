@@ -51,11 +51,14 @@ export struct TaskGroupHeader {
   @Require @Param totalCount: number;
   @Event onToggle: () => void = () => {};
 
-  /** 左：标题 = 「今天/明天/周几 · MM月DD日」，走带占位的资源，不做字符串拼接 */
+  /** 左：标题 = 「今天/明天/本周/更远」，未安排组用固定文案；老逻辑（按日期）保留兜底 */
   @Computed
-  get titleLabel(): Resource {
+  get titleLabel(): ResourceStr {
     if (!this.group.hasDate) {
       return $r('app.string.group_undated');
+    }
+    if (this.group.bucketLabel !== undefined) {
+      return this.group.bucketLabel;
     }
     if (this.group.dayOffset === 0) {
       return $r('app.string.group_title_today', this.group.month, this.group.day);

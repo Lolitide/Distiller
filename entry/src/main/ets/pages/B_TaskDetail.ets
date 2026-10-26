@@ -6,7 +6,10 @@ import { ThemeStore } from '../utils/Theme';
  *  ① 「点任务卡片 → 滑进来一个详情页 → 能返回」✓（与搜索页同一套顶栏）；
  *  ② 正文第一块：**可编辑的任务名** ✓ —— 字号/字重用与列表页导航栏 mainTitle **同一套官方 token**，
  *     名称前带卡片前缀里那个**状态圆圈**，已完成时名称变灰，点名称进入编辑、按回车提交。
- *  其余详情内容（备注 / 原文对照 / 地点 / 对象 / 类型 / 链接 / 置信度 / 缺失字段 / 步骤…）**待做**。
+ *  ③ 正文其余各块（2026-10-25，`feature/mvp-completion` 合并后的现状）：
+ *     原文对照（`TaskRawTextCard`，只读＋可折叠＋可复制）/ 步骤 / 媒体 / 提醒·到期·重复 /
+ *     来源 / 标签 / 备注 / 更多信息（状态分段 · 难易 · 类型 · 地点 · 置信度 · 时间戳）。
+ *     仍缺的：缺失字段（`missingFields`）没有专门一栏。
  *
  * 页面级约定（前几轮踩出来的，别再犯）：
  *  · `HdsNavDestination` 的 `titleMode` 默认 **MINI ＝ 56vp**（不是主页 FREE 的 112vp）；
@@ -26,7 +29,9 @@ import { TaskMetaCard } from '../components/TaskMetaCard';
 import { TaskInfoCard } from '../components/TaskInfoCard';
 import { TaskTagsCard } from '../components/TaskTagsCard';
 import { TaskNoteCard } from '../components/TaskNoteCard';
-import { TaskAlarm, TaskStatus } from '../model';
+import { TaskRawTextCard } from '../components/TaskRawTextCard';
+import { TaskMediaCard } from '../components/TaskMediaCard';
+import { Task, TaskAlarm, TaskStatus } from '../model';
 import { NAV_STACK_KEY, TaskDetailParam } from '../viewmodel/TaskNavParams';
 import { showDeleteConfirmDialog } from '../utils/DeleteConfirmDialog';
 
@@ -65,6 +70,8 @@ export struct B_TaskDetail {
   @Local statusBarVp: number = 0;
   /** 改名时的草稿（提交前不写回任务） */
   @Local draftName: string = '';
+  /** 进入页面时的内容快照：离开时对比，只有真改过才标记 userEdited（避免轮询覆盖） */
+  private snapshot: string = '';
   /** 改名输入框的控制器：进入编辑时把光标放到文本末尾（不默认全选） */
   private nameController: TextInputController = new TextInputController();
 
@@ -92,6 +99,27 @@ export struct B_TaskDetail {
   aboutToAppear(): void {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
     this.syncStatusBarHeight();
+    this.snapshot = this.contentSnapshot();
+    if (this.param.pendingMode) {
+      this.param.store.markPendingSeen(this.param.task);
+    }
+  }
+
+  /** 内容字段快照（用于判断用户是否真的改过；不含 status/reminderId 等系统态） */
+  private contentSnapshot(): string {
+    const t: Task = this.param.task;
+    return JSON.stringify({
+      name: t.name,
+      note: t.note,
+      dueAt: t.dueAt,
+      place: t.place,
+      who: t.who,
+      priority: t.priority,
+      level: t.level,
+      category: t.category,
+      tags: t.tags,
+      steps: t.steps
+    });
   }
 
   /**
@@ -125,6 +153,12 @@ export struct B_TaskDetail {
 
   aboutToDisappear(): void {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.OFFSET);
+    // 真改过内容才置脏：置脏后 5 秒轮询不再覆盖这些字段（FE-79）
+    if (this.contentSnapshot() !== this.snapshot) {
+      this.param.task.userEdited = true;
+    }
+    // 详情页的字段是「直接改 Task」，离开时统一落盘一次（FE-30：重启后编辑仍在）
+    this.param.store.saveNow();
   }
 
   /** 点名称 → 进入编辑：草稿从当前值起（抢焦点交给输入框的 `onAppear`，见 nameRow） */
@@ -182,6 +216,14 @@ export struct B_TaskDetail {
     const stack: NavPathStack | undefined = AppStorage.get<NavPathStack>(NAV_STACK_KEY);
     if (stack !== undefined) {
       stack.pop();
+    }
+  }
+
+  private showToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: message });
+    } catch (error) {
+      // toast 失败不影响主流程
     }
   }
 
@@ -298,6 +340,46 @@ export struct B_TaskDetail {
     })
   }
 
+  /** 待确认消息顶部的「保留 / 忽略」操作：放在最上方，原文卡移到底部。 */
+  @Builder
+  pendingActions() {
+    Row({ space: 12 }) {
+      Button({ type: ButtonType.Capsule, stateEffect: true }) {
+        Text('忽略')
+          .fontSize($r('sys.float.ohos_id_text_size_body1'))
+          .fontColor(this.themeStore.scheme.onSurfaceVariant)
+      }
+      .layoutWeight(1)
+      .height(44)
+      .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
+      .borderRadius(22)
+      .onClick(() => {
+        this.param.store.ignorePending(this.param.task);
+        this.popBack();
+      })
+
+      Button({ type: ButtonType.Capsule, stateEffect: true }) {
+        Text('保留')
+          .fontSize($r('sys.float.ohos_id_text_size_body1'))
+          .fontColor(this.themeStore.scheme.onPrimary)
+      }
+      .layoutWeight(1)
+      .height(44)
+      .backgroundColor(this.themeStore.scheme.primary)
+      .borderRadius(22)
+      .onClick(() => {
+        this.param.store.confirmPending(this.param.task);
+        this.popBack();
+      })
+    }
+    .width('100%')
+    .padding({
+      left: CONTENT_SIDE_PADDING_VP,
+      right: CONTENT_SIDE_PADDING_VP,
+      top: CONTENT_GAP_VP
+    })
+  }
+
   build() {
     HdsNavDestination() {
       // 2026-10-21 修「详情页底部导航条颜色未跟随页面」：
@@ -323,7 +405,20 @@ export struct B_TaskDetail {
         Scroll() {
           Column() {
             // 第一块正文：状态圆圈 + 可编辑任务名
-            this.nameRow()
+            //
+            // 与顶部标题栏的距离（2026-10-25 第二轮，需求方：「把任务名称和导航栏的间隔再减小一点」）：
+            // 上一轮收到 24vp（外层 8 + `nameRow` 自带的 `CONTENT_GAP_VP` 16），仍嫌远 →
+            // 现在**去掉外层那 8vp，只留 `nameRow` 自带的 16vp**（标题栏下沿 → 任务名墨迹 ≈56px）。
+            // 再想更近就直接调 `nameRow` 的 `padding.top`，外面不要再叠一层。
+            Column() {
+              this.nameRow()
+            }
+            .width('100%')
+
+            // 待确认消息：保留 / 忽略放在最上方，先确认再往下看细节
+            if (this.param.pendingMode) {
+              this.pendingActions()
+            }
 
             // 第二块：步骤（需求方 2026-10-16 的 4 张交互图，见 `TaskStepsSection` 顶部注释）
             Column() {
@@ -335,6 +430,20 @@ export struct B_TaskDetail {
               right: CONTENT_SIDE_PADDING_VP,
               top: CONTENT_GAP_VP
             })
+
+            // 第二块之后：图片 / 文件 / 扫码链接（步骤下方、提醒上方）
+            if ((this.param.task.urls !== undefined && this.param.task.urls.length > 0)
+              || (this.param.task.linkUrl !== undefined && this.param.task.linkUrl.length > 0)) {
+              Column() {
+                TaskMediaCard({ task: this.param.task })
+              }
+              .width('100%')
+              .padding({
+                left: CONTENT_SIDE_PADDING_VP,
+                right: CONTENT_SIDE_PADDING_VP,
+                top: CONTENT_GAP_VP
+              })
+            }
 
             // 第三块：属性编辑卡（提醒 / 到期 / 重复，照官方设置页造型）
             // 需求方 2026-10-16：「这个卡片放到步骤下方」
@@ -383,12 +492,14 @@ export struct B_TaskDetail {
               top: CONTENT_GAP_VP
             })
 
-            // 第七块：更多信息卡（难易程度 / 类型 / 地点 / 链接 / 置信度 / 创建于 / 完成于）
+            // 第七块：更多信息卡（状态 / 难易程度 / 类型 / 地点 / 链接 / 置信度 / 创建于 / 完成于）
             // **挪到最后**（2026-10-19「详情部分的显示优先级、分组可做优化调整」）：
             // 这张卡里一半是只读读数（置信度、两个时间戳），属于"平时不看"，压到页面底部；
             // 上面几块才是用户每天要动的：属性 → 分类标记 → 备注。
+            // 「状态」是本卡第一行（需求方 2026-10：「添加到重要性那个 card 里面的第一个」），
+            // 它要 `store` —— 状态写回只走 `store.setStatus`。
             Column() {
-              TaskInfoCard({ task: this.param.task })
+              TaskInfoCard({ task: this.param.task, store: this.param.store })
             }
             .width('100%')
             .padding({
@@ -397,7 +508,21 @@ export struct B_TaskDetail {
               top: CONTENT_GAP_VP
             })
 
-            // 底部留白：最后一张卡（备注卡）不要贴着手势条。
+            // 原文卡：这条任务从哪段话整理出来的（粘贴 / 截图 / 语音 / 群消息）。
+            // 按需求方 2026-10-26 的要求，原文放在整页最底部；保留 / 忽略已移到最上方。
+            if (this.param.task.rawText !== undefined && this.param.task.rawText.trim().length > 0) {
+              Column() {
+                TaskRawTextCard({ task: this.param.task })
+              }
+              .width('100%')
+              .padding({
+                left: CONTENT_SIDE_PADDING_VP,
+                right: CONTENT_SIDE_PADDING_VP,
+                top: CONTENT_GAP_VP
+              })
+            }
+
+            // 底部留白：最后一张卡（原文 / 备注）不要贴着手势条。
             // 原来这里还有一块「任务详情待做」占位 —— 五张卡做完就撤了（需求方 2026-10-17：「把底部的任务待做去掉」）
             Column()
               .width('100%')

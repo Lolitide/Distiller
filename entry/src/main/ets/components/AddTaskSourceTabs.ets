@@ -141,7 +141,10 @@ export struct AddTaskSourceTabs {
     }
     .width('100%')
     .padding($r('sys.float.padding_level1'))
-    .backgroundColor($r('sys.color.segment_button_v2_capsule_button_background'))
+    // 2026-10-25：轨道底色先是去掉系统冷灰（`segment_button_v2_capsule_button_background`），
+    // 再按作者「改成列表页面 card 的 bg 取色」定成 `scheme.surfaceContainerLow` ——
+    // 与任务卡片同一个 M3 角色（半模态面板仍是 `surface`，正好复刻"卡片浮在页面上"的层次）。
+    .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
     .borderRadius($r('sys.float.segment_button_v2_background_corner_radius'))
   }
 }

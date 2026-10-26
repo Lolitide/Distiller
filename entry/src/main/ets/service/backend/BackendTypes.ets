@@ -77,6 +77,8 @@ export interface BindStatusData {
   bound: boolean;
   user_openid_tail?: string;
   bound_at?: string;
+  /** 绑定时刻（毫秒）：用于区分「旧绑定」与「本次新绑定」 */
+  bound_at_ms?: number;
   source?: string;
 }
 
@@ -219,6 +221,8 @@ export interface CandidateItem {
   tags: string[];
   confidence: number;
   engine: string;
+  /** 是否规则降级（engine=rules）；前端据此提示「降级解析」 */
+  degraded?: boolean;
   source: CandidateSource;
   created_at: string;
 }
@@ -229,6 +233,14 @@ export interface CandidatesData {
   server_time: string;
   window_minutes: number;
   changed?: number;
+}
+
+/** POST /parse 的返回：一条候选 + 抽取用的合并文本（文本/OCR/文件抽取后的结果） */
+export interface ParseData {
+  candidate: CandidateItem;
+  text: string;
+  /** 规则降级标记（后端 engine=rules） */
+  degraded?: boolean;
 }
 
 // ---------------------------------------------------------------- 其它
@@ -249,6 +261,23 @@ export interface DeletedData {
 export interface PushTokenData {
   registered: boolean;
   push_ready: boolean;
+}
+
+/** 转发给机器人的一条待确认文本（纯内存，App 取走即删） */
+export interface ForwardItem {
+  id?: string;
+  kind?: string;
+  text: string;
+  url?: string;
+  created_at: number;
+}
+
+export interface ForwardPendingData {
+  items: ForwardItem[];
+}
+
+export interface ForwardAckData {
+  removed: number;
 }
 
 export interface FeedbackBody {

@@ -15,6 +15,13 @@ import { LengthMetrics } from '@kit.ArkUI';
 /** 图示尺寸（vp）：接近官方空状态插图的观感档位 */
 const EMPTY_ICON_SIZE_VP: number = 96;
 
+/**
+ * 文案左右留白（vp）：2026-10-25 加 —— 本组件的文案长度不固定
+ * （任务列表「无任务」三个字 / 板板一整句），没有留白时长句会贴着屏幕边缘断行。
+ * 短句居中不受影响。
+ */
+const EMPTY_TEXT_SIDE_PADDING_VP: number = 32;
+
 @ComponentV2
 export struct EmptyHint {
   /**
@@ -34,6 +41,11 @@ export struct EmptyHint {
         .fontSize($r('sys.float.ohos_id_text_size_body2'))
         .fontColor($r('sys.color.ohos_id_color_text_tertiary'))
         .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
+        // 2026-10-25（板板页接入本组件）：**文案长度不固定** —— 任务列表那条是三个字「无任务」，
+        // 板板那条是一整句。没有左右留白时，长句会贴着屏幕两边、并在很靠边的地方断行
+        //（实测断成「…或手动添加一 / 个。」）。给 32vp 留白后长句的折行居中、短句不受影响。
+        .padding({ left: EMPTY_TEXT_SIDE_PADDING_VP, right: EMPTY_TEXT_SIDE_PADDING_VP })
+        .textAlign(TextAlign.Center)
     }
     .width('100%')
     .height('100%')
