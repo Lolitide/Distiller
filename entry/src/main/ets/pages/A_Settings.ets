@@ -1446,9 +1446,9 @@ export struct A_Settings {
               .fontColor($r('sys.color.ohos_id_color_text_primary'))
               .layoutWeight(1)
               .maxLines(1)
-            Text(this.notifyAllowed ? '已开启' : '未开启')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+            // ⚠️ 2026-10-27 需求方：「去除通知权限、日历权限的重复性文本」——
+            // 这一行原来左边还有一句灰色「已开启 / 未开启」，与右边胶囊**说的是同一件事**（授权后两边都是"已开启"）。
+            // 胶囊本身就能表达两态（已开启＝状态色；去开启＝主色动作），所以灰字删掉，只留胶囊。
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
               Text(this.notifyAllowed ? '已开启' : '去开启')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
@@ -1486,9 +1486,7 @@ export struct A_Settings {
               .fontColor($r('sys.color.ohos_id_color_text_primary'))
               .layoutWeight(1)
               .maxLines(1)
-            Text(this.calendarAllowed ? '已授权' : '未授权')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+            // 同「通知权限」：灰色「已授权 / 未授权」与右边胶囊重复，已删（2026-10-27）
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
               Text(this.calendarAllowed ? '已授权' : '去授权')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
