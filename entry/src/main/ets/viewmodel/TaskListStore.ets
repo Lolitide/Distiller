@@ -688,6 +688,82 @@ export class TaskListStore {
     return 0;
   }
 
+  /*
+   * ── 标签（`Task.tags`）的**写入口**（2026-10-27 收口）──
+   *
+   * 为什么收口：标签现在有**两处**要改 ——
+   *   ① 详情页标签卡里的内联输入（只影响本任务：加 / 删 / 改名）；
+   *   ② 详情页「添加标签」时浮在输入法上方的**已有标签选择条**（本任务加删 + **全局删除**一个标签）。
+   * 两处各自 `task.tags = next` 的话，「去空白 / 去重 / 换新数组（`@Trace` 只有换引用才通知界面）」
+   * 这套口径迟早各写一份、然后漂移。所以加 / 删一律走下面三个方法。
+   *
+   * 落盘纪律：① 属于单任务编辑，跟详情页其它字段一样等离开页面时 `saveNow()` 统一落盘；
+   * ② 的全局删除跨多条任务、且不可撤销，**当场落盘**。
+   */
+
+  /**
+   * 给一个任务加一个标签（去空白、去重）。
+   * @returns 是否真的加了（已经有的再点一次不会重复加）
+   */
+  addTagTo(task: Task, tag: string): boolean {
+    const text: string = tag.trim();
+    if (text.length === 0) {
+      return false;
+    }
+    const own: string[] | undefined = task.tags;
+    const current: string[] = own === undefined ? [] : own;
+    if (current.indexOf(text) >= 0) {
+      return false;
+    }
+    const next: string[] = current.slice();
+    next.push(text);
+    // 整体换新数组：`@Trace` 数组只有换引用才会通知界面
+    task.tags = next;
+    return true;
+  }
+
+  /** 从一个任务里删掉一个标签（只动本任务）。返回是否真的删了 */
+  removeTagFrom(task: Task, tag: string): boolean {
+    const own: string[] | undefined = task.tags;
+    if (own === undefined || own.indexOf(tag) < 0) {
+      return false;
+    }
+    task.tags = own.filter((each: string) => each !== tag);
+    return true;
+  }
+
+  /**
+   * **全局删掉一个标签**：把所有任务（含待确认消息）身上的这个标签都摘掉。
+   *
+   * 这是「已有标签选择条」里长按 → 标签变成「删除」→ 再点一次的落点，属于标签管理；
+   * 语义是「这个标签以后不要了」，不是「从这一条任务上拿掉一个」，所以走 `removeTagFrom` 的不适用。
+   *
+   * 顺带收尾三件事：
+   *  · 清掉它的点选次数（`tagUsages`），免得 `chips` 排序里留一条孤儿；
+   *  · 正在按它筛选 → 把筛选键写回「全部」（`effectiveFilter` 只是兜底）；
+   *  · **当场落盘**（跨多条任务、且删了不可恢复，不能等离开详情页）。
+   *
+   * @returns 受影响的任务条数（0 ＝ 没有任何任务带这个标签，什么都没写）
+   */
+  deleteTagEverywhere(tag: string): number {
+    let changed: number = 0;
+    const all: Task[] = this.allTasks();
+    all.forEach((task: Task) => {
+      if (this.removeTagFrom(task, tag)) {
+        changed++;
+      }
+    });
+    if (changed === 0) {
+      return 0;
+    }
+    this.tagUsages = this.tagUsages.filter((usage: TagUsage) => usage.tag !== tag);
+    if (this.activeFilter === `${FILTER_TAG_PREFIX}${tag}`) {
+      this.activeFilter = FILTER_ALL;
+    }
+    this.persist();
+    return changed;
+  }
+
   /**
    * 按 Chip 的 key 过滤：
    * · `all` 不过滤；`done` 已完成；`todo` 未完成；`urgent` 紧急（`TaskPriority.URGENT`）；
