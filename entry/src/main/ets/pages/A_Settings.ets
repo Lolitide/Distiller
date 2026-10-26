@@ -33,7 +33,7 @@ import {
 import { OptionPickerBody } from '../components/OptionPickerBody';
 import { SettingsNavRow } from '../components/SettingsNavRow';
 import { PopupSelector } from '../components/PopupSelector';
-import { ToggleSlider } from '../components/ToggleSlider';
+import { M3SegmentGroup, M3SegmentOption } from '../components/M3SegmentGroup';
 // 开关统一走 M3 取色的组件（`Toggle` 默认取系统蓝，见 M3Switch 顶部注释）
 import { M3Switch } from '../components/M3Switch';
 import { Task } from '../model';
@@ -98,8 +98,15 @@ const ACCENT_SELECT_RING_VP: number = 5;
 
 /** 提醒提前量的可选档（分钟）：0 ＝ 到点提醒 */
 const REMIND_LEAD_OPTIONS: number[] = [0, 5, 15, 30, 60];
-/** 卡片密度的档位文案 */
-const DENSITY_OPTIONS: string[] = ['标准', '紧凑'];
+
+/**
+ * 卡片密度那一组 M3 分段的选项（2026-10-27：控件换成共用组件 `M3SegmentGroup`）。
+ * 做成模块级常量而不是每次 build 现拼：`@Param` 收到新数组引用会多跑一轮渲染。
+ */
+const DENSITY_SEGMENT_OPTIONS: M3SegmentOption[] = [
+  { key: 'standard', label: '标准', a11y: '标准' },
+  { key: 'compact', label: '紧凑', a11y: '紧凑' }
+];
 
 /** 当前打开的选择器（卡片密度已改成页内滑动控件，不再走弹窗） */
 const SHEET_NONE: number = 0;
@@ -1269,11 +1276,14 @@ export struct A_Settings {
   }
 
   /**
-   * 卡片密度：**二档滑动控件**（2026-10-19 作者要求）。
+   * 卡片密度：**M3 胶囊分段组**（2026-10-27 需求方：「把这个改成和添加任务里面的截图、录音、文本
+   * 一样的 md 取色组件」）。
    *
-   * 之前是「点一行 → 弹选择器 → 再点确定」，两个动作才改一个二选一的开关；
-   * 而且右侧那行值因为 `@Builder` 值参数不刷新，选完还显示旧值。
-   * 现在一行内直接滑动切换，值也由 `@Param` 响应式驱动。
+   * 原来用的是 `ToggleSlider`（系统冷灰轨道 + 白色滑块 + 系统蓝/灰文字），
+   * 在这套 M3 暖色页面上是唯一一块"系统色"控件，和「添加任务」那组来源页签风格也不一致。
+   * 现在直接复用 `M3SegmentGroup` —— 与来源页签**同一个组件**，取色永远同步：
+   * 轨道 `surfaceContainerLow`、选中块 `primary` + `onPrimary`、未选中 `font_secondary`。
+   * 纯文字两档，所以按内容宽度收缩（`fillWidth: false` / `equalWidth: false`），不撑满整行。
    */
   @Builder
   densityRow() {
@@ -1287,12 +1297,16 @@ export struct A_Settings {
 
       Blank()
 
-      ToggleSlider({
-        options: DENSITY_OPTIONS,
+      M3SegmentGroup({
+        options: DENSITY_SEGMENT_OPTIONS,
         selectedIndex: this.themeStore.density,
         onSelect: (index: number) => {
           this.applyDensity(index);
-        }
+        },
+        fillWidth: false,
+        equalWidth: false,
+        // 设置页这张卡片本身就是 `surfaceContainerLow`，轨道要抬一档才看得见
+        onCard: true
       })
     }
     .width('100%')
