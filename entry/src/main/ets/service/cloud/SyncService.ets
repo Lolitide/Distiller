@@ -18,6 +18,7 @@ import { CandidateItem, ServeMessage, apiErrorMessage } from '../backend/Backend
 import { TaskRepository } from '../../repository/TaskRepository';
 import { TaskListStore } from '../../viewmodel/TaskListStore';
 import { TaskExpiryService } from '../system/TaskExpiryService';
+import { PrivacyConsent } from '../system/PrivacyConsent';
 import { Task } from '../../model';
 import { SyncStatus } from './SyncStatus';
 
@@ -48,6 +49,13 @@ export class SyncService {
 
   /** 设置页开关：关闭立即停轮询；打开立刻拉一次 */
   static setEnabled(enabled: boolean): void {
+    // 隐私授权已撤回 → 不允许开云同步（撤回后「与所有 AI、云相关功能分隔」）
+    if (enabled && !PrivacyConsent.allowed()) {
+      SyncService.stop();
+      SyncStatus.instance().disabled();
+      SyncService.lastError = '已撤回隐私授权，云端同步不可用';
+      return;
+    }
     SyncService.enabled = enabled;
     if (!enabled) {
       SyncService.stop();
@@ -124,6 +132,11 @@ export class SyncService {
       return 0;
     }
     if (!SyncService.enabled) {
+      SyncStatus.instance().disabled();
+      return 0;
+    }
+    // 隐私授权门禁：撤回后一条候选都不拉（撤回即"与所有云相关功能分隔"）
+    if (!PrivacyConsent.allowed()) {
       SyncStatus.instance().disabled();
       return 0;
     }

@@ -15,6 +15,7 @@ import { fileIo } from '@kit.CoreFileKit';
 import { detectBarcode, scanBarcode, scanCore } from '@kit.ScanKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { PrivacyConsent } from '../system/PrivacyConsent';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'OcrService';
@@ -27,6 +28,10 @@ export class OcrService {
    * 用 Scan Kit 的 detectBarcode；picker 给的 uri 本身就能直接传（不落临时文件）。
    */
   static async detectBarcode(uri: string): Promise<string> {
+    // 隐私授权门禁：撤回后所有端侧识别一并停用（AI 能力与基础功能分隔）
+    if (!PrivacyConsent.allowed()) {
+      return '';
+    }
     if ((uri || '').length === 0) {
       return '';
     }
@@ -50,6 +55,10 @@ export class OcrService {
 
   /** 识别本地文件（系统 picker 给的 uri）里的文字；失败返回空串 */
   static async recognizeUri(uri: string): Promise<string> {
+    // 隐私授权门禁：撤回后所有端侧识别一并停用（AI 能力与基础功能分隔）
+    if (!PrivacyConsent.allowed()) {
+      return '';
+    }
     if ((uri || '').length === 0) {
       return '';
     }

@@ -13,6 +13,7 @@ import { speechRecognizer } from '@kit.CoreSpeechKit';
 import { audio } from '@kit.AudioKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { PrivacyConsent } from '../system/PrivacyConsent';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'SpeechService';
@@ -39,6 +40,10 @@ export class SpeechService {
 
   /** 开始识别 + 录音；返回 false 表示没起来（权限/引擎/启动失败） */
   static async start(callbacks: SpeechCallbacks): Promise<boolean> {
+    // 隐私授权门禁：撤回后不打开麦克风、不做语音转文字
+    if (!PrivacyConsent.allowed()) {
+      return false;
+    }
     if (SpeechService.running) {
       return false;
     }

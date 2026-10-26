@@ -39,6 +39,8 @@ import { M3Switch } from '../components/M3Switch';
 import { Task } from '../model';
 import { buildDemoTasks, DEMO_TASK_PREFIX } from '../mock/DemoTasks';
 import { TaskListStore } from '../viewmodel/TaskListStore';
+import { NAV_STACK_KEY, ROUTE_PRIVACY_POLICY } from '../viewmodel/TaskNavParams';
+import { PrivacyConsent } from '../service/system/PrivacyConsent';
 import { TaskExportViewModel, TaskImportParseResult } from '../viewmodel/TaskExportViewModel';
 import { TaskExportResult, TaskExportService } from '../service/system/TaskExportService';
 import { TaskImportFileResult, TaskImportService } from '../service/system/TaskImportService';
@@ -118,6 +120,12 @@ export struct A_Settings {
 
   /** 视觉个性化状态（跨页共享，见 utils/Theme.ets） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
+
+  /**
+   * 隐私授权状态（单例的 `@Trace` 字段）：撤回/重新授权会驱动「隐私说明」那一行的状态文案刷新。
+   * 真实判定在服务层（`PrivacyConsent.allowed()`），这里只读来显示。
+   */
+  @Local consent: PrivacyConsent = PrivacyConsent.instance();
 
   /**
    * 底部遮罩的两端色（`GradientDirection.Bottom`：第一项画在**上**边，所以上透下实）。
@@ -763,6 +771,11 @@ export struct A_Settings {
    * 开发者向的诊断信息摊在设置页上。
    */
 
+  /** 隐私说明：改成跳**独立页面**（`B_PrivacyPolicy`，2026-10-27） */
+  private openPrivacyPage(): void {
+    AppStorage.get<NavPathStack>(NAV_STACK_KEY)?.pushPathByName(ROUTE_PRIVACY_POLICY, '');
+  }
+
   /** 云端字段清单：与隐私说明同一口径，不把「本机数据」混进来 */
   private showCloudFields(): void {
     this.getUIContext().getPromptAction().showDialog({
@@ -776,15 +789,14 @@ export struct A_Settings {
   }
 
   /** 隐私说明：只讲本机存什么、什么会离开手机 */
-  private showPrivacy(): void {    this.getUIContext().getPromptAction().showDialog({
-      title: '隐私说明',
-      message: '任务、备注、原文、草稿只存在本机。'
-        + '同步开启时只向服务器发送设备标识、绑定关系、群订阅与采纳/忽略计数。'
-        + '群消息原文由服务器临时保留 30 分钟（仅内存、不落盘），不会回传。'
-        + '可随时在「删除服务端数据」中清空云端记录。',
-      buttons: [{ text: '知道了', color: this.themeStore.scheme.primary }]
-    });
-  }
+  /**
+   * 原「隐私说明」居中弹窗（2026-10-27 已下线）。
+   *
+   * 需求方：「隐私说明、隐私政策未合规撰写，且应放至独立页面，用官方的规范」——
+   * 这段文案现在整段搬进了独立页面 `pages/B_PrivacyPolicy.ets`（并按合规结构重写、支持撤回授权）。
+   * 这里保留一行说明，避免后来的人再补一个弹窗进来。
+   */
+
   private deleteServerData(): void {
     this.getUIContext().getPromptAction().showDialog({
       title: '删除服务端数据',
@@ -1966,21 +1978,29 @@ export struct A_Settings {
           this.rowDivider()
           this.infoRow('版本', this.versionLabel)
           this.rowDivider()
+          // 「隐私说明」：2026-10-27 改成**独立页面**（弹窗塞不下一篇合规的隐私政策），
+          // 右侧显示当前授权状态；页内可撤回/重新授权（撤回后 AI 与云端停用，本机基础功能保留）。
           Row() {
             Text('隐私说明')
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
               .fontColor($r('sys.color.ohos_id_color_text_primary'))
               .layoutWeight(1)
+            Text(this.consent.granted ? '已授权' : '已撤回')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.consent.granted
+                ? $r('sys.color.ohos_id_color_text_secondary')
+                : this.themeStore.scheme.error)
             Text('查看')
               .fontSize($r('sys.float.ohos_id_text_size_body2'))
               .fontColor(this.themeStore.scheme.primary)
+              .margin({ left: 8 })
           }
           .width('100%')
           .height(ROW_HEIGHT_VP)
           .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
           .alignItems(VerticalAlign.Center)
           .onClick(() => {
-            this.showPrivacy();
+            this.openPrivacyPage();
           })
 
           this.rowDivider()

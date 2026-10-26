@@ -13,6 +13,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { RelayApi } from '../backend/RelayApi';
 import { apiErrorMessage, CandidateItem } from '../backend/BackendTypes';
 import { OcrService } from '../ai/OcrService';
+import { PrivacyConsent } from '../system/PrivacyConsent';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'ManualParse';
@@ -35,7 +36,20 @@ export interface ManualParseResult {
 }
 
 export class ManualParseService {
+  /** 撤回隐私授权后统一的拒绝结果（AI / 云功能与基础功能分隔） */
+  private static denied(): ManualParseResult {
+    return {
+      ok: false,
+      message: '已撤回隐私授权，AI 解析不可用；可在「设置 → 关于 → 隐私说明」里重新授权',
+      text: '',
+      code: 'privacy'
+    };
+  }
+
   static async parseText(text: string): Promise<ManualParseResult> {
+    if (!PrivacyConsent.allowed()) {
+      return ManualParseService.denied();
+    }
     const trimmed: string = (text || '').trim();
     if (trimmed.length === 0) {
       return { ok: false, message: '先输入或粘贴一段内容', text: '' };
@@ -48,6 +62,10 @@ export class ManualParseService {
   }
 
   static async parseImage(uri: string): Promise<ManualParseResult> {
+    // 截图解析链路既走端侧 OCR 也走服务端模型，撤回后整条链路一起停
+    if (!PrivacyConsent.allowed()) {
+      return ManualParseService.denied();
+    }
     if ((uri || '').length === 0) {
       return { ok: false, message: '先选一张截图', text: '' };
     }

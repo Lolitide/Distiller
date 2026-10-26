@@ -19,6 +19,7 @@ import { ApiResult, PushTokenData, apiErrorMessage } from '../backend/BackendTyp
 import { PushTokenResult, PushTokenService } from '../system/PushTokenService';
 import { PushStatus } from './PushStatus';
 import { SyncService } from './SyncService';
+import { PrivacyConsent } from '../system/PrivacyConsent';
 
 const TAG: string = 'PushRegistrar';
 
@@ -33,6 +34,11 @@ export class PushRegistrar {
    */
   static async register(): Promise<boolean> {
     const status: PushStatus = PushStatus.instance();
+    // 隐私授权门禁：撤回后不再取 token、不再上报（撤回即"与所有云相关功能分隔"）
+    if (!PrivacyConsent.allowed()) {
+      status.unavailable('已撤回隐私授权，推送上报已停用');
+      return false;
+    }
     if (PushRegistrar.running) {
       return status.pushReady;
     }
