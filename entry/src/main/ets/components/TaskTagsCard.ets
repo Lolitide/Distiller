@@ -1,6 +1,8 @@
 /*
  * 任务详情的「标签」卡（需求方 2026-10-17 的设计图）：
- * 每条标签一行（圆形图标 + 标签名 + 右侧 ×），**最后固定一行「＋ 添加标签」**。
+ * 每条标签一行（圆形图标 + 标签名 + 右侧 ×），**最后固定一行「＋ 添加标签」**，
+ * 再往下是**「类型」那一行**（需求方 2026-10-27：「把『类型』置于『添加标签』下一个」，
+ * 由 `TaskCategoryRow` 负责渲染 —— 标签与类型同属"分类与标记"）。
  *
  * 造型与上面两张卡同一套（白卡 + 蓝实心圆图标 + 官方文字/分割线 token）。
  *
@@ -26,6 +28,7 @@
 import { ColorMetrics, LengthMetrics } from '@kit.ArkUI';
 import { Task } from '../model';
 import { TaskListStore } from '../viewmodel/TaskListStore';
+import { TaskCategoryRow } from './TaskCategoryRow';
 import { ThemeStore } from '../utils/Theme';
 
 /** 圆形图标直径（vp） */
@@ -331,7 +334,9 @@ export struct TaskTagsCard {
       ForEach(this.tags, (tag: string, index: number) => {
         Row() {
           Row() {
-            this.iconCircle($r('sys.symbol.bookmark'))
+            // 图标用「标签」那个 symbol（需求方 2026-10-27：与下面「类型」那一行的图标**互换**，
+            // 标签行从 `bookmark` 换成 `label`）
+            this.iconCircle($r('sys.symbol.label'))
             if (this.editingIndex === index) {
               // 原地改：与步骤/任务名同一套内联输入（无背板、无下划线、关掉焦点框），出现即抢焦点
               TextInput({ text: this.editDraft, controller: this.inputController })
@@ -411,6 +416,12 @@ export struct TaskTagsCard {
       } else {
         this.addRow()
       }
+
+      // ③ 「类型」：需求方 2026-10-27「把『类型』置于『添加标签』下一个」——
+      //    从「更多信息」卡整行搬到本卡最后（标签与类型同属"分类与标记"）。
+      //    上面那条分隔线与标签行之间同一套（越过图标圆再起），所以看起来就是本卡的第 n 行。
+      this.rowDivider()
+      TaskCategoryRow({ task: this.task })
     }
     .width('100%')
     // 卡片底 = M3 `surface-container-low`：与设置页卡片、元信息卡、属性卡同一档（别再退回系统纯白）
