@@ -397,90 +397,62 @@ export struct A_TaskList {
     .height('100%')
   }
 
-  private pendingTime(ts: number): string {
-    const d: Date = new Date(ts);
-    const hh: string = TaskListViewModel.pad2(d.getHours());
-    const mm: string = TaskListViewModel.pad2(d.getMinutes());
-    return hh + ':' + mm;
-  }
-
-  /** 待确认消息（转发/群聊/图片收集）：组头样式与「今天/明天」一致 */
+  /** 待确认消息组头：与「今天/明天」同一个 SubHeader，展开/收起同一条动画 */
   @Builder
-  pendingSection() {
-    Column() {
-      Row({ space: 8 }) {
-        Column() {
-          SubHeader({
-            primaryTitle: '待确认消息',
-            secondaryTitle: this.store.pendingList.length + ' 条待确认'
-          })
-        }
-        .layoutWeight(1)
-
-        // 「数字 + 红点」放在展开箭头左边
-        if (this.store.pendingUnseenCount() > 0) {
-          Row({ space: 4 }) {
-            Column()
-              .width(8)
-              .height(8)
-              .borderRadius(4)
-              .backgroundColor(this.themeStore.scheme.error)
-            Text(String(this.store.pendingUnseenCount()))
-              .fontSize(12)
-              .fontColor(this.themeStore.scheme.error)
-          }
-        }
-
-        SymbolGlyph(this.pendingExpanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
-          .fontSize($r('sys.float.subheader_right_icon_size'))
-          .fontColor([$r('sys.color.icon_primary')])
+  pendingHeader() {
+    Row({ space: 8 }) {
+      Column() {
+        SubHeader({
+          primaryTitle: '待确认消息',
+          secondaryTitle: this.store.pendingList.length + ' 条待确认'
+        })
       }
-      .width('100%')
-      .alignItems(VerticalAlign.Center)
-      .padding({ end: LengthMetrics.resource($r('sys.float.padding_level8')) })
-      .onClick(() => {
-        this.pendingExpanded = !this.pendingExpanded;
-      })
+      .layoutWeight(1)
 
-      if (this.pendingExpanded) {
-        ForEach(this.store.pendingTasks(), (task: Task) => {
-          Column({ space: 3 }) {
-            Row({ space: 8 }) {
-              Text(task.name)
-                .fontSize($r('sys.float.ohos_id_text_size_body1'))
-                .fontColor($r('sys.color.ohos_id_color_text_primary'))
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-                .layoutWeight(1)
-              if (task.pendingSeen !== true) {
-                Column()
-                  .width(8)
-                  .height(8)
-                  .borderRadius(4)
-                  .backgroundColor(this.themeStore.scheme.error)
-              }
-            }
-            .width('100%')
-            Text((task.pendingSource === 'image' ? '图片转发' : (task.pendingSource === 'forward' ? '转发给机器人' : '群聊收集'))
-              + ' · ' + this.pendingTime(task.createdAt))
-              .fontSize(11)
-              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-          }
-          .width('100%')
-          .padding(14)
-          .alignItems(HorizontalAlign.Start)
-          .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
-          .borderRadius(14)
-          .margin({ left: 16, right: 16, bottom: 8 })
-          .onClick(() => {
-            this.store.markPendingSeen(task);
-            AppStorage.get<NavPathStack>(NAV_STACK_KEY)
-              ?.pushPathByName(ROUTE_TASK_DETAIL, new TaskDetailParam(task, this.store, true));
-          })
-        }, (task: Task) => 'pending-' + task.id)
+      // 「数字 + 红点」放在展开箭头左边
+      if (this.store.pendingUnseenCount() > 0) {
+        Row({ space: 4 }) {
+          Column()
+            .width(8)
+            .height(8)
+            .borderRadius(4)
+            .backgroundColor(this.themeStore.scheme.error)
+          Text(String(this.store.pendingUnseenCount()))
+            .fontSize(12)
+            .fontColor(this.themeStore.scheme.error)
+        }
       }
+
+      SymbolGlyph(this.pendingExpanded ? $r('sys.symbol.chevron_up') : $r('sys.symbol.chevron_down'))
+        .fontSize($r('sys.float.subheader_right_icon_size'))
+        .fontColor([$r('sys.color.icon_primary')])
     }
     .width('100%')
+    .alignItems(VerticalAlign.Center)
+    .padding({ end: LengthMetrics.resource($r('sys.float.padding_level8')) })
+    .onClick(() => {
+      this.getUIContext().animateTo({
+        duration: GROUP_EXPAND_ANIM_MS,
+        curve: Curve.FastOutSlowIn
+      }, () => {
+        this.pendingExpanded = !this.pendingExpanded;
+      });
+    })
+  }
+
+  /** 待确认子卡片：直接复用普通任务卡容器，只换前缀/右侧图标与第二行文案 */
+  @Builder
+  pendingCard(task: Task) {
+    TaskCard({
+      task: task,
+      store: this.store,
+      pendingMode: true,
+      onOpen: () => {
+        this.store.markPendingSeen(task);
+        AppStorage.get<NavPathStack>(NAV_STACK_KEY)
+          ?.pushPathByName(ROUTE_TASK_DETAIL, new TaskDetailParam(task, this.store, true));
+      }
+    })
   }
 
   /** 同步状态细条（离线 / 同步中 / 已关闭），离线可点重试 */
@@ -540,9 +512,30 @@ export struct A_TaskList {
       .accessibilityLevel('no')
 
       if (this.store.pendingList.length > 0) {
-        ListItem() {
-          this.pendingSection()
+        ListItemGroup({
+          header: this.pendingHeader()
+        }) {
+          if (this.pendingExpanded) {
+            ForEach(this.store.pendingTasks(), (task: Task) => {
+              ListItem() {
+                Column() {
+                  this.pendingCard(task)
+                }
+                .width('100%')
+              }
+              .width('100%')
+              // 与普通任务卡一致的卡片间距（左右由 HDS 卡片自身留白，不重复加）
+              .margin({ bottom: this.themeStore.listItemSpace })
+              // 展开/收起时与普通分组同一套淡入 + 下移
+              .transition(
+                TransitionEffect.OPACITY
+                  .combine(TransitionEffect.translate({ y: -CARD_ENTER_OFFSET_VP }))
+                  .animation({ duration: GROUP_EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
+              )
+            }, (task: Task) => 'pending-' + task.id)
+          }
         }
+        .margin({ top: -GROUP_HEADER_LIST_PULL_UP_VP })
       }
 
       if (this.syncStatus.showsBanner) {

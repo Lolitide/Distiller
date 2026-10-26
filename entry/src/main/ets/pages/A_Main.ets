@@ -75,6 +75,9 @@ struct A_Main {
   @Local themeStore: ThemeStore = ThemeStore.instance();
   /** 提醒/日历对账定时器（分钟级就够） */
   private reminderTimer: number = -1;
+  /** 转发队列轮询（App 在前台时也能收到；不能只靠 onPageShow） */
+  private forwardTimer: number = -1;
+  private forwardPulling: boolean = false;
   /** 通知引导弹窗每次启动只弹一次，避免每分钟对账重复打扰 */
   @Local notificationGuideShown: boolean = false;
 
@@ -91,6 +94,10 @@ struct A_Main {
     this.startBackend();
     this.setupShare();
     this.setupOnboarding();
+    this.pullForwarded();
+    this.forwardTimer = setInterval(() => {
+      this.pullForwarded();
+    }, 15000);
   }
 
   /** 首次启动：没看过引导就全屏覆盖；不阻塞列表初始化 */
@@ -125,27 +132,75 @@ struct A_Main {
   }
 
   private async pullForwarded(): Promise<void> {
+    if (this.forwardPulling) {
+      return;
+    }
     if (!BackendConfig.hasIdentity() || BackendConfig.baseUrl.length === 0 || this.showOnboarding) {
       return;
     }
-    const res = await RelayApi.forwardPending();
-    if (!res.ok || res.data === undefined) {
-      return;
+    this.forwardPulling = true;
+    try {
+      const res = await RelayApi.forwardPending();
+      if (!res.ok || res.data === undefined) {
+        hilog.warn(DOMAIN, TAG, 'forward/pending failed: %{public}s',
+          res.error !== undefined ? res.error.message : 'no data');
+        return;
+      }
+      const data: ForwardPendingData = res.data;
+      if (data.items === undefined || data.items.length === 0) {
+        return;
+      }
+      hilog.info(DOMAIN, TAG, 'forward/pending items=%{public}d', data.items.length);
+      const pending: Task[] = [];
+      const acked: string[] = [];
+      for (let i = 0; i < data.items.length; i++) {
+        const item: ForwardItem = data.items[i];
+        let task: Task;
+        try {
+          task = item.kind === 'image' && item.url !== undefined && item.url.length > 0
+            ? await this.imageToPending(item, i)
+            : await this.forwardToPending(item, i);
+        } catch (error) {
+          const err = error as BusinessError;
+          hilog.error(DOMAIN, TAG, 'forward item failed: %{public}s', err.message);
+          task = this.forwardFallback(item, i);
+        }
+        pending.push(task);
+        if (item.id !== undefined && item.id.length > 0) {
+          acked.push(item.id);
+        }
+      }
+      this.store.upsertAll(pending);
+      if (acked.length > 0) {
+        await RelayApi.ackForwards(acked);
+      }
+      this.toast('收到 ' + pending.length + ' 条待确认消息');
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'pullForwarded failed: %{public}s', err.message);
+    } finally {
+      this.forwardPulling = false;
     }
-    const data: ForwardPendingData = res.data;
-    if (data.items.length === 0) {
-      return;
+  }
+
+  /** 转发项解析异常时的兜底：至少保留原文，绝不静默丢消息 */
+  private forwardFallback(item: ForwardItem, index: number): Task {
+    const raw: string = item.text !== undefined ? item.text.trim() : '';
+    const task: Task = new Task();
+    let name: string = raw.length > 0 ? raw.split('\n')[0].trim() : '转发的消息';
+    if (name.length > 20) {
+      name = name.substring(0, 20);
     }
-    const pending: Task[] = [];
-    for (let i = 0; i < data.items.length; i++) {
-      const item: ForwardItem = data.items[i];
-      const task: Task = item.kind === 'image' && item.url !== undefined && item.url.length > 0
-        ? await this.imageToPending(item, i)
-        : await this.forwardToPending(item, i);
-      pending.push(task);
-    }
-    this.store.upsertAll(pending);
-    this.toast('收到 ' + data.items.length + ' 条待确认消息');
+    task.name = name.length > 0 ? name : '转发的消息';
+    task.rawText = raw;
+    task.clientTaskId = 'forward-' + (item.id !== undefined ? item.id : String(Date.now() + index));
+    task.status = TaskStatus.PENDING_CONFIRM;
+    task.priority = TaskPriority.NORMAL;
+    task.source = TaskSource.SHARE;
+    task.createdAt = Date.now() + index;
+    task.pendingSeen = false;
+    task.pendingSource = item.kind === 'image' ? 'image' : 'forward';
+    return task;
   }
 
   /** 转发文本 → 待确认任务（解析失败也保留原文，不丢消息） */
@@ -156,6 +211,7 @@ struct A_Main {
       const parsed: ManualParseResult = await ManualParseService.parseText(raw);
       if (parsed.ok && parsed.candidate !== undefined) {
         const task: Task = candidateToTask(parsed.candidate, 0, raw, true);
+        task.clientTaskId = 'forward-' + (item.id !== undefined ? item.id : String(now));
         task.createdAt = now;
         task.pendingSource = 'forward';
         task.pendingSeen = false;
@@ -171,6 +227,7 @@ struct A_Main {
     }
     task.name = name.length > 0 ? name : '转发的消息';
     task.rawText = raw;
+    task.clientTaskId = 'forward-' + (item.id !== undefined ? item.id : String(now));
     task.status = TaskStatus.PENDING_CONFIRM;
     task.priority = TaskPriority.NORMAL;
     task.source = TaskSource.SHARE;
@@ -193,6 +250,7 @@ struct A_Main {
         const parsed: ManualParseResult = await ManualParseService.parseImage(uri);
         if (parsed.ok && parsed.candidate !== undefined) {
           const task: Task = candidateToTask(parsed.candidate, 0, parsed.text, true);
+          task.clientTaskId = 'forward-' + (item.id !== undefined ? item.id : String(now));
           task.createdAt = now;
           task.pendingSource = 'image';
           task.pendingSeen = false;
@@ -203,6 +261,7 @@ struct A_Main {
           const first: string = parsed.text.split('\n')[0].trim();
           task.name = first.length > 0 ? first.substring(0, 20) : '图片消息';
           task.rawText = parsed.text;
+          task.clientTaskId = 'forward-' + (item.id !== undefined ? item.id : String(now));
           task.status = TaskStatus.PENDING_CONFIRM;
           task.priority = TaskPriority.NORMAL;
           task.source = TaskSource.SHARE;
@@ -217,6 +276,7 @@ struct A_Main {
     }
     const task: Task = new Task();
     task.name = '图片消息（待核对）';
+    task.clientTaskId = 'forward-' + (item.id !== undefined ? item.id : String(now));
     task.status = TaskStatus.PENDING_CONFIRM;
     task.priority = TaskPriority.NORMAL;
     task.source = TaskSource.SHARE;
@@ -232,6 +292,8 @@ struct A_Main {
     if (context !== undefined) {
       SettingsRepository.setFirstLaunchDone(context);
     }
+    // 引导期间可能已经有转发消息入队；关掉覆盖层后立刻补拉一次
+    this.pullForwarded();
   }
 
   /** 分享接收：热启动走监听，冷启动先取暂存；同一次分享只消费一次 */
@@ -333,6 +395,10 @@ struct A_Main {
 
   aboutToDisappear(): void {
     SyncService.stop();
+    if (this.forwardTimer >= 0) {
+      clearInterval(this.forwardTimer);
+      this.forwardTimer = -1;
+    }
     if (this.reminderTimer >= 0) {
       clearInterval(this.reminderTimer);
       this.reminderTimer = -1;

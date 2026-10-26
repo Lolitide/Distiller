@@ -11,6 +11,7 @@ import {
   CandidatesData,
   DeletedData,
   FeedbackBody,
+  ForwardAckData,
   ForwardPendingData,
   GroupsData,
   HealthData,
@@ -119,8 +120,13 @@ export class RelayApi {
       { 'skip_self': skipSelf });
   }
 
-  /** 取走「转发给机器人」的文本（一次性；纯内存 30 分钟 TTL） */
+  /** 查看「转发给机器人」的队列（不消费；本地入库成功后再 ack） */
   static async forwardPending(): Promise<ApiResult<ForwardPendingData>> {
     return await ApiClient.get<ForwardPendingData>(BASE + '/forward/pending');
+  }
+
+  /** 确认已入库，删除服务端队列项（纯内存 30 分钟 TTL） */
+  static async ackForwards(ids: string[]): Promise<ApiResult<ForwardAckData>> {
+    return await ApiClient.post<ForwardAckData>(BASE + '/forward/ack', { 'ids': ids });
   }
 }

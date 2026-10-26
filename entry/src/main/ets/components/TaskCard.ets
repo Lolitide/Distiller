@@ -97,6 +97,8 @@ export struct TaskCard {
   @Require @Param task: Task;
   /** 「数据 ＋ 编辑态」store：编辑态与勾选状态从这里读（卡片自己算，ForEach 不用重跑也能刷新） */
   @Require @Param store: TaskListStore;
+  /** 待确认收件箱里的卡片：同款容器/高度，前缀按来源显示图标，右侧留空 */
+  @Param pendingMode: boolean = false;
   @Event onToggleComplete: () => void = () => {};
   @Event onRemindChange: (isOn: boolean) => void = () => {};
   /** 点整卡 → 交给页面去压任务详情页（卡片本身不知道路由） */
@@ -475,23 +477,132 @@ export struct TaskCard {
     .flexShrink(0)
   }
 
+  @Computed
+  get pendingSourceLabel(): string {
+    if (this.task.pendingSource === 'image') {
+      return '图片转发';
+    }
+    if (this.task.pendingSource === 'forward') {
+      return '转发给机器人';
+    }
+    return '群聊收集';
+  }
+
+  @Computed
+  get pendingTimeLabel(): string {
+    const d: Date = new Date(this.task.createdAt);
+    return `${TaskListViewModel.pad2(d.getHours())}:${TaskListViewModel.pad2(d.getMinutes())}`;
+  }
+
+  /** 待确认子卡的左侧图标：按来源区分（转发=机器人，图片=图片，群聊=群聊） */
+  @Computed
+  get pendingIcon(): Resource {
+    if (this.task.pendingSource === 'forward') {
+      return $r('sys.symbol.robot');
+    }
+    if (this.task.pendingSource === 'image') {
+      return $r('sys.symbol.picture');
+    }
+    return $r('sys.symbol.person_2');
+  }
+
+  @Builder
+  pendingPrefix() {
+    SymbolGlyph(this.pendingIcon)
+      .fontSize($r('sys.float.ohos_id_min_circle_button_icon_size'))
+      .fontColor([this.themeStore.scheme.primary])
+      .accessibilityText(this.pendingSourceLabel)
+  }
+
+  /** 与普通卡片两行同构：标题 + 「来源 · 时间 + 未读红点」 */
+  @Builder
+  pendingTextBlock() {
+    Column() {
+      Text(this.task.name)
+        .fontSize($r('sys.float.ohos_id_text_size_body1'))
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.textColor)
+        .lineHeight(`${this.themeStore.lineHeight}vp`)
+        .maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+        .width('100%')
+        .textAlign(TextAlign.Start)
+
+      Row({ space: 6 }) {
+        Text(this.pendingSourceLabel)
+          .fontSize($r('sys.float.ohos_id_text_size_caption'))
+          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+          .padding({
+            left: TAG_CHIP_SIDE_PADDING_VP,
+            right: TAG_CHIP_SIDE_PADDING_VP,
+            top: TAG_CHIP_VERTICAL_PADDING_VP,
+            bottom: TAG_CHIP_VERTICAL_PADDING_VP
+          })
+          .backgroundColor(this.themeStore.scheme.secondaryContainer)
+          .borderRadius(TAG_CHIP_RADIUS_VP)
+        Text('·')
+          .fontSize($r('sys.float.ohos_id_text_size_caption'))
+          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+        Text(this.pendingTimeLabel)
+          .fontSize($r('sys.float.ohos_id_text_size_caption'))
+          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+        if (this.task.pendingSeen !== true) {
+          Column()
+            .width(8)
+            .height(8)
+            .borderRadius(4)
+            .backgroundColor(this.themeStore.scheme.error)
+        }
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Center)
+      .justifyContent(FlexAlign.Start)
+    }
+    .width('100%')
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  pendingSuffixRow() {
+    // 待确认卡片暂时不放任何右侧操作图标
+    Row().width(0).height(0)
+  }
+
+  @Computed
+  get pendingSuffix(): SuffixCustomBuilder {
+    return new SuffixCustomBuilder((): void => {
+      this.pendingSuffixRow();
+    });
+  }
+
   build() {
     HdsListItemCard({
       cardBackgroundColor: this.cardBackground,
       // 卡片高度随「设置 → 视觉个性化 → 卡片密度」变（标准 76 / 紧凑 64）
       cardHeight: this.themeStore.cardHeight,
       prefixItem: new PrefixCustomBuilder((): void => {
-        this.prefixCircle();
+        if (this.pendingMode) {
+          this.pendingPrefix();
+        } else {
+          this.prefixCircle();
+        }
       }),
       textItem: {
         customBuilder: (): void => {
-          this.textBlock();
+          if (this.pendingMode) {
+            this.pendingTextBlock();
+          } else {
+            this.textBlock();
+          }
         }
       },
-      // C 区：铃铛按钮（每一项都有，点它切 alarm）
-      suffixItem: this.suffixButtons,
+      // C 区：铃铛按钮（每一项都有，点它切 alarm）；待确认卡片右侧留空
+      suffixItem: this.pendingMode ? this.pendingSuffix : this.suffixButtons,
       accessibilityOptions: {
-        accessibilityText: this.accessibilityLabel
+        accessibilityText: this.pendingMode
+          ? `${this.task.name} ${this.pendingSourceLabel} ${this.pendingTimeLabel}`
+          : this.accessibilityLabel
       }
     })
     // 整卡可点 → 进任务详情（需求方 2026-10-16）。前缀圆圈与右侧开关各自有 onClick，

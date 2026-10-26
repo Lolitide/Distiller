@@ -340,6 +340,46 @@ export struct B_TaskDetail {
     })
   }
 
+  /** 待确认消息顶部的「保留 / 忽略」操作：放在最上方，原文卡移到底部。 */
+  @Builder
+  pendingActions() {
+    Row({ space: 12 }) {
+      Button({ type: ButtonType.Capsule, stateEffect: true }) {
+        Text('忽略')
+          .fontSize($r('sys.float.ohos_id_text_size_body1'))
+          .fontColor(this.themeStore.scheme.onSurfaceVariant)
+      }
+      .layoutWeight(1)
+      .height(44)
+      .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
+      .borderRadius(22)
+      .onClick(() => {
+        this.param.store.ignorePending(this.param.task);
+        this.popBack();
+      })
+
+      Button({ type: ButtonType.Capsule, stateEffect: true }) {
+        Text('保留')
+          .fontSize($r('sys.float.ohos_id_text_size_body1'))
+          .fontColor(this.themeStore.scheme.onPrimary)
+      }
+      .layoutWeight(1)
+      .height(44)
+      .backgroundColor(this.themeStore.scheme.primary)
+      .borderRadius(22)
+      .onClick(() => {
+        this.param.store.confirmPending(this.param.task);
+        this.popBack();
+      })
+    }
+    .width('100%')
+    .padding({
+      left: CONTENT_SIDE_PADDING_VP,
+      right: CONTENT_SIDE_PADDING_VP,
+      top: CONTENT_GAP_VP
+    })
+  }
+
   build() {
     HdsNavDestination() {
       // 2026-10-21 修「详情页底部导航条颜色未跟随页面」：
@@ -375,6 +415,11 @@ export struct B_TaskDetail {
             }
             .width('100%')
 
+            // 待确认消息：保留 / 忽略放在最上方，先确认再往下看细节
+            if (this.param.pendingMode) {
+              this.pendingActions()
+            }
+
             // 第二块：步骤（需求方 2026-10-16 的 4 张交互图，见 `TaskStepsSection` 顶部注释）
             Column() {
               TaskStepsSection({ task: this.param.task })
@@ -386,27 +431,11 @@ export struct B_TaskDetail {
               top: CONTENT_GAP_VP
             })
 
-            // 普通待办不再显示「有用 / 忽略」；待确认消息用底部的「保留 / 忽略」
-
             // 第二块之后：图片 / 文件 / 扫码链接（步骤下方、提醒上方）
             if ((this.param.task.urls !== undefined && this.param.task.urls.length > 0)
               || (this.param.task.linkUrl !== undefined && this.param.task.linkUrl.length > 0)) {
               Column() {
                 TaskMediaCard({ task: this.param.task })
-              }
-              .width('100%')
-              .padding({
-                left: CONTENT_SIDE_PADDING_VP,
-                right: CONTENT_SIDE_PADDING_VP,
-                top: CONTENT_GAP_VP
-              })
-            }
-
-            // 原文卡：这条任务从哪段话整理出来的（粘贴 / 截图 / 语音 / 群消息）。
-            // 只读 ＋ 可折叠 ＋ 可复制；`rawText` 为空时整卡不渲染（手建且没填原文的任务）。
-            if (this.param.task.rawText !== undefined && this.param.task.rawText.trim().length > 0) {
-              Column() {
-                TaskRawTextCard({ task: this.param.task })
               }
               .width('100%')
               .padding({
@@ -479,41 +508,21 @@ export struct B_TaskDetail {
               top: CONTENT_GAP_VP
             })
 
-            if (this.param.pendingMode) {
-              Row({ space: 12 }) {
-                Button({ type: ButtonType.Capsule, stateEffect: true }) {
-                  Text('忽略')
-                    .fontSize($r('sys.float.ohos_id_text_size_body1'))
-                    .fontColor(this.themeStore.scheme.onSurfaceVariant)
-                }
-                .layoutWeight(1)
-                .height(44)
-                .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
-                .borderRadius(22)
-                .onClick(() => {
-                  this.param.store.ignorePending(this.param.task);
-                  this.popBack();
-                })
-
-                Button({ type: ButtonType.Capsule, stateEffect: true }) {
-                  Text('保留')
-                    .fontSize($r('sys.float.ohos_id_text_size_body1'))
-                    .fontColor(this.themeStore.scheme.onPrimary)
-                }
-                .layoutWeight(1)
-                .height(44)
-                .backgroundColor(this.themeStore.scheme.primary)
-                .borderRadius(22)
-                .onClick(() => {
-                  this.param.store.confirmPending(this.param.task);
-                  this.popBack();
-                })
+            // 原文卡：这条任务从哪段话整理出来的（粘贴 / 截图 / 语音 / 群消息）。
+            // 按需求方 2026-10-26 的要求，原文放在整页最底部；保留 / 忽略已移到最上方。
+            if (this.param.task.rawText !== undefined && this.param.task.rawText.trim().length > 0) {
+              Column() {
+                TaskRawTextCard({ task: this.param.task })
               }
               .width('100%')
-              .padding({ left: CONTENT_SIDE_PADDING_VP, right: CONTENT_SIDE_PADDING_VP, top: 16 })
+              .padding({
+                left: CONTENT_SIDE_PADDING_VP,
+                right: CONTENT_SIDE_PADDING_VP,
+                top: CONTENT_GAP_VP
+              })
             }
 
-            // 底部留白：最后一张卡（备注卡）不要贴着手势条。
+            // 底部留白：最后一张卡（原文 / 备注）不要贴着手势条。
             // 原来这里还有一块「任务详情待做」占位 —— 五张卡做完就撤了（需求方 2026-10-17：「把底部的任务待做去掉」）
             Column()
               .width('100%')
