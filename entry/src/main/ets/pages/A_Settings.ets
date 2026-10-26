@@ -48,13 +48,6 @@ import { RelayApi } from '../service/backend/RelayApi';
 import { apiErrorMessage, GroupItemDto } from '../service/backend/BackendTypes';
 import { SyncService } from '../service/cloud/SyncService';
 import { PushRegistrar } from '../service/cloud/PushRegistrar';
-import {
-  PUSH_PHASE_FAILED,
-  PUSH_PHASE_READY,
-  PUSH_PHASE_REGISTERED,
-  PUSH_PHASE_UNAVAILABLE,
-  PushStatus
-} from '../service/cloud/PushStatus';
 import { NotificationService } from '../service/system/NotificationService';
 import { PermissionEvents } from '../service/system/PermissionEvents';
 import { TaskRepository } from '../repository/TaskRepository';
@@ -115,8 +108,9 @@ const SHEET_GROUPS: number = 4;
 export struct A_Settings {
   /** 任务 store：清空任务 + 提醒提前量同步 */
   @Require @Param store: TaskListStore;
-  /** 推送通道状态（FE-76）：`PushStatus` 是可观察单例，端侧/云端两段失败原因都在这 */
-  private pushStatus: PushStatus = PushStatus.instance();
+
+  // 2026-10-27：原来这里有个 `pushStatus`（`PushStatus` 单例），只服务于「推送通道 / 推送验证说明」两行；
+  // 那两行按需求方要求删除后，这个字段与 `PushStatus` 的导入一并去掉。
 
   // 2026-10-25：原来这里还有一个 `@Require @Param scroller: Scroller`，唯一的用途是交给
   // `HdsNavigation.bindToScrollable` 做「大标题随滚动收缩」。三个页签统一改成固定 MINI 标题后
@@ -761,49 +755,13 @@ export struct A_Settings {
   }
 
   /**
-   * 「推送通道」右侧那一句：
-   *  · 失败 → 直接显示原因（官方错误码翻出来的那句话，如"推送权益未开通…"）
-   *  · 就绪 → 已就绪 + 最近一次成功时间
-   *  · 未启用 → 显示原因（没配服务器 / 没身份）
+   * 推送通道 / 推送验证说明这两行**已删除**（需求方 2026-10-27：「推送通道删去、推送验证说明删去」）。
+   *
+   * 连带删掉的成员：`pushStatus` 字段、`pushLine` getter、`retryPush()`、`showPushHelp()`，
+   * 以及 `PushStatus` / `PUSH_PHASE_*` 的导入 —— 它们只服务那两行。
+   * 推送本身仍在跑（`PushRegistrar.register()` 在打开云端同步时照常上报），只是不再把
+   * 开发者向的诊断信息摊在设置页上。
    */
-  @Computed
-  get pushLine(): string {
-    const s: PushStatus = this.pushStatus;
-    if (s.phase === PUSH_PHASE_FAILED) {
-      return s.message;
-    }
-    if (s.phase === PUSH_PHASE_READY) {
-      return s.updatedAt.length > 0 ? s.label + ' · ' + s.updatedAt : s.label;
-    }
-    if (s.phase === PUSH_PHASE_UNAVAILABLE) {
-      return s.message.length > 0 ? s.message : s.label;
-    }
-    if (s.phase === PUSH_PHASE_REGISTERED) {
-      return s.label;
-    }
-    return s.label;
-  }
-
-  /** 点「推送通道」那行：重新取 token 并上报；失败时把「怎么修」一并说出来 */
-  private async retryPush(): Promise<void> {
-    const ok: boolean = await PushRegistrar.register();
-    const s: PushStatus = this.pushStatus;
-    this.toast(ok ? '推送通道已就绪' : (s.advice.length > 0 ? s.message + '：' + s.advice : s.message));
-  }
-
-  /** 推送通道到底怎么验证（没有 AGC 时用户不该被一句「未就绪」卡住） */
-  private showPushHelp(): void {
-    this.getUIContext().getPromptAction().showDialog({
-      title: '推送通道怎么验证',
-      message: '推送分两段，任何一段没开都会显示「未就绪」：\n\n'
-        + '① 手机端：需要 AGC 已开通「推送服务」，并用该应用的 Profile 重新签名，'
-        + 'App 才能取到 Push Token；没有权益时会显示「设备不支持/权益未开通」。\n'
-        + '② 服务端：在电脑上配置 QQBOT_PUSH_SA（服务账号 JSON，含 project_id）后重启后端，'
-        + '`/health` 的 capabilities 里会出现 push，`/push/token` 返回 push_ready=true。\n\n'
-        + '两段都就绪后，这一行显示「已就绪」；此时在群里产生一条新候选，后端会向设备发通知。',
-      buttons: [{ text: '知道了', color: this.themeStore.scheme.primary }]
-    });
-  }
 
   /** 云端字段清单：与隐私说明同一口径，不把「本机数据」混进来 */
   private showCloudFields(): void {
@@ -1427,6 +1385,11 @@ export struct A_Settings {
               this.applyRemindLead(REMIND_LEAD_OPTIONS[index]);
             }
           })
+
+          // 「提醒状态」：从「关于」搬进「通知个性化」（需求方 2026-10-27：「提醒状态可放至通知个性化下」）——
+          // 它报的是提醒**发布**的最近一次失败原因（额度满 / 通知没开），本来就是提醒这项设置的运行时状态。
+          this.rowDivider()
+          this.infoRow('提醒状态', this.store.reminderError.length > 0 ? this.store.reminderError : '正常')
         }
         .width('100%')
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
@@ -1477,6 +1440,27 @@ export struct A_Settings {
           .height(ROW_HEIGHT_VP)
           .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
           .alignItems(VerticalAlign.Center)
+
+          this.rowDivider()
+
+          // 「通知与横幅设置」：从「关于」搬到这里 —— 它管的就是上面这一颗「通知权限」（需求方 2026-10-27：
+          // 「通知与横幅设置可放至通知权限下」，分类上不再混进"关于"）。
+          Row() {
+            Text('通知与横幅设置')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+            Text('去开启')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.openNotificationSettings();
+          })
 
           this.rowDivider()
 
@@ -2017,76 +2001,14 @@ export struct A_Settings {
             this.replayOnboarding();
           })
 
-          this.rowDivider()
-          Row() {
-            Text('通知与横幅设置')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              .layoutWeight(1)
-            Text('去开启')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor(this.themeStore.scheme.primary)
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-          .onClick(() => {
-            this.openNotificationSettings();
-          })
-
-          this.rowDivider()
-          this.infoRow('提醒状态', this.store.reminderError.length > 0 ? this.store.reminderError : '正常')
-
-          this.rowDivider()
-          // 推送通道（FE-76）：端侧 Push Token + 后端 `push_ready` 两段合成一句话；
-          // 没就绪时点这行重试（失败原因来自官方错误码，见 PushTokenService.mapMessage）
-          Row({ space: 8 }) {
-            Text('推送通道')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              .layoutWeight(1)
-              .maxLines(1)
-            Text(this.pushLine)
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor(this.pushStatus.pushReady
-                ? this.themeStore.scheme.primary
-                : $r('sys.color.ohos_id_color_text_secondary'))
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .constraintSize({ maxWidth: '62%' })
-            if (!this.pushStatus.pushReady) {
-              Text('重试')
-                .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.themeStore.scheme.primary)
-                .maxLines(1)
-            }
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-          .onClick(() => {
-            this.retryPush();
-          })
-
-          this.rowDivider()
-          Row() {
-            Text('推送验证说明')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-              .layoutWeight(1)
-            Text('查看')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor(this.themeStore.scheme.primary)
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-          .onClick(() => {
-            this.showPushHelp();
-          })
+          /*
+           * 2026-10-27 需求方：「设置项分类不对与冗余」——
+           *  · 「通知与横幅设置」→ 已搬到「权限管理」里、「通知权限」下面；
+           *  · 「提醒状态」→ 已搬到「通知个性化」里；
+           *  · 「推送通道」「推送验证说明」→ **删除**（连同 `pushStatus` / `pushLine` /
+           *    `retryPush` / `showPushHelp` 与 `PushStatus` 导入）。
+           * 所以「关于」现在只剩：演示模式 / 版本 / 隐私说明 / 重新查看启动引导。
+           */
         }
         .width('100%')
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
