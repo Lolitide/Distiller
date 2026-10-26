@@ -36,6 +36,13 @@ const KEY_GROUP_EXPANDED: string = 'task_group_expanded';
 const KEY_SYNC_ENABLED: string = 'sync_enabled';
 /** 首次启动引导是否已看过 */
 const KEY_FIRST_LAUNCH: string = 'first_launch_done';
+/**
+ * 演示模式开关（设置 → 关于）：打开时列表里放一组演示任务，关掉即摘掉。
+ *
+ * 2026-10-27：原来任务列表右下角有颗「样例」按钮做这件事，需求方要求删掉按钮、
+ * 统一收到设置页的「关于」里，于是多了一个需要记住的开关状态。
+ */
+const KEY_DEMO_MODE: string = 'demo_mode';
 
 /** 默认提醒提前量：0 分钟（到点提醒） */
 export const DEFAULT_REMIND_LEAD: number = 0;
@@ -303,6 +310,38 @@ export class SettingsRepository {
     } catch (error) {
       const err = error as BusinessError;
       hilog.error(DOMAIN, TAG, 'setFirstLaunchDone failed: %{public}s', err.message);
+      return false;
+    }
+  }
+
+  /** 演示模式是否开启（默认关） */
+  static async getDemoMode(context: common.Context): Promise<boolean> {
+    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
+    if (store === undefined) {
+      return false;
+    }
+    try {
+      const value: preferences.ValueType = await store.get(KEY_DEMO_MODE, false);
+      return value === true;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'getDemoMode failed: %{public}s', err.message);
+      return false;
+    }
+  }
+
+  static async setDemoMode(context: common.Context, enabled: boolean): Promise<boolean> {
+    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
+    if (store === undefined) {
+      return false;
+    }
+    try {
+      await store.put(KEY_DEMO_MODE, enabled);
+      await store.flush();
+      return true;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'setDemoMode failed: %{public}s', err.message);
       return false;
     }
   }

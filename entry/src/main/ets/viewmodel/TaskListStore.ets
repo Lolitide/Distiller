@@ -765,6 +765,45 @@ export class TaskListStore {
   }
 
   /**
+   * **演示模式关掉**时用：把 `clientTaskId` 以 `prefix` 开头的任务**软删**掉。
+   *
+   * 为什么按前缀而不是按 id：演示任务的 `clientTaskId` 固定带 `sample-` 前缀
+   * （见 `mock/DemoTasks.ets`），而 `id` 是本机自增主键、重装/导入后会变；
+   * 前缀只可能命中演示任务，不会误删用户自己写的或后端推来的任务。
+   *
+   * 与 `deleteTask` 同一条口径：软删（`status = DELETED`）—— `groupByDay` 会过滤掉已删任务，
+   * 所以界面立刻看不到；同时关掉响铃并交给对账器撤销已发布的提醒句柄。
+   *
+   * @returns 删掉的条数（0 ＝ 当前没有演示任务，什么都不写）
+   */
+  removeTasksByClientIdPrefix(prefix: string): number {
+    if (prefix.length === 0) {
+      return 0;
+    }
+    let removed: number = 0;
+    const all: Task[] = this.allTasks();
+    all.forEach((task: Task) => {
+      const key: string | undefined = task.clientTaskId;
+      if (key === undefined || !key.startsWith(prefix)) {
+        return;
+      }
+      if (task.status === TaskStatus.DELETED) {
+        return;
+      }
+      task.status = TaskStatus.DELETED;
+      task.alarm = TaskAlarm.OFF;
+      removed++;
+    });
+    if (removed === 0) {
+      return 0;
+    }
+    this.refreshGroups();
+    this.persist();
+    this.reconcileReminders();
+    return removed;
+  }
+
+  /**
    * 按 Chip 的 key 过滤：
    * · `all` 不过滤；`done` 已完成；`todo` 未完成；`urgent` 紧急（`TaskPriority.URGENT`）；
    * · `tag:xxx` 任务身上的标签里有 xxx。

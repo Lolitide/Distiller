@@ -37,6 +37,7 @@ import { ToggleSlider } from '../components/ToggleSlider';
 // 开关统一走 M3 取色的组件（`Toggle` 默认取系统蓝，见 M3Switch 顶部注释）
 import { M3Switch } from '../components/M3Switch';
 import { Task } from '../model';
+import { buildDemoTasks, DEMO_TASK_PREFIX } from '../mock/DemoTasks';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 import { TaskExportViewModel, TaskImportParseResult } from '../viewmodel/TaskExportViewModel';
 import { TaskExportResult, TaskExportService } from '../service/system/TaskExportService';
@@ -168,6 +169,13 @@ export struct A_Settings {
   @Local bindLeftSec: number = 0;
   /** 云端同步开关（关闭即停止轮询） */
   @Local syncEnabled: boolean = true;
+  /**
+   * 演示模式开关（设置 → 关于）：打开时往列表里放一组演示任务，关掉即摘掉。
+   *
+   * 2026-10-27 需求方：「任务列表页删去『样例』按钮，转而统一到设置的『关于』下新增『演示模式』开关」——
+   * 这条状态要**记住**（列表右下角那颗按钮是无状态的，这里多了个开关态），所以走 `SettingsRepository`。
+   */
+  @Local demoMode: boolean = false;
   private bindTimer: number = -1;
   /** 本次「去绑定/重新绑定」的开始时间（用于忽略旧 bound_at） */
   private bindStartedAt: number = 0;
@@ -204,6 +212,7 @@ export struct A_Settings {
     this.loadBackend();
     this.loadPermissions();
     this.loadSyncEnabled();
+    this.loadDemoMode();
     // 引导页里授权通知/日历后，这里没有重新走生命周期，靠广播刷新
     PermissionEvents.setListener(() => {
       this.loadPermissions();
@@ -691,6 +700,42 @@ export struct A_Settings {
     }
     SettingsRepository.setFirstLaunchDone(ctx, false);
     this.toast('下次启动会显示启动引导');
+  }
+
+  /**
+   * 读「演示模式」开关的持久化状态。
+   *
+   * ⚠️ 只同步**开关外观**，不在这里重新灌一遍演示任务 —— 任务本身已经落盘在列表里，
+   * 每次进设置页都灌一次会反复触发 upsert / 重分组。真正灌/摘只在用户拨开关时发生。
+   */
+  private async loadDemoMode(): Promise<void> {
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    this.demoMode = await SettingsRepository.getDemoMode(ctx);
+  }
+
+  /**
+   * 拨「演示模式」：开 → 往列表加入一组演示任务；关 → 按 `clientTaskId` 前缀把它们摘掉。
+   *
+   * 数据侧逻辑：`mock/DemoTasks.buildDemoTasks()` 负责造任务，
+   * `store.upsertAll()` 按 `clientTaskId` 幂等合并，`store.removeTasksByClientIdPrefix()`
+   * 只软删带 `sample-` 前缀的任务 —— 用户自己的任务一条都不会被动到。
+   */
+  private onDemoToggle(isOn: boolean): void {
+    this.demoMode = isOn;
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx !== undefined) {
+      SettingsRepository.setDemoMode(ctx, isOn);
+    }
+    if (isOn) {
+      const added: number = this.store.upsertAll(buildDemoTasks());
+      this.toast(added > 0 ? `已加入 ${added} 条演示任务` : '演示任务已在列表里');
+      return;
+    }
+    const removed: number = this.store.removeTasksByClientIdPrefix(DEMO_TASK_PREFIX);
+    this.toast(removed > 0 ? `已移除 ${removed} 条演示任务` : '列表里没有演示任务');
   }
 
   private async loadSyncEnabled(): Promise<void> {    const ctx: common.Context | undefined = this.hostContext();
@@ -1911,6 +1956,37 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
+          // 「演示模式」：列表页右下角那颗「样例」按钮搬到这里（需求方 2026-10-27）。
+          // 开 → 加入一组演示任务；关 → 按 clientTaskId 前缀（`sample-`）摘掉它们，用户自己的任务不受影响。
+          Row({ space: 8 }) {
+            Column({ space: 2 }) {
+              Text('演示模式')
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              Text('加入一组演示任务，关闭即移除')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+                .maxLines(1)
+                .textOverflow({ overflow: TextOverflow.Ellipsis })
+            }
+            .layoutWeight(1)
+            .alignItems(HorizontalAlign.Start)
+
+            // 开关同样必须用 `M3Switch`（裸 `Toggle` 的选中轨道固定取系统蓝，换主题色不会变）
+            M3Switch({
+              isOn: this.demoMode,
+              onToggle: (isOn: boolean) => {
+                this.onDemoToggle(isOn);
+              }
+            })
+            .id('demoModeToggle')
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+
+          this.rowDivider()
           this.infoRow('版本', this.versionLabel)
           this.rowDivider()
           Row() {
