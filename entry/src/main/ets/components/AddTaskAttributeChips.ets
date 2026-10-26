@@ -891,7 +891,17 @@ export struct AddTaskAttributeChips {
           this.pickerDialog();
         },
         alignment: DialogAlignment.Center,
-        isModal: true
+        isModal: true,
+        /*
+         * 弹窗**被蒙层点掉 / 返回键关掉**时，`pickerKind` 还停在原值 ——
+         * 而开关是靠 `@Monitor('pickerKind')` 驱动的，值没变就不再触发，
+         * 于是"点同一颗芯片没反应、要点别的芯片再回来才有反应"（2026-10-27 实测踩到）。
+         * 这里把状态收回 `PICKER_NONE`，任何关闭路径之后都能立刻再打开。
+         * （自身关闭时是先把 `pickerKind` 置 NONE 再关窗，这里再置一次是幂等的，不会递归。）
+         */
+        onDidDisappear: () => {
+          this.pickerKind = PICKER_NONE;
+        }
       }).then((id: number) => {
         this.pickerDialogId = id;
       });

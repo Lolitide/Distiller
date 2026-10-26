@@ -9,8 +9,13 @@ import { ThemeStore } from '../utils/Theme';
  * ⚠️ 高度/竖线**必须给普通数字**（vp）：给 `LengthMetrics` 不生效 —— 整条 Row 会撑满、
  * 竖线被拉长、按钮被挤出屏幕（这一坑在 `DateTimePickerBody` 顶部注释里记了实测）。
  */
-/** 底部条高度（vp）：48vp ＝ 官方可点高度 */
-const FOOTER_HEIGHT_VP: number = 48;
+/**
+ * 底部条高度（vp）：44vp。
+ *
+ * 原来是 48vp —— 文字在这么高的行里居中，字形下方就多出 ~13vp，再加上弹窗外框的底部内边距，
+ * 「取消 / 确定」离弹窗下边界太远（需求方 2026-10-27）。收到 44vp 仍在官方最小可点 40vp 之上。
+ */
+const FOOTER_HEIGHT_VP: number = 44;
 
 /** 中间竖细线长度（vp） */
 const FOOTER_DIVIDER_VP: number = 20;

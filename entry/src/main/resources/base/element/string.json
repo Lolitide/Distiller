@@ -691,6 +691,18 @@
     {
       "name": "permission_mic_reason",
       "value": "用于把你说的话转成文字，再整理成任务"
+    },
+    {
+      "name": "tag_suggest_hint",
+      "value": "点击添加已有标签，长按管理"
+    },
+    {
+      "name": "tag_suggest_delete_hint",
+      "value": "再点一次删除该标签"
+    },
+    {
+      "name": "tag_deleted",
+      "value": "已删除标签「%s」"
     }
   ]
 }

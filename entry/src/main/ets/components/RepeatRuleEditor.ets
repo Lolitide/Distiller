@@ -26,6 +26,8 @@ import { ThemeStore } from '../utils/Theme';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { RepeatFrequency, RepeatRule } from '../model';
+import { PickerFooter } from './PickerFooter';
+import { SegmentRow } from './SegmentRow';
 import { Theme } from '../utils/Theme';
 
 const DOMAIN: number = 0x0000;
@@ -50,14 +52,12 @@ const FREQ_DAILY: number = 3;
 /** 编辑器里的频率选中值：-1 = 不重复（否则等于 `RepeatFrequency` 的值） */
 const FREQ_NONE: number = -1;
 
-/** 每月档位 */
+/** 每月档位（**取值就是数组下标**，直接喂给 `SegmentRow.selectedIndex`） */
 const MONTH_MODE_START: number = 0;
 const MONTH_MODE_MID: number = 1;
 const MONTH_MODE_END: number = 2;
-
-/** 分段按钮尺寸（vp） */
-const SEGMENT_HEIGHT_VP: number = 32;
-const SEGMENT_GAP_VP: number = 8;
+/** 「选择日期」三档的文案（顺序 = 上面的 0/1/2） */
+const MONTH_MODE_OPTIONS: string[] = ['月初（1 号）', '月中（15 号）', '月末'];
 
 /** 频率列表的行高（vp） */
 const FREQ_ROW_HEIGHT_VP: number = 44;
@@ -84,8 +84,6 @@ const FREQ_OPTIONS: FrequencyOption[] = [
   new FrequencyOption('每月', FREQ_MONTHLY),
   new FrequencyOption('每年', FREQ_YEARLY)
 ];
-/** 底部操作条高度（vp） */
-const FOOTER_HEIGHT_VP: number = 56;
 /** 正文区高度上限（vp）：超出由 `Scroll` 承担 */
 const EDITOR_MAX_HEIGHT_VP: number = 420;
 
@@ -249,25 +247,16 @@ export struct RepeatRuleEditor {
 
   /* ── 视图 ── */
 
-  @Builder
-  segment(text: string, selected: boolean, onTap: () => void) {
-    Text(text)
-      .fontSize(Theme.FONT_BODY)
-      .fontColor(selected
-        ? this.themeStore.scheme.onPrimary
-        : $r('sys.color.ohos_id_color_text_primary'))
-      .height(SEGMENT_HEIGHT_VP)
-      .padding({ left: Theme.GAP_M, right: Theme.GAP_M })
-      .backgroundColor(selected
-        ? this.themeStore.scheme.primary
-        : $r('sys.color.comp_background_secondary'))
-      .borderRadius(SEGMENT_HEIGHT_VP / 2)
-      .textAlign(TextAlign.Center)
-      .onClick(onTap)
-      .accessibilityText(text)
-  }
+  /*
+   * ⚠️ 「月初 / 月中 / 月末」这组**不能再写成 `@Builder segment(text, selected, onTap)`**：
+   * `@Builder` 的**值参数不随状态刷新**（本工程踩过三次，见 `SegmentRow.ets` 头注释的实测证据）——
+   * 之前点「月末」时，`monthMode` 已经变成 END（下面那句提示会立刻出现），但三颗按钮是首次构建时
+   * 定死的高亮，所以**按钮不变蓝**，看起来像"点了没反应"（需求方 2026-10-27 报的就是这个 bug）。
+   * 现在换成共用的 `SegmentRow`：它是 `@ComponentV2` + `@Param selectedIndex`（响应式），
+   * 与详情页「重要程度 / 难易程度」同一套实现。
+   */
 
-  /** 星期圆圈：选中实心，未选中描边 */
+  /** 星期圆圈：选中实心，未选中描边（读 `this.weekdays`，无值参数 → 状态变了会刷新） */
   @Builder
   weekdayCircle(day: number, label: string) {
     Text(label)
@@ -394,19 +383,22 @@ export struct RepeatRuleEditor {
               .padding({ top: Theme.GAP_L, bottom: Theme.GAP_S })
               .textAlign(TextAlign.Start)
 
-            Row({ space: SEGMENT_GAP_VP }) {
-              this.segment('月初（1 号）', this.monthMode === MONTH_MODE_START, () => {
-                this.monthMode = MONTH_MODE_START;
-              })
-              this.segment('月中（15 号）', this.monthMode === MONTH_MODE_MID, () => {
-                this.monthMode = MONTH_MODE_MID;
-              })
-              this.segment('月末', this.monthMode === MONTH_MODE_END, () => {
-                this.monthMode = MONTH_MODE_END;
+            // 三档「月初 / 月中 / 月末」：共用 `SegmentRow`（响应式，选中态会跟着跳）。
+            // 外层套横向 Scroll：三颗带括号的文案在 360vp 宽度下略宽，放不下时能左右滑。
+            Scroll() {
+              SegmentRow({
+                options: MONTH_MODE_OPTIONS,
+                selectedIndex: this.monthMode,
+                onSelect: (index: number) => {
+                  this.monthMode = index;
+                }
               })
             }
+            .scrollable(ScrollDirection.Horizontal)
+            .scrollBar(BarState.Off)
+            .edgeEffect(EdgeEffect.Spring)
             .width('100%')
-            .justifyContent(FlexAlign.Start)
+            .align(Alignment.Start)
 
             if (this.monthMode === MONTH_MODE_END) {
               Text(`月末无法用规则表达，将记录未来 ${MONTH_END_MONTHS} 个月的最后一天`)
@@ -424,37 +416,25 @@ export struct RepeatRuleEditor {
           }
         }
         .width('100%')
-        .padding({ left: Theme.GAP_L, right: Theme.GAP_L, top: Theme.GAP_L })
+        // ⚠️ 这里**不再自己加左右内边距**（原来左/右/上各 16vp）：
+        //    弹窗外框（`CenterDialogFrame`）已经给了 16vp，再叠一层的话
+        //    标题在 16vp、列表却从 32vp 起 —— 标题和列表左缘对不齐（需求方 2026-10-27 报的"排版未统一"）。
       }
       .width('100%')
       .constraintSize({ maxHeight: EDITOR_MAX_HEIGHT_VP })
       .scrollBar(BarState.Off)
       .align(Alignment.Top)
 
-      // 底部操作条：取消 / 确定
-      Row() {
-        Text('取消')
-          .fontSize(Theme.FONT_TITLE)
-          .fontColor($r('sys.color.ohos_id_color_text_primary'))
-          .layoutWeight(1)
-          .height('100%')
-          .textAlign(TextAlign.Center)
-          .onClick(() => {
-            this.onCancel();
-          })
-        Text('确定')
-          .fontSize(Theme.FONT_TITLE)
-          .fontColor(this.themeStore.scheme.primary)
-          .layoutWeight(1)
-          .height('100%')
-          .textAlign(TextAlign.Center)
-          .onClick(() => {
-            this.confirm();
-          })
-      }
-      .width('100%')
-      .height(FOOTER_HEIGHT_VP)
-      .alignItems(VerticalAlign.Center)
+      // 底部操作条：与其它所有面板**共用** `PickerFooter`（同一套高度 / 分隔线 / 取色）——
+      // 原来这里自己画了一份（无分隔线、取消用正文色、56vp 高），和「添加标签」那个弹窗不是一套
+      PickerFooter({
+        onCancel: () => {
+          this.onCancel();
+        },
+        onConfirm: () => {
+          this.confirm();
+        }
+      })
     }
     .width('100%')
   }

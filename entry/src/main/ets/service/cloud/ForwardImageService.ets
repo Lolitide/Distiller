@@ -9,12 +9,17 @@ import { fileIo, fileUri } from '@kit.CoreFileKit';
 import { http } from '@kit.NetworkKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { PrivacyConsent } from '../system/PrivacyConsent';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'ForwardImage';
 
 export class ForwardImageService {
   static async download(context: common.Context, url: string): Promise<string> {
+    // 隐私授权门禁：撤回后不再从服务器下载任何图片
+    if (!PrivacyConsent.allowed()) {
+      return '';
+    }
     if (url.length === 0) {
       return '';
     }

@@ -35,6 +35,7 @@
  */
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { PrivacyConsent } from '../system/PrivacyConsent';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'TextExtract';
@@ -129,6 +130,13 @@ export class TextExtractService {
     const trimmed: string = (text || '').trim();
     const result: TextExtractResult = new TextExtractResult();
     result.text = trimmed;
+    // 隐私授权门禁：撤回后不做实体抽取（时间/地点推断是 AI 能力）；
+    // 文本原样返回，用户在外层手动填写即可
+    if (!PrivacyConsent.allowed()) {
+      result.code = 'privacy';
+      result.message = '已撤回隐私授权，AI 抽取不可用；请手动填写时间与地点';
+      return result;
+    }
     if (trimmed.length === 0) {
       result.code = 'empty';
       result.message = '没有可抽取的文本';

@@ -18,6 +18,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { Theme, ThemeStore } from '../utils/Theme';
 import { SettingsRepository } from '../repository/SettingsRepository';
+import { PrivacyConsent } from '../service/system/PrivacyConsent';
 import { ShareIntake } from '../service/share/ShareIntake';
 
 const DOMAIN = 0x0000;
@@ -34,9 +35,24 @@ export default class EntryAbility extends UIAbility {
     }
     // **首帧之前**把用户个性化设置读进来（同步），否则冷启动会「先默认色、再跳个性化」闪一下
     this.preloadThemeSettings();
+    // 隐私授权同样在首帧前灌好：服务层的 `PrivacyConsent.allowed()` 是**同步**判定，
+    // 不能等异步读完首选项（否则冷启动头几秒 AI/云能力会"先允许再拒绝"）
+    this.preloadPrivacyConsent();
     // 系统分享拉起（冷启动）：拿到内容先暂存，A_Main 上树后取走
     ShareIntake.handleWant(want);
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
+  }
+
+  /**
+   * 冷启动同步预读**隐私授权**（2026-10-27）。
+   *
+   * 为什么同步：`Service` 里的门禁（云同步/推送/OCR/语音/实体抽取…）都是同步调 `PrivacyConsent.allowed()`，
+   * 拿不到 context 也就不该在那条路径上读首选项。在 `onCreate` 一次灌进内存单例，服务层只读内存值。
+   */
+  private preloadPrivacyConsent(): void {
+    const granted: boolean = SettingsRepository.getPrivacyConsentSync(this.context, true);
+    PrivacyConsent.instance().granted = granted;
+    hilog.info(DOMAIN, 'testTag', 'Preloaded privacy consent = %{public}s', String(granted));
   }
 
   /**

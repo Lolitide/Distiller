@@ -33,11 +33,14 @@ import {
 import { OptionPickerBody } from '../components/OptionPickerBody';
 import { SettingsNavRow } from '../components/SettingsNavRow';
 import { PopupSelector } from '../components/PopupSelector';
-import { ToggleSlider } from '../components/ToggleSlider';
+import { M3SegmentGroup, M3SegmentOption } from '../components/M3SegmentGroup';
 // 开关统一走 M3 取色的组件（`Toggle` 默认取系统蓝，见 M3Switch 顶部注释）
 import { M3Switch } from '../components/M3Switch';
 import { Task } from '../model';
+import { buildDemoTasks, DEMO_TASK_PREFIX } from '../mock/DemoTasks';
 import { TaskListStore } from '../viewmodel/TaskListStore';
+import { NAV_STACK_KEY, ROUTE_PRIVACY_POLICY } from '../viewmodel/TaskNavParams';
+import { PrivacyConsent } from '../service/system/PrivacyConsent';
 import { TaskExportViewModel, TaskImportParseResult } from '../viewmodel/TaskExportViewModel';
 import { TaskExportResult, TaskExportService } from '../service/system/TaskExportService';
 import { TaskImportFileResult, TaskImportService } from '../service/system/TaskImportService';
@@ -47,13 +50,6 @@ import { RelayApi } from '../service/backend/RelayApi';
 import { apiErrorMessage, GroupItemDto } from '../service/backend/BackendTypes';
 import { SyncService } from '../service/cloud/SyncService';
 import { PushRegistrar } from '../service/cloud/PushRegistrar';
-import {
-  PUSH_PHASE_FAILED,
-  PUSH_PHASE_READY,
-  PUSH_PHASE_REGISTERED,
-  PUSH_PHASE_UNAVAILABLE,
-  PushStatus
-} from '../service/cloud/PushStatus';
 import { NotificationService } from '../service/system/NotificationService';
 import { PermissionEvents } from '../service/system/PermissionEvents';
 import { TaskRepository } from '../repository/TaskRepository';
@@ -102,8 +98,15 @@ const ACCENT_SELECT_RING_VP: number = 5;
 
 /** 提醒提前量的可选档（分钟）：0 ＝ 到点提醒 */
 const REMIND_LEAD_OPTIONS: number[] = [0, 5, 15, 30, 60];
-/** 卡片密度的档位文案 */
-const DENSITY_OPTIONS: string[] = ['标准', '紧凑'];
+
+/**
+ * 卡片密度那一组 M3 分段的选项（2026-10-27：控件换成共用组件 `M3SegmentGroup`）。
+ * 做成模块级常量而不是每次 build 现拼：`@Param` 收到新数组引用会多跑一轮渲染。
+ */
+const DENSITY_SEGMENT_OPTIONS: M3SegmentOption[] = [
+  { key: 'standard', label: '标准', a11y: '标准' },
+  { key: 'compact', label: '紧凑', a11y: '紧凑' }
+];
 
 /** 当前打开的选择器（卡片密度已改成页内滑动控件，不再走弹窗） */
 const SHEET_NONE: number = 0;
@@ -114,8 +117,9 @@ const SHEET_GROUPS: number = 4;
 export struct A_Settings {
   /** 任务 store：清空任务 + 提醒提前量同步 */
   @Require @Param store: TaskListStore;
-  /** 推送通道状态（FE-76）：`PushStatus` 是可观察单例，端侧/云端两段失败原因都在这 */
-  private pushStatus: PushStatus = PushStatus.instance();
+
+  // 2026-10-27：原来这里有个 `pushStatus`（`PushStatus` 单例），只服务于「推送通道 / 推送验证说明」两行；
+  // 那两行按需求方要求删除后，这个字段与 `PushStatus` 的导入一并去掉。
 
   // 2026-10-25：原来这里还有一个 `@Require @Param scroller: Scroller`，唯一的用途是交给
   // `HdsNavigation.bindToScrollable` 做「大标题随滚动收缩」。三个页签统一改成固定 MINI 标题后
@@ -123,6 +127,12 @@ export struct A_Settings {
 
   /** 视觉个性化状态（跨页共享，见 utils/Theme.ets） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
+
+  /**
+   * 隐私授权状态（单例的 `@Trace` 字段）：撤回/重新授权会驱动「隐私说明」那一行的状态文案刷新。
+   * 真实判定在服务层（`PrivacyConsent.allowed()`），这里只读来显示。
+   */
+  @Local consent: PrivacyConsent = PrivacyConsent.instance();
 
   /**
    * 底部遮罩的两端色（`GradientDirection.Bottom`：第一项画在**上**边，所以上透下实）。
@@ -156,8 +166,10 @@ export struct A_Settings {
   /** 连接状态文案（已连接 / 失败原因） */
   @Local backendState: string = '未连接';
   @Local backendBusy: boolean = false;
-  /** 「导出任务」那一行的格式菜单显隐（FE-60） */
-  @Local exportMenuShown: boolean = false;
+  /*
+   * 2026-10-27：原来这里有个 `@Local exportMenuShown`（导出格式 `bindPopup` 小浮窗的显隐），
+   * 导出现在改成 `showDialog` 三选项对话框，不再需要这个状态。
+   */
   /** 绑定状态与配对码 */
   @Local bound: boolean = false;
   @Local bindCode: string = '';
@@ -168,6 +180,13 @@ export struct A_Settings {
   @Local bindLeftSec: number = 0;
   /** 云端同步开关（关闭即停止轮询） */
   @Local syncEnabled: boolean = true;
+  /**
+   * 演示模式开关（设置 → 关于）：打开时往列表里放一组演示任务，关掉即摘掉。
+   *
+   * 2026-10-27 需求方：「任务列表页删去『样例』按钮，转而统一到设置的『关于』下新增『演示模式』开关」——
+   * 这条状态要**记住**（列表右下角那颗按钮是无状态的，这里多了个开关态），所以走 `SettingsRepository`。
+   */
+  @Local demoMode: boolean = false;
   private bindTimer: number = -1;
   /** 本次「去绑定/重新绑定」的开始时间（用于忽略旧 bound_at） */
   private bindStartedAt: number = 0;
@@ -204,6 +223,7 @@ export struct A_Settings {
     this.loadBackend();
     this.loadPermissions();
     this.loadSyncEnabled();
+    this.loadDemoMode();
     // 引导页里授权通知/日历后，这里没有重新走生命周期，靠广播刷新
     PermissionEvents.setListener(() => {
       this.loadPermissions();
@@ -693,6 +713,42 @@ export struct A_Settings {
     this.toast('下次启动会显示启动引导');
   }
 
+  /**
+   * 读「演示模式」开关的持久化状态。
+   *
+   * ⚠️ 只同步**开关外观**，不在这里重新灌一遍演示任务 —— 任务本身已经落盘在列表里，
+   * 每次进设置页都灌一次会反复触发 upsert / 重分组。真正灌/摘只在用户拨开关时发生。
+   */
+  private async loadDemoMode(): Promise<void> {
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    this.demoMode = await SettingsRepository.getDemoMode(ctx);
+  }
+
+  /**
+   * 拨「演示模式」：开 → 往列表加入一组演示任务；关 → 按 `clientTaskId` 前缀把它们摘掉。
+   *
+   * 数据侧逻辑：`mock/DemoTasks.buildDemoTasks()` 负责造任务，
+   * `store.upsertAll()` 按 `clientTaskId` 幂等合并，`store.removeTasksByClientIdPrefix()`
+   * 只软删带 `sample-` 前缀的任务 —— 用户自己的任务一条都不会被动到。
+   */
+  private onDemoToggle(isOn: boolean): void {
+    this.demoMode = isOn;
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx !== undefined) {
+      SettingsRepository.setDemoMode(ctx, isOn);
+    }
+    if (isOn) {
+      const added: number = this.store.upsertAll(buildDemoTasks());
+      this.toast(added > 0 ? `已加入 ${added} 条演示任务` : '演示任务已在列表里');
+      return;
+    }
+    const removed: number = this.store.removeTasksByClientIdPrefix(DEMO_TASK_PREFIX);
+    this.toast(removed > 0 ? `已移除 ${removed} 条演示任务` : '列表里没有演示任务');
+  }
+
   private async loadSyncEnabled(): Promise<void> {    const ctx: common.Context | undefined = this.hostContext();
     if (ctx === undefined) {
       return;
@@ -716,48 +772,17 @@ export struct A_Settings {
   }
 
   /**
-   * 「推送通道」右侧那一句：
-   *  · 失败 → 直接显示原因（官方错误码翻出来的那句话，如"推送权益未开通…"）
-   *  · 就绪 → 已就绪 + 最近一次成功时间
-   *  · 未启用 → 显示原因（没配服务器 / 没身份）
+   * 推送通道 / 推送验证说明这两行**已删除**（需求方 2026-10-27：「推送通道删去、推送验证说明删去」）。
+   *
+   * 连带删掉的成员：`pushStatus` 字段、`pushLine` getter、`retryPush()`、`showPushHelp()`，
+   * 以及 `PushStatus` / `PUSH_PHASE_*` 的导入 —— 它们只服务那两行。
+   * 推送本身仍在跑（`PushRegistrar.register()` 在打开云端同步时照常上报），只是不再把
+   * 开发者向的诊断信息摊在设置页上。
    */
-  @Computed
-  get pushLine(): string {
-    const s: PushStatus = this.pushStatus;
-    if (s.phase === PUSH_PHASE_FAILED) {
-      return s.message;
-    }
-    if (s.phase === PUSH_PHASE_READY) {
-      return s.updatedAt.length > 0 ? s.label + ' · ' + s.updatedAt : s.label;
-    }
-    if (s.phase === PUSH_PHASE_UNAVAILABLE) {
-      return s.message.length > 0 ? s.message : s.label;
-    }
-    if (s.phase === PUSH_PHASE_REGISTERED) {
-      return s.label;
-    }
-    return s.label;
-  }
 
-  /** 点「推送通道」那行：重新取 token 并上报；失败时把「怎么修」一并说出来 */
-  private async retryPush(): Promise<void> {
-    const ok: boolean = await PushRegistrar.register();
-    const s: PushStatus = this.pushStatus;
-    this.toast(ok ? '推送通道已就绪' : (s.advice.length > 0 ? s.message + '：' + s.advice : s.message));
-  }
-
-  /** 推送通道到底怎么验证（没有 AGC 时用户不该被一句「未就绪」卡住） */
-  private showPushHelp(): void {
-    this.getUIContext().getPromptAction().showDialog({
-      title: '推送通道怎么验证',
-      message: '推送分两段，任何一段没开都会显示「未就绪」：\n\n'
-        + '① 手机端：需要 AGC 已开通「推送服务」，并用该应用的 Profile 重新签名，'
-        + 'App 才能取到 Push Token；没有权益时会显示「设备不支持/权益未开通」。\n'
-        + '② 服务端：在电脑上配置 QQBOT_PUSH_SA（服务账号 JSON，含 project_id）后重启后端，'
-        + '`/health` 的 capabilities 里会出现 push，`/push/token` 返回 push_ready=true。\n\n'
-        + '两段都就绪后，这一行显示「已就绪」；此时在群里产生一条新候选，后端会向设备发通知。',
-      buttons: [{ text: '知道了', color: this.themeStore.scheme.primary }]
-    });
+  /** 隐私说明：改成跳**独立页面**（`B_PrivacyPolicy`，2026-10-27） */
+  private openPrivacyPage(): void {
+    AppStorage.get<NavPathStack>(NAV_STACK_KEY)?.pushPathByName(ROUTE_PRIVACY_POLICY, '');
   }
 
   /** 云端字段清单：与隐私说明同一口径，不把「本机数据」混进来 */
@@ -773,15 +798,14 @@ export struct A_Settings {
   }
 
   /** 隐私说明：只讲本机存什么、什么会离开手机 */
-  private showPrivacy(): void {    this.getUIContext().getPromptAction().showDialog({
-      title: '隐私说明',
-      message: '任务、备注、原文、草稿只存在本机。'
-        + '同步开启时只向服务器发送设备标识、绑定关系、群订阅与采纳/忽略计数。'
-        + '群消息原文由服务器临时保留 30 分钟（仅内存、不落盘），不会回传。'
-        + '可随时在「删除服务端数据」中清空云端记录。',
-      buttons: [{ text: '知道了', color: this.themeStore.scheme.primary }]
-    });
-  }
+  /**
+   * 原「隐私说明」居中弹窗（2026-10-27 已下线）。
+   *
+   * 需求方：「隐私说明、隐私政策未合规撰写，且应放至独立页面，用官方的规范」——
+   * 这段文案现在整段搬进了独立页面 `pages/B_PrivacyPolicy.ets`（并按合规结构重写、支持撤回授权）。
+   * 这里保留一行说明，避免后来的人再补一个弹窗进来。
+   */
+
   private deleteServerData(): void {
     this.getUIContext().getPromptAction().showDialog({
       title: '删除服务端数据',
@@ -1048,46 +1072,40 @@ export struct A_Settings {
   }
 
   /**
-   * 导出菜单（FE-60）：点「导出任务」那一行弹出。
-   * 三种口径按"给人看 / 给机器看 / 贴到别处"分：CSV 白名单列、JSON 完整（含原文）、复制到剪贴板。
+   * 导出对话框（2026-10-27 需求方：「设置页导出用三选项对话弹出框（showDialog）实现」）。
+   *
+   * 三种口径按"给人看 / 给机器看 / 贴到别处"分，正文里各用一句话说清差别：
+   *  · CSV  —— 表格，给 Excel/表格软件看，**不含原文**（原文是本机溯源字段，不往外贴）；
+   *  · JSON —— 完整数据（含原文），给别的工具或以后导入用；
+   *  · 剪贴板 —— CSV 文本直接贴到聊天/文档里。
+   *
+   * 为什么用 `showDialog` 而不是 `bindPopup`：这是"三选一"的决策，不是贴着某一行的上下文菜单；
+   * 居中对话框能同时把三种口径的解释摆出来，和设置页「清空全部任务」「删除服务端数据」同一套长相。
    */
-  @Builder
-  exportMenu() {
-    Column() {
-      Text('CSV（表格，不含原文）')
-        .width('100%')
-        .height(ROW_HEIGHT_VP)
-        .fontSize($r('sys.float.ohos_id_text_size_body1'))
-        .fontColor($r('sys.color.ohos_id_color_text_primary'))
-        .textAlign(TextAlign.Start)
-        .onClick(() => {
-          this.exportMenuShown = false;
-          this.exportTasks('csv');
-        })
-      Text('JSON（完整，含原文）')
-        .width('100%')
-        .height(ROW_HEIGHT_VP)
-        .fontSize($r('sys.float.ohos_id_text_size_body1'))
-        .fontColor($r('sys.color.ohos_id_color_text_primary'))
-        .textAlign(TextAlign.Start)
-        .onClick(() => {
-          this.exportMenuShown = false;
-          this.exportTasks('json');
-        })
-      Text('复制到剪贴板（CSV）')
-        .width('100%')
-        .height(ROW_HEIGHT_VP)
-        .fontSize($r('sys.float.ohos_id_text_size_body1'))
-        .fontColor($r('sys.color.ohos_id_color_text_primary'))
-        .textAlign(TextAlign.Start)
-        .onClick(() => {
-          this.exportMenuShown = false;
-          this.exportToClipboard();
-        })
+  private showExportDialog(): void {
+    if (this.store.allTasks().length === 0) {
+      this.toast('没有可导出的任务');
+      return;
     }
-    .width(240)
-    .padding(8)
-    .alignItems(HorizontalAlign.Start)
+    this.getUIContext().getPromptAction().showDialog({
+      title: '导出任务',
+      message: 'CSV：表格（不含原文）\nJSON：完整数据（含原文）\n剪贴板：复制 CSV 文本',
+      buttons: [
+        { text: 'CSV', color: this.themeStore.scheme.primary },
+        { text: 'JSON', color: this.themeStore.scheme.primary },
+        { text: '剪贴板', color: this.themeStore.scheme.primary }
+      ]
+    }).then((result: promptAction.ShowDialogSuccessResponse) => {
+      if (result.index === 0) {
+        this.exportTasks('csv');
+      } else if (result.index === 1) {
+        this.exportTasks('json');
+      } else if (result.index === 2) {
+        this.exportToClipboard();
+      }
+    }).catch(() => {
+      // 用户点蒙层关掉：什么都不做
+    });
   }
 
   /**
@@ -1258,11 +1276,14 @@ export struct A_Settings {
   }
 
   /**
-   * 卡片密度：**二档滑动控件**（2026-10-19 作者要求）。
+   * 卡片密度：**M3 胶囊分段组**（2026-10-27 需求方：「把这个改成和添加任务里面的截图、录音、文本
+   * 一样的 md 取色组件」）。
    *
-   * 之前是「点一行 → 弹选择器 → 再点确定」，两个动作才改一个二选一的开关；
-   * 而且右侧那行值因为 `@Builder` 值参数不刷新，选完还显示旧值。
-   * 现在一行内直接滑动切换，值也由 `@Param` 响应式驱动。
+   * 原来用的是 `ToggleSlider`（系统冷灰轨道 + 白色滑块 + 系统蓝/灰文字），
+   * 在这套 M3 暖色页面上是唯一一块"系统色"控件，和「添加任务」那组来源页签风格也不一致。
+   * 现在直接复用 `M3SegmentGroup` —— 与来源页签**同一个组件**，取色永远同步：
+   * 轨道 `surfaceContainerLow`、选中块 `primary` + `onPrimary`、未选中 `font_secondary`。
+   * 纯文字两档，所以按内容宽度收缩（`fillWidth: false` / `equalWidth: false`），不撑满整行。
    */
   @Builder
   densityRow() {
@@ -1276,12 +1297,16 @@ export struct A_Settings {
 
       Blank()
 
-      ToggleSlider({
-        options: DENSITY_OPTIONS,
+      M3SegmentGroup({
+        options: DENSITY_SEGMENT_OPTIONS,
         selectedIndex: this.themeStore.density,
         onSelect: (index: number) => {
           this.applyDensity(index);
-        }
+        },
+        fillWidth: false,
+        equalWidth: false,
+        // 设置页这张卡片本身就是 `surfaceContainerLow`，轨道要抬一档才看得见
+        onCard: true
       })
     }
     .width('100%')
@@ -1382,6 +1407,11 @@ export struct A_Settings {
               this.applyRemindLead(REMIND_LEAD_OPTIONS[index]);
             }
           })
+
+          // 「提醒状态」：从「关于」搬进「通知个性化」（需求方 2026-10-27：「提醒状态可放至通知个性化下」）——
+          // 它报的是提醒**发布**的最近一次失败原因（额度满 / 通知没开），本来就是提醒这项设置的运行时状态。
+          this.rowDivider()
+          this.infoRow('提醒状态', this.store.reminderError.length > 0 ? this.store.reminderError : '正常')
         }
         .width('100%')
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
@@ -1401,9 +1431,9 @@ export struct A_Settings {
               .fontColor($r('sys.color.ohos_id_color_text_primary'))
               .layoutWeight(1)
               .maxLines(1)
-            Text(this.notifyAllowed ? '已开启' : '未开启')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+            // ⚠️ 2026-10-27 需求方：「去除通知权限、日历权限的重复性文本」——
+            // 这一行原来左边还有一句灰色「已开启 / 未开启」，与右边胶囊**说的是同一件事**（授权后两边都是"已开启"）。
+            // 胶囊本身就能表达两态（已开启＝状态色；去开启＝主色动作），所以灰字删掉，只留胶囊。
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
               Text(this.notifyAllowed ? '已开启' : '去开启')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
@@ -1435,15 +1465,34 @@ export struct A_Settings {
 
           this.rowDivider()
 
+          // 「通知与横幅设置」：从「关于」搬到这里 —— 它管的就是上面这一颗「通知权限」（需求方 2026-10-27：
+          // 「通知与横幅设置可放至通知权限下」，分类上不再混进"关于"）。
+          Row() {
+            Text('通知与横幅设置')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+            Text('去开启')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.openNotificationSettings();
+          })
+
+          this.rowDivider()
+
           Row({ space: 8 }) {
             Text('日历权限')
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
               .fontColor($r('sys.color.ohos_id_color_text_primary'))
               .layoutWeight(1)
               .maxLines(1)
-            Text(this.calendarAllowed ? '已授权' : '未授权')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+            // 同「通知权限」：灰色「已授权 / 未授权」与右边胶囊重复，已删（2026-10-27）
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
               Text(this.calendarAllowed ? '已授权' : '去授权')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
@@ -1823,7 +1872,10 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
-          // 「导出任务」：点一下弹格式菜单（FE-60）。CSV/JSON 走系统保存面板，剪贴板走 pasteboard
+          // 「导出任务」：点一下弹**三选项对话框**（`showDialog`，2026-10-27 需求方指定）。
+          // 原来是 `bindPopup` 贴着这一行的小浮窗（三行纯文字），改成居中对话框后：
+          // 标题说"导出任务"、正文三行说清三种口径的差别、底部三颗按钮直接选，
+          // 与设置页其它弹窗（清空任务 / 删除服务端数据）同一套官方长相。
           Row({ space: 8 }) {
             Text('导出任务')
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
@@ -1844,20 +1896,7 @@ export struct A_Settings {
           .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
           .alignItems(VerticalAlign.Center)
           .onClick(() => {
-            this.exportMenuShown = true;
-          })
-          .bindPopup(this.exportMenuShown, {
-            builder: this.exportMenu(),
-            placement: Placement.Bottom,
-            popupColor: this.themeStore.scheme.surfaceContainerHigh,
-            radius: 16,
-            enableArrow: false,
-            focusable: true,
-            onStateChange: (event) => {
-              if (!event.isVisible) {
-                this.exportMenuShown = false;
-              }
-            }
+            this.showExportDialog();
           })
 
           this.rowDivider()
@@ -1911,23 +1950,57 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
+          // 「演示模式」：列表页右下角那颗「样例」按钮搬到这里（需求方 2026-10-27）。
+          // 开 → 加入一组演示任务；关 → 按 clientTaskId 前缀（`sample-`）摘掉它们，用户自己的任务不受影响。
+          // 2026-10-27 第二轮：需求方要去掉开关下面那句说明文案，只留标题 + 开关。
+          Row({ space: 8 }) {
+            Text('演示模式')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+              .maxLines(1)
+              .textAlign(TextAlign.Start)
+
+            // 开关同样必须用 `M3Switch`（裸 `Toggle` 的选中轨道固定取系统蓝，换主题色不会变）
+            M3Switch({
+              isOn: this.demoMode,
+              onToggle: (isOn: boolean) => {
+                this.onDemoToggle(isOn);
+              }
+            })
+            .id('demoModeToggle')
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+
+          this.rowDivider()
           this.infoRow('版本', this.versionLabel)
           this.rowDivider()
+          // 「隐私说明」：2026-10-27 改成**独立页面**（弹窗塞不下一篇合规的隐私政策），
+          // 右侧显示当前授权状态；页内可撤回/重新授权（撤回后 AI 与云端停用，本机基础功能保留）。
           Row() {
             Text('隐私说明')
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
               .fontColor($r('sys.color.ohos_id_color_text_primary'))
               .layoutWeight(1)
+            Text(this.consent.granted ? '已授权' : '已撤回')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.consent.granted
+                ? $r('sys.color.ohos_id_color_text_secondary')
+                : this.themeStore.scheme.error)
             Text('查看')
               .fontSize($r('sys.float.ohos_id_text_size_body2'))
               .fontColor(this.themeStore.scheme.primary)
+              .margin({ left: 8 })
           }
           .width('100%')
           .height(ROW_HEIGHT_VP)
           .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
           .alignItems(VerticalAlign.Center)
           .onClick(() => {
-            this.showPrivacy();
+            this.openPrivacyPage();
           })
 
           this.rowDivider()
@@ -1948,76 +2021,14 @@ export struct A_Settings {
             this.replayOnboarding();
           })
 
-          this.rowDivider()
-          Row() {
-            Text('通知与横幅设置')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              .layoutWeight(1)
-            Text('去开启')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor(this.themeStore.scheme.primary)
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-          .onClick(() => {
-            this.openNotificationSettings();
-          })
-
-          this.rowDivider()
-          this.infoRow('提醒状态', this.store.reminderError.length > 0 ? this.store.reminderError : '正常')
-
-          this.rowDivider()
-          // 推送通道（FE-76）：端侧 Push Token + 后端 `push_ready` 两段合成一句话；
-          // 没就绪时点这行重试（失败原因来自官方错误码，见 PushTokenService.mapMessage）
-          Row({ space: 8 }) {
-            Text('推送通道')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              .layoutWeight(1)
-              .maxLines(1)
-            Text(this.pushLine)
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor(this.pushStatus.pushReady
-                ? this.themeStore.scheme.primary
-                : $r('sys.color.ohos_id_color_text_secondary'))
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-              .constraintSize({ maxWidth: '62%' })
-            if (!this.pushStatus.pushReady) {
-              Text('重试')
-                .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.themeStore.scheme.primary)
-                .maxLines(1)
-            }
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-          .onClick(() => {
-            this.retryPush();
-          })
-
-          this.rowDivider()
-          Row() {
-            Text('推送验证说明')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-              .layoutWeight(1)
-            Text('查看')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor(this.themeStore.scheme.primary)
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-          .onClick(() => {
-            this.showPushHelp();
-          })
+          /*
+           * 2026-10-27 需求方：「设置项分类不对与冗余」——
+           *  · 「通知与横幅设置」→ 已搬到「权限管理」里、「通知权限」下面；
+           *  · 「提醒状态」→ 已搬到「通知个性化」里；
+           *  · 「推送通道」「推送验证说明」→ **删除**（连同 `pushStatus` / `pushLine` /
+           *    `retryPush` / `showPushHelp` 与 `PushStatus` 导入）。
+           * 所以「关于」现在只剩：演示模式 / 版本 / 隐私说明 / 重新查看启动引导。
+           */
         }
         .width('100%')
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)

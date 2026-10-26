@@ -532,9 +532,12 @@ struct A_Main {
     if (this.currentIndex === 1) {
       return MainTitleBar.emptyMenu();
     }
-    return MainTitleBar.settingsMenu(() => {
-      this.onAbout();
-    });
+    // 设置页：**右上角不再放任何按钮**（需求方 2026-10-27：「关于页的按钮什么页面也没接，删去」）——
+    // 原来这里挂了颗 `info_circle`，点了只弹一句「关于」的 toast，没有真的页面可去；
+    // 而「关于」的内容（版本 / 隐私说明 / 演示模式…）本来就在设置页最下面那一块，
+    // 所以这颗按钮既是空跳转、又是重复入口，直接删掉。
+    // 「板板」页与设置页一样，右上角空着。
+    return MainTitleBar.emptyMenu();
   }
 
   /** 统一的 toast 反馈（菜单项/图标按钮无文字，点了要给可见反馈） */
@@ -597,10 +600,6 @@ struct A_Main {
     // 页面本身在 `router_map.json` 里注册（官方系统路由表），所以这里只要路由名；
     // **把任务 store 一起带过去**，搜索页搜的就是列表这一份数据（不是副本）。
     this.navPathStack.pushPathByName(ROUTE_SEARCH, this.store);
-  }
-
-  private onAbout(): void {
-    this.toast($r('app.string.menu_about'));
   }
 
   /**

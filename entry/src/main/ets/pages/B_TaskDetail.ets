@@ -8,8 +8,9 @@ import { ThemeStore } from '../utils/Theme';
  *     名称前带卡片前缀里那个**状态圆圈**，已完成时名称变灰，点名称进入编辑、按回车提交。
  *  ③ 正文其余各块（2026-10-25，`feature/mvp-completion` 合并后的现状）：
  *     原文对照（`TaskRawTextCard`，只读＋可折叠＋可复制）/ 步骤 / 媒体 / 提醒·到期·重复 /
- *     来源 / 标签 / 备注 / 更多信息（状态分段 · 难易 · 类型 · 地点 · 置信度 · 时间戳）。
+ *     来源 / 标签（含最后一行「类型」）/ 备注 / 更多信息（难易 · 地点 · 置信度 · 时间戳）。
  *     仍缺的：缺失字段（`missingFields`）没有专门一栏。
+ *     2026-10-27：「状态」整行删掉（只给系统管），「类型」搬到「添加标签」下面一行。
  *
  * 页面级约定（前几轮踩出来的，别再犯）：
  *  · `HdsNavDestination` 的 `titleMode` 默认 **MINI ＝ 56vp**（不是主页 FREE 的 112vp）；
@@ -27,7 +28,8 @@ import { TaskStepsSection } from '../components/TaskStepsSection';
 import { TaskAttributeCard } from '../components/TaskAttributeCard';
 import { TaskMetaCard } from '../components/TaskMetaCard';
 import { TaskInfoCard } from '../components/TaskInfoCard';
-import { TaskTagsCard } from '../components/TaskTagsCard';
+import { TAG_DRAFT_INPUT_ID, TAG_ROW_HEIGHT_VP, TaskTagsCard } from '../components/TaskTagsCard';
+import { TagSuggestBar } from '../components/TagSuggestBar';
 import { TaskNoteCard } from '../components/TaskNoteCard';
 import { TaskRawTextCard } from '../components/TaskRawTextCard';
 import { TaskMediaCard } from '../components/TaskMediaCard';
@@ -70,10 +72,26 @@ export struct B_TaskDetail {
   @Local statusBarVp: number = 0;
   /** 改名时的草稿（提交前不写回任务） */
   @Local draftName: string = '';
+  /**
+   * 是否要在**输入法上方**挂着「已有标签选择条」（需求方 2026-10-27）。
+   *
+   * 由标签卡（`TaskTagsCard`）的 `onPickerVisibleChange` 驱动：它进了「添加标签」态、
+   * 且**光标就在那行内联输入框里**才置 true —— 所以条子的生命周期与输入行、键盘完全同步，
+   * 点别处把焦点挪走（比如点「添加步骤」）时条子会立刻让位（实测第一版只盯"输入行存在"，
+   * 焦点走了条子还挂着，见组件里的说明）。
+   */
+  @Local tagBarVisible: boolean = false;
   /** 进入页面时的内容快照：离开时对比，只有真改过才标记 userEdited（避免轮询覆盖） */
   private snapshot: string = '';
   /** 改名输入框的控制器：进入编辑时把光标放到文本末尾（不默认全选） */
   private nameController: TextInputController = new TextInputController();
+  /**
+   * 正文滚动容器的控制器（`Scroll(this.contentScroller)`）。
+   *
+   * 用途只有一处：在「已有标签选择条」上点选一个标签时，标签卡多出一行、内容变长，
+   * 而滚动偏移不会自己跟着走 —— 补一行的偏移，输入行才留在原来的位置（见 `nudgeScrollForNewRow`）。
+   */
+  private contentScroller: Scroller = new Scroller();
 
   /**
    * 右上角两个图标按钮（需求方 2026-10-17）：**响铃 + 删除**。
@@ -103,6 +121,69 @@ export struct B_TaskDetail {
     if (this.param.pendingMode) {
       this.param.store.markPendingSeen(this.param.task);
     }
+  }
+
+  /**
+   * 所有**已创建**的标签（去重）。与列表页顶部筛选 Chip 同源（`TaskListStore.allTags`），
+   * 所以「这边删掉一个标签 → 那边 Chip 也跟着消失」是同一份数据，不需要另外通知。
+   */
+  @Computed
+  get existingTags(): string[] {
+    return this.param.store.allTags;
+  }
+
+  /** 本任务当前的标签（决定选择条上哪些芯片画成「已添加」） */
+  @Computed
+  get taskTags(): string[] {
+    const own: string[] | undefined = this.param.task.tags;
+    return own === undefined ? [] : own;
+  }
+
+  /**
+   * 选择条上点了一个已有标签：本任务**没有就加上、已经有就拿掉**（再点一次＝取消）。
+   *
+   * 为什么做成开关而不是"只加"：条子上同时展示了"已在任务里"的那几个（带对勾），
+   * 用户看到对勾最自然的动作就是再点一下去掉它，比让他滚回标签卡点 × 近得多。
+   *
+   * 加的那一半要**顺手把滚动位置下移一行**：本卡多了一行，内容就长高一截，
+   * 而滚动偏移不会自己改 —— 键盘弹着的时候连点两个标签，「添加标签」那行就被推到
+   * 选择条底下去了（实测）。少一行（取消选中）时内容变短、输入行往上走，不用动。
+   */
+  private pickTag(tag: string): void {
+    if (!this.param.store.removeTagFrom(this.param.task, tag)) {
+      this.param.store.addTagTo(this.param.task, tag);
+      this.nudgeScrollForNewRow();
+    }
+    // 点选择条不该打断输入：芯片用的是不可获焦的 Row（正常不会丢焦点），这里再兜一层，
+    // 免得万一焦点飘走、键盘收起、连条子本身一起消失。
+    if (this.tagBarVisible) {
+      focusControl.requestFocus(TAG_DRAFT_INPUT_ID);
+    }
+  }
+
+  /**
+   * 把内容区滚动位置补上"刚多出来的一行"，让标签输入行留在原地。
+   *
+   * 推到下一帧再滚：`scrollBy` 会被**当前的**可滚动范围夹住，等这一行真正布局上去之后再滚，
+   * 才滚得动（与工程里"设光标推一帧"同一个道理）。少一行（取消选中）时内容变短、
+   * 输入行往上走，压根不用动，所以只在"加"的这一侧调用。
+   */
+  private nudgeScrollForNewRow(): void {
+    setTimeout(() => {
+      this.contentScroller.scrollBy(0, TAG_ROW_HEIGHT_VP);
+    }, 0);
+  }
+
+  /**
+   * 标签管理：长按把某个标签变成「删除」后**再点一次**走这里 ——
+   * 把这个标签从所有任务上摘掉（`TaskListStore.deleteTagEverywhere` 里当场落盘）。
+   *
+   * 反馈不放在页面这一层：这条交互永远发生在键盘弹起时，`showToast` 的窗口会被键盘顶掉
+   * （实测连窗口都不建），所以「已删除 xxx」的回执由选择条自己在提示行上回一句
+   * （见 `TagSuggestBar.justDeleted`），它就在键盘正上方，百分百可见。
+   */
+  private deleteTagEverywhere(tag: string): void {
+    this.param.store.deleteTagEverywhere(tag);
   }
 
   /** 内容字段快照（用于判断用户是否真的改过；不含 status/reminderId 等系统态） */
@@ -402,7 +483,7 @@ export struct B_TaskDetail {
         // 装不下是常态。之前这里是裸 `Column`，卡片一多「添加标签」那一行就被裁在屏幕外
         // （需求方 2026-10-17 报的标签卡点不到，就是这个）。
         // 让位那条 `Row` 留在 `Scroll` 外面 —— 它是标题栏的占位，不该跟着内容滚。
-        Scroll() {
+        Scroll(this.contentScroller) {
           Column() {
             // 第一块正文：状态圆圈 + 可编辑任务名
             //
@@ -469,10 +550,18 @@ export struct B_TaskDetail {
               top: CONTENT_GAP_VP
             })
 
-            // 第五块：标签卡（每条标签一行 + 固定「＋ 添加标签」）
-            // —— 与第四块的「重要程度 / 来源」同属**分类与标记**，紧挨着放，不再被更多信息卡隔开
+            // 第五块：标签卡（每条标签一行 + 固定「＋ 添加标签」+ 最后一行「类型」）
+            // —— 与第四块的「重要程度 / 来源」同属**分类与标记**，紧挨着放，不再被更多信息卡隔开。
+            // 2026-10-27：「类型」从更多信息卡搬到这里，正好落在「添加标签」下面一行（需求方指定）。
             Column() {
-              TaskTagsCard({ task: this.param.task })
+              TaskTagsCard({
+                task: this.param.task,
+                store: this.param.store,
+                // 「输入行在 ＋ 光标在输入行里」→ 挂出底部那条已有标签选择条（详见组件内注释）
+                onPickerVisibleChange: (visible: boolean) => {
+                  this.tagBarVisible = visible;
+                }
+              })
             }
             .width('100%')
             .padding({
@@ -492,14 +581,15 @@ export struct B_TaskDetail {
               top: CONTENT_GAP_VP
             })
 
-            // 第七块：更多信息卡（状态 / 难易程度 / 类型 / 地点 / 链接 / 置信度 / 创建于 / 完成于）
+            // 第六块：更多信息卡（重要程度 / 难易程度 / 地点 / 链接 / 置信度 / 创建于 / 完成于）
             // **挪到最后**（2026-10-19「详情部分的显示优先级、分组可做优化调整」）：
             // 这张卡里一半是只读读数（置信度、两个时间戳），属于"平时不看"，压到页面底部；
             // 上面几块才是用户每天要动的：属性 → 分类标记 → 备注。
-            // 「状态」是本卡第一行（需求方 2026-10：「添加到重要性那个 card 里面的第一个」），
-            // 它要 `store` —— 状态写回只走 `store.setStatus`。
+            // 2026-10-27：**「状态」整行删掉**（需求方：「这东西只有系统能编辑管理」）、
+            // **「类型」搬到标签卡的最后一行**（需求方：「把『类型』置于『添加标签』下一个」，
+            // 见 `TaskCategoryRow`）——所以本卡不再要 `store`，也不再有状态分段的写入口。
             Column() {
-              TaskInfoCard({ task: this.param.task, store: this.param.store })
+              TaskInfoCard({ task: this.param.task })
             }
             .width('100%')
             .padding({
@@ -536,6 +626,34 @@ export struct B_TaskDetail {
         .scrollBar(BarState.Off)
         // 滚到底要有回弹，手势条那一带的灰才连得住
         .edgeEffect(EdgeEffect.Spring)
+
+        /*
+         * 已有标签选择条（需求方 2026-10-27）：
+         * 「添加标签时不能选择已有标签」→ 输入行活着的时候，把**所有已创建标签**横向排在这里，
+         * 点一下＝选中给本任务，长按＝这个标签变成「删除」，再点一次才真删。
+         *
+         * 为什么放在**可滚区之外的底部固定段**（而不是 `position` 浮层 / `bindSheet`）：
+         * 本页键盘避让是 `KeyboardAvoidMode.RESIZE`，整页高度会随键盘收缩 →
+         * 这条带子天然停在「标签输入行下方、键盘上方」之间：
+         *  · 不会盖住输入行（输入行在 `Scroll` 里，可视区被它挤到上方）；
+         *  · 不会被键盘挡住（页面收缩到键盘上沿为止）；
+         *  · 不用自己监听键盘高度，也就不会和系统的避让再叠一次 offset。
+         * 外面**不包 Column、不加左右留白**（2026-10-27 第二轮：不要卡片样式）：
+         * 条子自己是一条**满宽白底**的输入法配件条，贴边才像"键盘上方那一条"。
+         * `existingTags` 为空（一个标签都还没创建过）时没有可选项，直接不显示。
+         */
+        if (this.tagBarVisible && this.existingTags.length > 0) {
+          TagSuggestBar({
+            tags: this.existingTags,
+            selected: this.taskTags,
+            onPick: (tag: string) => {
+              this.pickTag(tag);
+            },
+            onDelete: (tag: string) => {
+              this.deleteTagEverywhere(tag);
+            }
+          })
+        }
       }
       .width('100%')
       .height('100%')

@@ -13,6 +13,8 @@ import { TaskListStore } from './TaskListStore';
 export const ROUTE_SEARCH: string = 'SearchPage';
 /** 任务详情页 */
 export const ROUTE_TASK_DETAIL: string = 'TaskDetailPage';
+/** 《隐私政策》独立页（2026-10-27：从设置页的弹窗改成独立页面） */
+export const ROUTE_PRIVACY_POLICY: string = 'PrivacyPolicyPage';
 
 /**
  * 导航栈在 `AppStorage` 里的键。

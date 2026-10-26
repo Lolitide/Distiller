@@ -221,25 +221,16 @@ export class MainTitleBar {
     };
   }
 
-  /** 设置页的右上角：**单个「关于」图标按钮**（官方 Symbol `info_circle`），同样不是下拉 */
-  /** 空菜单：板板页没有右上角动作（不借设置页的「关于」） */
+  /**
+   * 设置页的右上角：**空菜单**。
+   *
+   * 2026-10-27 需求方：「关于页的按钮什么页面也没接，没有接任何实际的页面，删去」——
+   * 原来这里是一颗 `info_circle`（「关于」），点了只弹 toast，没有任何页面；
+   * 关于内容本来就在设置页底部的「关于」区块里，所以这颗按钮已撤掉。
+   */
+  /** 空菜单：板板页 / 设置页都没有右上角动作（不借设置页的「关于」） */
   static emptyMenu(): HdsNavigationMenuContentOptions {
     return { value: [] };
-  }
-
-  static settingsMenu(onAbout: () => void): HdsNavigationMenuContentOptions {
-    return {
-      value: [
-        {
-          content: {
-            label: $r('app.string.menu_about'),
-            icon: $r('sys.symbol.info_circle'),
-            isEnabled: true,
-            action: onAbout
-          }
-        }
-      ]
-    };
   }
 
   /**

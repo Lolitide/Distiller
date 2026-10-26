@@ -9,6 +9,11 @@
       "name": "TaskDetailPage",
       "pageSourceFile": "src/main/ets/pages/B_TaskDetail.ets",
       "buildFunction": "TaskDetailPageBuilder"
+    },
+    {
+      "name": "PrivacyPolicyPage",
+      "pageSourceFile": "src/main/ets/pages/B_PrivacyPolicy.ets",
+      "buildFunction": "PrivacyPolicyPageBuilder"
     }
   ]
 }

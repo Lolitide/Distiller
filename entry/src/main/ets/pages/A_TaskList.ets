@@ -1,6 +1,6 @@
 import { LengthMetrics, SubHeader } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
-import { Task, TaskPriority, TaskStatus } from '../model';
+import { Task } from '../model';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { TaskCard } from '../components/TaskCard';
 import { TaskSubCard } from '../components/TaskSubCard';
@@ -134,8 +134,13 @@ const GROUP_EXPAND_ANIM_MS: number = 180;
  * 保留注释说明为什么不再用平移：位移做不出"卡一直在底下被压着"的图层关系。
  */
 const SUB_CARD_EMERGE_VP: number = 36;
-/** 副卡片展开后的完整高度（vp）：与 `TaskSubCard` 里的 `SUB_CARD_HEIGHT_VP` 保持一致 */
-const SUB_CARD_FULL_HEIGHT_VP: number = 36;
+/*
+ * ⚠️ 原来这里有个 `SUB_CARD_FULL_HEIGHT_VP = 36`（"副卡片完整高度，与 TaskSubCard 保持一致"），
+ * 2026-10-27 已删除：副卡片的真实高度是**随密度档变的**
+ * （`ThemeStore.subCardHeight`：标准 36 / 紧凑 **28**，见 `TaskSubCard` 的 `.height(...)`），
+ * 写死一个 36 就会在紧凑档上算错"往上推多少"——那次 bug 的根因正是它（详见下面堆叠层的注释）。
+ * 现在高度只从 `themeStore.subCardHeight` 取，只有一处真值源。
+ */
 /**
  * 副卡片折叠态的不透明度 —— **已移到 `Theme.OPACITY_CARD_DIM`**。
  *
@@ -330,52 +335,6 @@ export struct A_TaskList {
    *   （实测踩到过：筛「已完成」再删掉那条 → Chip 行消失 → 卡在空筛选里）。
    *   所以这里自己拼「标题栏让位 + Chip 行 + 余下空间居中」，而不是整个列表都不渲染。
    */
-  /** 一键加入演示任务：4 种 tag（通知 ×2 / 作业 / 考试 / 活动），创建时间与 ddl 都错开 */
-  private addSampleTasks(): void {
-    const now: number = Date.now();
-    const hour: number = 3600000;
-    const list: Task[] = [];
-    list.push(this.makeSampleTask('sample-notice-library', '图书馆临时闭馆通知',
-      '因设备检修，今晚 18:00 后闭馆，请提前借还书', '通知', '通知',
-      now - 19 * hour, now + 3 * hour));
-    list.push(this.makeSampleTask('sample-notice-course', '选课系统维护通知',
-      '选课系统本周六 00:00-06:00 维护，期间无法选课', '通知', '通知',
-      now - 15 * hour, now + 26 * hour));
-    list.push(this.makeSampleTask('sample-homework-practice', '提交社会实践材料',
-      '把实践报告和照片打包交给辅导员', '作业', '作业',
-      now - 11 * hour, now + 50 * hour));
-    list.push(this.makeSampleTask('sample-exam-math', '复习高等数学',
-      '重点看极限、导数和积分应用，做两套真题', '考试', '考试',
-      now - 7 * hour, now + 74 * hour));
-    list.push(this.makeSampleTask('sample-activity-club', '社团招新摆摊',
-      '下午三点到东广场集合，带好宣传物料', '活动', '活动',
-      now - 3 * hour, now + 98 * hour));
-    this.store.upsertAll(list);
-  }
-
-  private makeSampleTask(key: string, name: string, note: string, tag: string, category: string,
-    createdAt: number, dueAt: number): Task {
-    const task: Task = new Task();
-    task.clientTaskId = key;
-    task.name = name;
-    task.note = note;
-    task.category = category;
-    task.tags = [tag];
-    task.status = TaskStatus.CONFIRMED;
-    task.priority = TaskPriority.NORMAL;
-    task.createdAt = createdAt;
-    task.dueAt = dueAt;
-    task.dueText = this.sampleDueText(dueAt);
-    return task;
-  }
-
-  private sampleDueText(ms: number): string {
-    const d: Date = new Date(ms);
-    const hh: string = d.getHours() < 10 ? `0${d.getHours()}` : `${d.getHours()}`;
-    const mm: string = d.getMinutes() < 10 ? `0${d.getMinutes()}` : `${d.getMinutes()}`;
-    return `${d.getMonth() + 1}月${d.getDate()}日 ${hh}:${mm}`;
-  }
-
   @Builder
   emptyState() {
     Column() {
@@ -602,10 +561,16 @@ export struct A_TaskList {
                       // 2026-10-19 第七次修正：上一版只让**容器高度**变，副卡自己贴底不动，
                       // 观感是"被裁短了"而不是"滑出来"（作者：「副卡的位置不带动的」）。
                       // 现在让**两个量同时动**：
-                      //   · 外层容器高度：6vp ↔ 36vp（裁切窗口）
-                      //   · 副卡 translateY：-(36-6) ↔ 0（它自己从主卡底下往上顶 / 往下沉）
+                      //   · 外层容器高度：6vp ↔ 副卡完整高度（裁切窗口）
+                      //   · 副卡 translateY：-(完整高度 − 6) ↔ 0（它自己从主卡底下往上顶 / 往下沉）
                       // 两者同步 → 副卡的**位置真的在动**，从主卡底下滑出来。
                       // 阴影按作者反馈已去掉（「莫名其妙地边框阴影」）。
+                      //
+                      // 🔴 2026-10-27 修 bug（需求方：「紧凑模式下，有子任务的任务项失去区分」）：
+                      // 这里原来把"完整高度"写成常量 36vp，而副卡在**紧凑档只有 28vp** ——
+                      // 照样往上推 (36-6)=30vp 就把整张卡推到裁切窗口上方，**一条都不露**，
+                      // 于是紧凑模式下有子任务的卡片和普通卡片长得一模一样。
+                      // 现在高度一律取 `themeStore.subCardHeight`（36 / 28 两个档都对得上）。
                       //
                       // ⚠️ 宽度：百分比相对**父容器**（整屏 1320px）算，直接写 92% 会比主卡还宽
                       //   （实测 1214px vs 1208px）。所以先左右各缩进 16vp（与主卡留白一致）再取 92%。
@@ -622,17 +587,19 @@ export struct A_TaskList {
                           })
                         }
                         .width(STACK_LAYER_WIDTH)
-                        // 收起时把副卡整体上推 (36-6)=30vp，只留最下面一条在裁切窗口里
+                        // 收起时把副卡整体上推 (完整高度 − 露出高度)，只留最下面一条在裁切窗口里
                         .translate({
                           y: this.isStepsExpanded(task.id)
                             ? 0
-                            : -(SUB_CARD_FULL_HEIGHT_VP - STACK_LAYER_EDGE_VP)
+                            : -(this.themeStore.subCardHeight - STACK_LAYER_EDGE_VP)
                         })
                         .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
                       }
                       .width('100%')
                       .padding({ left: CARD_SIDE_MARGIN_VP, right: CARD_SIDE_MARGIN_VP })
-                      .height(this.isStepsExpanded(task.id) ? SUB_CARD_FULL_HEIGHT_VP : STACK_LAYER_EDGE_VP)
+                      .height(this.isStepsExpanded(task.id)
+                        ? this.themeStore.subCardHeight
+                        : STACK_LAYER_EDGE_VP)
                       .clip(true)
                       .alignItems(HorizontalAlign.Center)
                       .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
@@ -732,28 +699,9 @@ export struct A_TaskList {
         })
       }
 
-      // 样例入口：右下角小胶囊，一键塞演示任务（4 种 tag、创建时间与 ddl 都错开）。
-      // 反复点击按 `clientTaskId` 幂等合并，不会堆出重复卡片。
-      Column() {
-        Button({ type: ButtonType.Capsule, stateEffect: true }) {
-          Text('样例')
-            .fontSize(12)
-            .fontColor(this.themeStore.scheme.onSecondaryContainer)
-        }
-        .height(28)
-        .padding({ left: 14, right: 14 })
-        .backgroundColor(this.themeStore.scheme.secondaryContainer)
-        .id('sampleTasksButton')
-        .onClick(() => {
-          this.addSampleTasks();
-        })
-      }
-      .width('100%')
-      .height('100%')
-      .justifyContent(FlexAlign.End)
-      .alignItems(HorizontalAlign.End)
-      .padding({ right: 20, bottom: 96 })
-      .hitTestBehavior(HitTestMode.Transparent)
+      // 2026-10-27：右下角原来那颗「样例」胶囊按钮**已删除**（需求方：「任务列表页删去『样例』按钮，
+      // 转而统一到设置的『关于』下新增『演示模式』开关」）—— 演示数据的开/关现在在设置页，
+      // 任务列表页不再放任何演示入口。
     }
     .width('100%')
     .height('100%')

@@ -33,6 +33,15 @@ import { Theme, ThemeStore } from '../utils/Theme';
 
 /** M3 对话框内边距（vp）：规范 24dp */
 const DIALOG_PADDING_VP: number = 24;
+/**
+ * 底部内边距（vp）：比顶部收得多。
+ *
+ * 2026-10-27 需求方：「设置重复、添加标签两个弹窗的取消｜确定离下边界太远了」——
+ * 实测过：底部操作条那一行 48vp（文字居中，字形下方约 13vp）再叠 24vp 底内边距，
+ * 文字到弹窗下边界有 **38vp**。M3 对话框的动作区本来就贴着底边，所以底部只留 8vp，
+ * 现在约 19vp（点按热区仍由 `PickerFooter` 的 44vp 撑住）。
+ */
+const DIALOG_PADDING_BOTTOM_VP: number = 8;
 /** 横向内边距（vp）：收窄到 16，给「年月日时分」五列滚轮腾地方 */
 const DIALOG_PADDING_H_VP: number = 16;
 /** M3 对话框圆角（vp）：shape scale 的 extra-large */
@@ -57,7 +66,7 @@ export struct CenterDialogFrame {
       left: DIALOG_PADDING_H_VP,
       right: DIALOG_PADDING_H_VP,
       top: DIALOG_PADDING_VP,
-      bottom: DIALOG_PADDING_VP
+      bottom: DIALOG_PADDING_BOTTOM_VP
     })
     .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
     .borderRadius(DIALOG_RADIUS_VP)
@@ -67,19 +76,25 @@ export struct CenterDialogFrame {
   }
 }
 
-/** 面板里的小标题（如「设置到期时间」）：M3 `titleMedium` 16/24 字重 500 */
+/**
+ * 面板里的小标题（如「设置到期时间」）：**20vp / Bold**。
+ *
+ * 2026-10-27 需求方：「字号、排版未统一；弹窗的字号（标题、正文）、字重、排版、间距调整得更合适、统一」——
+ * 原来这里是 16vp / Medium，与面板正文（14vp）几乎一样大，标题在弹窗里"立不起来"；
+ * 现在升到 20vp 加粗、下留 16vp，与详情页那个半模态的抬头（大号加粗标题）同一观感。
+ */
 @ComponentV2
 export struct DialogTitle {
   @Require @Param text: ResourceStr;
 
   build() {
     Text(this.text)
-      .fontSize(Theme.FONT_TITLE)
-      .fontWeight(FontWeight.Medium)
+      .fontSize(Theme.FONT_DIALOG_TITLE)
+      .fontWeight(FontWeight.Bold)
       .fontColor($r('sys.color.ohos_id_color_text_primary'))
       .width('100%')
       .maxLines(1)
       .textAlign(TextAlign.Start)
-      .padding({ bottom: Theme.GAP_M })
+      .padding({ bottom: Theme.GAP_L })
   }
 }
