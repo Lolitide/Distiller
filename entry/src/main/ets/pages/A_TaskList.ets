@@ -134,8 +134,13 @@ const GROUP_EXPAND_ANIM_MS: number = 180;
  * 保留注释说明为什么不再用平移：位移做不出"卡一直在底下被压着"的图层关系。
  */
 const SUB_CARD_EMERGE_VP: number = 36;
-/** 副卡片展开后的完整高度（vp）：与 `TaskSubCard` 里的 `SUB_CARD_HEIGHT_VP` 保持一致 */
-const SUB_CARD_FULL_HEIGHT_VP: number = 36;
+/*
+ * ⚠️ 原来这里有个 `SUB_CARD_FULL_HEIGHT_VP = 36`（"副卡片完整高度，与 TaskSubCard 保持一致"），
+ * 2026-10-27 已删除：副卡片的真实高度是**随密度档变的**
+ * （`ThemeStore.subCardHeight`：标准 36 / 紧凑 **28**，见 `TaskSubCard` 的 `.height(...)`），
+ * 写死一个 36 就会在紧凑档上算错"往上推多少"——那次 bug 的根因正是它（详见下面堆叠层的注释）。
+ * 现在高度只从 `themeStore.subCardHeight` 取，只有一处真值源。
+ */
 /**
  * 副卡片折叠态的不透明度 —— **已移到 `Theme.OPACITY_CARD_DIM`**。
  *
@@ -602,10 +607,16 @@ export struct A_TaskList {
                       // 2026-10-19 第七次修正：上一版只让**容器高度**变，副卡自己贴底不动，
                       // 观感是"被裁短了"而不是"滑出来"（作者：「副卡的位置不带动的」）。
                       // 现在让**两个量同时动**：
-                      //   · 外层容器高度：6vp ↔ 36vp（裁切窗口）
-                      //   · 副卡 translateY：-(36-6) ↔ 0（它自己从主卡底下往上顶 / 往下沉）
+                      //   · 外层容器高度：6vp ↔ 副卡完整高度（裁切窗口）
+                      //   · 副卡 translateY：-(完整高度 − 6) ↔ 0（它自己从主卡底下往上顶 / 往下沉）
                       // 两者同步 → 副卡的**位置真的在动**，从主卡底下滑出来。
                       // 阴影按作者反馈已去掉（「莫名其妙地边框阴影」）。
+                      //
+                      // 🔴 2026-10-27 修 bug（需求方：「紧凑模式下，有子任务的任务项失去区分」）：
+                      // 这里原来把"完整高度"写成常量 36vp，而副卡在**紧凑档只有 28vp** ——
+                      // 照样往上推 (36-6)=30vp 就把整张卡推到裁切窗口上方，**一条都不露**，
+                      // 于是紧凑模式下有子任务的卡片和普通卡片长得一模一样。
+                      // 现在高度一律取 `themeStore.subCardHeight`（36 / 28 两个档都对得上）。
                       //
                       // ⚠️ 宽度：百分比相对**父容器**（整屏 1320px）算，直接写 92% 会比主卡还宽
                       //   （实测 1214px vs 1208px）。所以先左右各缩进 16vp（与主卡留白一致）再取 92%。
@@ -622,17 +633,19 @@ export struct A_TaskList {
                           })
                         }
                         .width(STACK_LAYER_WIDTH)
-                        // 收起时把副卡整体上推 (36-6)=30vp，只留最下面一条在裁切窗口里
+                        // 收起时把副卡整体上推 (完整高度 − 露出高度)，只留最下面一条在裁切窗口里
                         .translate({
                           y: this.isStepsExpanded(task.id)
                             ? 0
-                            : -(SUB_CARD_FULL_HEIGHT_VP - STACK_LAYER_EDGE_VP)
+                            : -(this.themeStore.subCardHeight - STACK_LAYER_EDGE_VP)
                         })
                         .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
                       }
                       .width('100%')
                       .padding({ left: CARD_SIDE_MARGIN_VP, right: CARD_SIDE_MARGIN_VP })
-                      .height(this.isStepsExpanded(task.id) ? SUB_CARD_FULL_HEIGHT_VP : STACK_LAYER_EDGE_VP)
+                      .height(this.isStepsExpanded(task.id)
+                        ? this.themeStore.subCardHeight
+                        : STACK_LAYER_EDGE_VP)
                       .clip(true)
                       .alignItems(HorizontalAlign.Center)
                       .animation({ duration: EXPAND_ANIM_MS, curve: Curve.FastOutSlowIn })
