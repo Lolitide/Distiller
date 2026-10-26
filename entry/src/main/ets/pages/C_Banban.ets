@@ -35,7 +35,8 @@ const LANE_H_VP: number = 26;
 /** 缩放档位：时间窗口长度（天）。默认 3 天（下标 1） */
 const ZOOM_DAYS: number[] = [1, 3, 7, 14, 30];
 const DEFAULT_ZOOM_INDEX: number = 1;
-/** 甘特背景板最大高度（vp），轨道过多时内部滚动 */
+/** 底部渐变遮罩高度（vp）：与任务列表 / 设置页同一套，内容滑到胶囊和＋下方时淡出 */
+const BOTTOM_MASK_VP: number = 140;
 /** 甘特条配色（按轨道轮换；与主题无关，保证相邻轨道可分） */
 const LANE_COLORS: string[] = ['#5B8FF9', '#61DDAA', '#F6BD16', '#7262FD', '#78D3F8', '#9661BC', '#E8684A'];
 
@@ -43,6 +44,20 @@ const LANE_COLORS: string[] = ['#5B8FF9', '#61DDAA', '#F6BD16', '#7262FD', '#78D
 export struct C_Banban {
   @Require @Param store: TaskListStore;
   @Local themeStore: ThemeStore = ThemeStore.instance();
+
+  /** 底部遮罩颜色：与任务列表 / 设置页同一套 6 档色标，色相取当前主题 surface */
+  @Computed
+  get bottomMaskColors(): Array<[ResourceColor, number]> {
+    const surface: string = this.themeStore.scheme.surface;
+    return [
+      [Theme.withAlpha(surface, '00'), 0.0],
+      [Theme.withAlpha(surface, '40'), 0.25],
+      [Theme.withAlpha(surface, '8C'), 0.49],
+      [Theme.withAlpha(surface, 'CC'), 0.70],
+      [Theme.withAlpha(surface, 'EE'), 0.85],
+      [Theme.withAlpha(surface, 'FF'), 1.0]
+    ];
+  }
   /** 当前时间轴的位置（毫秒）；拖动时间轴时更新，上方简要详情显示它穿过的事件 */
   @Local cursorMs: number = 0;
   /** 缩放档位（只有用户点 + / − 才变） */
@@ -69,8 +84,6 @@ export struct C_Banban {
   private redrawTimer: number = -1;
   /** 状态栏高度（vp）：本页隐藏了 HDS 标题栏，自己画标题行，需要让开系统栏 */
   @Local statusBarVp: number = 0;
-  /** 标题右侧时间文本（由 updateCursor/drawGantt 主动同步，保证一定触发重绘） */
-  @Local cursorLabelStr: string = '';
 
   aboutToAppear(): void {
     const ctx: common.Context | undefined = this.getUIContext().getHostContext();
@@ -144,33 +157,6 @@ export struct C_Banban {
       start = Math.min(start, list[i].createdAt);
     }
     return start === Number.MAX_SAFE_INTEGER ? Date.now() : start;
-  }
-
-  /** 可动轴时间文案：时间刻：MM:DD HH:MM（没有 ddl / 不显示图表时为空） */
-  /**
-   * 把当前可动轴时间同步进 `cursorLabelStr`（只在文本变化时才写 `@Local`，避免无谓重绘）。
-   *
-   * 这个值的去处：**详情区顶部那一行右对齐的小字**（原来是画在自绘标题行右侧的，
-   * 标题栏改用 HDS 之后搬到内容区，见 `build()` 里那段注释）。
-   */
-  private syncCursorLabel(): void {
-    const next: string = this.dueTasks().length === 0 ? '' : this.cursorLabelText();
-    if (next !== this.cursorLabelStr) {
-      this.cursorLabelStr = next;
-    }
-  }
-
-  private cursorLabelText(): string {
-    if (this.dueTasks().length === 0) {
-      return '';
-    }
-    const ms: number = this.cursorInit ? this.cursorMs : Date.now();
-    const d: Date = new Date(ms);
-    const hh: string = d.getHours() < 10 ? `0${d.getHours()}` : `${d.getHours()}`;
-    const mi: string = d.getMinutes() < 10 ? `0${d.getMinutes()}` : `${d.getMinutes()}`;
-    const mm: string = d.getMonth() + 1 < 10 ? `0${d.getMonth() + 1}` : `${d.getMonth() + 1}`;
-    const dd: string = d.getDate() < 10 ? `0${d.getDate()}` : `${d.getDate()}`;
-    return `时间刻：${mm}:${dd} ${hh}:${mi}`;
   }
 
   /** 固定时间窗口长度（不再按任务跨度自动拉伸，只有用户缩放才变） */
@@ -576,7 +562,6 @@ export struct C_Banban {
       this.cursorMs = cursor;
       this.cursorInit = true;
     }
-    this.syncCursorLabel();
     const cx: number = plotX + ((cursor - start) / span) * plotW;
     ctx.strokeStyle = this.themeStore.scheme.primary;
     // 可动轴细一半（原来 2vp，太抢眼）
@@ -680,7 +665,6 @@ export struct C_Banban {
       this.cursorMs = start + ((rel - plotX) / plotW) * Math.max(1, end - start);
     }
     this.cursorInit = true;
-    this.syncCursorLabel();
     this.drawGantt();
   }
 
@@ -855,24 +839,6 @@ export struct C_Banban {
       Column() {
         // ── 上 70%：简要详情 ──
         Column() {
-          // **可动轴时间**（2026-10-25 搬家）：原来画在本页**自绘标题行**的右侧；
-          // 标题栏改用 HDS 之后（与设置页一致，见 `A_Main` 那条注释），标题区归 HDS 管，
-          // 这行文字就挪到这里 —— 放在它描述的这块内容（时间轴穿过的事件）正上方、右对齐。
-          // 显示规则不变：没有 ddl / 不显示图表时 `cursorLabelStr` 为空，整行不渲染。
-          if (this.cursorLabelStr.length > 0) {
-            Row() {
-              Blank()
-              Text(this.cursorLabelStr)
-                .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.themeStore.scheme.onSurfaceVariant)
-                .maxLines(1)
-            }
-            .width('100%')
-            .padding({ left: 16, right: 16, top: 4, bottom: 2 })
-            // 纯展示：不挡下面卡片的点击
-            .hitTestBehavior(HitTestMode.None)
-          }
-
           if (this.dueTasks().length === 0) {
             // 空态提示统一由下面的覆盖层负责
             Column()
@@ -1027,6 +993,21 @@ export struct C_Banban {
       // 原来那行是 `.position({ y: statusBarVp + 4 })` 的浮层，字号 28 / 左右 20vp 都是手写的，
       // 与 HDS 的 MINI 标题栏对不齐，这正是作者说的「和设置页面的不一样」。
       // 内容顶部让白保留 `statusBarVp + 64`（与 `A_Settings` 的 `TITLE_CLEARANCE_VP + statusBarVp` 同档）。
+
+      // 底部渐变遮罩：与任务列表 / 设置页同一套，让甘特内容在悬浮页签和「＋」下方淡出
+      Column() {
+        Blank()
+        Column()
+          .width('100%')
+          .height(BOTTOM_MASK_VP)
+          .linearGradient({
+            direction: GradientDirection.Bottom,
+            colors: this.bottomMaskColors
+          })
+      }
+      .width('100%')
+      .height('100%')
+      .hitTestBehavior(HitTestMode.None)
 
       // 空态（2026-10-25，作者：「板板页面无任务的时候，也像任务列表页面一样显示一个图标再加文字」）：
       // **复用 `EmptyHint`** —— 任务列表的空态和搜索页的两种空态用的就是它（图示 + 一句灰字），

@@ -1,4 +1,9 @@
-import { HdsNavigation, HdsNavigationMenuContentOptions, HdsNavigationTitleMode } from '@kit.UIDesignKit';
+import {
+  HdsNavigation,
+  HdsNavigationMenuContentOptions,
+  HdsNavigationTitle,
+  HdsNavigationTitleMode
+} from '@kit.UIDesignKit';
 import { common } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
 import { Theme, ThemeStore } from '../utils/Theme';
@@ -9,6 +14,7 @@ import { MainTabBar } from '../components/MainTabBar';
 import { MainTitleBar } from '../components/MainTitleBar';
 import { NAV_STACK_KEY, ROUTE_SEARCH } from '../viewmodel/TaskNavParams';
 import { TaskListStore } from '../viewmodel/TaskListStore';
+import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
 import { DraftRepository } from '../repository/DraftRepository';
 import { SettingsRepository } from '../repository/SettingsRepository';
@@ -50,6 +56,9 @@ struct A_Main {
    */
   private store: TaskListStore = TaskListStore.instance();
   @Local currentIndex: number = 0;
+  /** 板板页标题右侧的「现在是 XX月XX日 XX:XX」 */
+  @Local banbanNowLabel: string = '';
+  private clockTimer: number = -1;
   /**
    * 「添加任务」半模态（`bindSheet`）的显隐（需求方 2026-10-17：「点击底部页签的添加按钮后
    * 显示一个 bindSheet 先完成这个功能」）。
@@ -98,6 +107,18 @@ struct A_Main {
     this.forwardTimer = setInterval(() => {
       this.pullForwarded();
     }, 15000);
+    this.refreshBanbanNowLabel();
+    this.clockTimer = setInterval(() => {
+      this.refreshBanbanNowLabel();
+    }, 30000);
+  }
+
+  /** 板板标题右侧的实时时间（分钟精度；30 秒刷新一次，跨分钟不会迟太久） */
+  private refreshBanbanNowLabel(): void {
+    const d: Date = new Date();
+    this.banbanNowLabel = `现在是  ${TaskListViewModel.pad2(d.getMonth() + 1)}月`
+      + `${TaskListViewModel.pad2(d.getDate())}日  `
+      + `${TaskListViewModel.pad2(d.getHours())}:${TaskListViewModel.pad2(d.getMinutes())}`;
   }
 
   /** 首次启动：没看过引导就全屏覆盖；不阻塞列表初始化 */
@@ -403,6 +424,10 @@ struct A_Main {
       clearInterval(this.reminderTimer);
       this.reminderTimer = -1;
     }
+    if (this.clockTimer >= 0) {
+      clearInterval(this.clockTimer);
+      this.clockTimer = -1;
+    }
   }
 
   /**
@@ -467,6 +492,18 @@ struct A_Main {
       return $r('app.string.tab_banban');
     }
     return $r('app.string.tab_settings');
+  }
+
+  /**
+   * 标题栏内容：板板页在主标题右/下补一行实时时间（「现在是 MM月DD日 HH:MM」），
+   * 其他页签不显示副标题。
+   */
+  @Computed
+  get navTitleContent(): HdsNavigationTitle {
+    if (this.currentIndex === 1) {
+      return { mainTitle: this.navTitle, subTitle: this.banbanNowLabel };
+    }
+    return { mainTitle: this.navTitle };
   }
 
   /**
@@ -646,7 +683,7 @@ struct A_Main {
       avoidLayoutSafeArea: true,
       style: MainTitleBar.style(this.themeStore.scheme.surface, this.themeStore.scheme.onSurface),
       content: {
-        title: { mainTitle: this.navTitle },
+        title: this.navTitleContent,
         menu: this.navMenu
       }
     })
