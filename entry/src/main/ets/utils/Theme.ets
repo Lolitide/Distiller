@@ -36,6 +36,13 @@ export class Theme {
   static readonly FONT_BODY: number = 14;
   static readonly FONT_CAPTION: number = 12;
 
+  /**
+   * 弹窗标题字号（vp）：比正文大一档、加粗 —— 与系统半模态的抬头（详情页「设置重复」那个
+   * 底部面板）观感对齐。之前用的是 16vp Medium，和面板里的正文（14vp）几乎一样大，
+   * 弹窗看起来"没有标题"（需求方 2026-10-27：「字号、排版未统一」）。
+   */
+  static readonly FONT_DIALOG_TITLE: number = 20;
+
   /* 行高（vp） */
   static readonly LINE_BODY: number = 22;
   static readonly LINE_CAPTION: number = 18;

@@ -26,6 +26,7 @@ import { ThemeStore } from '../utils/Theme';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { RepeatFrequency, RepeatRule } from '../model';
+import { PickerFooter } from './PickerFooter';
 import { Theme } from '../utils/Theme';
 
 const DOMAIN: number = 0x0000;
@@ -84,8 +85,6 @@ const FREQ_OPTIONS: FrequencyOption[] = [
   new FrequencyOption('每月', FREQ_MONTHLY),
   new FrequencyOption('每年', FREQ_YEARLY)
 ];
-/** 底部操作条高度（vp） */
-const FOOTER_HEIGHT_VP: number = 56;
 /** 正文区高度上限（vp）：超出由 `Scroll` 承担 */
 const EDITOR_MAX_HEIGHT_VP: number = 420;
 
@@ -424,37 +423,25 @@ export struct RepeatRuleEditor {
           }
         }
         .width('100%')
-        .padding({ left: Theme.GAP_L, right: Theme.GAP_L, top: Theme.GAP_L })
+        // ⚠️ 这里**不再自己加左右内边距**（原来左/右/上各 16vp）：
+        //    弹窗外框（`CenterDialogFrame`）已经给了 16vp，再叠一层的话
+        //    标题在 16vp、列表却从 32vp 起 —— 标题和列表左缘对不齐（需求方 2026-10-27 报的"排版未统一"）。
       }
       .width('100%')
       .constraintSize({ maxHeight: EDITOR_MAX_HEIGHT_VP })
       .scrollBar(BarState.Off)
       .align(Alignment.Top)
 
-      // 底部操作条：取消 / 确定
-      Row() {
-        Text('取消')
-          .fontSize(Theme.FONT_TITLE)
-          .fontColor($r('sys.color.ohos_id_color_text_primary'))
-          .layoutWeight(1)
-          .height('100%')
-          .textAlign(TextAlign.Center)
-          .onClick(() => {
-            this.onCancel();
-          })
-        Text('确定')
-          .fontSize(Theme.FONT_TITLE)
-          .fontColor(this.themeStore.scheme.primary)
-          .layoutWeight(1)
-          .height('100%')
-          .textAlign(TextAlign.Center)
-          .onClick(() => {
-            this.confirm();
-          })
-      }
-      .width('100%')
-      .height(FOOTER_HEIGHT_VP)
-      .alignItems(VerticalAlign.Center)
+      // 底部操作条：与其它所有面板**共用** `PickerFooter`（同一套高度 / 分隔线 / 取色）——
+      // 原来这里自己画了一份（无分隔线、取消用正文色、56vp 高），和「添加标签」那个弹窗不是一套
+      PickerFooter({
+        onCancel: () => {
+          this.onCancel();
+        },
+        onConfirm: () => {
+          this.confirm();
+        }
+      })
     }
     .width('100%')
   }

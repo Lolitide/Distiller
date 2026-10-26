@@ -24,9 +24,14 @@ import { Theme, ThemeStore } from '../utils/Theme';
 const DOMAIN: number = 0x0000;
 const TAG: string = 'TaskRawTextCard';
 
-/** 卡片内边距（vp）：与备注卡一致（官方 `padding_level8`） */
+/** 卡片内边距（vp）：四边一致（官方 `padding_level8`），与备注卡、元信息卡同一档 */
 const CARD_PADDING_VP: number = 16;
-/** 标题行与正文之间的间距（vp） */
+/**
+ * 标题行与正文之间的间距（vp）。
+ *
+ * 2026-10-27 需求方：「原文和原文内容之间添加间距」—— 原来 4vp，标题（14vp）和正文（14vp/行高 22）
+ * 几乎糊在一起；给到 8vp 之后，标题与正文在视觉上分成"小标题 + 内容"两层，又不会空出一大块。
+ */
 const HEADER_GAP_VP: number = 8;
 /** 折叠时显示的行数：整段群消息常见的长度下，4 行足以让用户认出"是不是这条" */
 const COLLAPSE_MAX_LINES: number = 4;
@@ -34,8 +39,8 @@ const COLLAPSE_MAX_LINES: number = 4;
 const EXPANDED_MAX_LINES: number = 200;
 /** 超过这么多字符才显示「展开/收起」（短原文一眼看完，不需要交互） */
 const COLLAPSE_THRESHOLD_CHARS: number = 80;
-/** 标题图标尺寸（vp） */
-const TITLE_ICON_SIZE_VP: number = 16;
+/** 「复制」图标的字号（vp）：略大于标题文字的 14vp（左侧标题前缀图标已按需求方要求去掉） */
+const COPY_ICON_SIZE_VP: number = 18;
 /** 复制按钮的热区（vp）：官方最小可点 40 */
 const COPY_HIT_VP: number = 40;
 
@@ -90,14 +95,20 @@ export struct TaskRawTextCard {
 
   build() {
     Column() {
-      // ① 标题行：「原文」＋ 展开/收起 ＋ 复制
-      Row({ space: Theme.GAP_S }) {
-        SymbolGlyph($r('sys.symbol.doc_text'))
-          .fontSize(TITLE_ICON_SIZE_VP)
-          .fontColor([$r('sys.color.icon_secondary')])
-
+      // ① 标题行：「原文」＋ 展开/收起 ＋ 复制（右侧）
+      //
+      // 2026-10-27 需求方两处要求：
+      //  · 「这个原文和图标的字号和上面的『创建于』一样大」→ 标题 `body1`（14vp）、次要色，
+      //    与「更多信息」卡里「创建于 / 地点 / 置信度」那一列标签同一档；
+      //  · 「去掉原文前的图标」→ 标题左侧**不再有 `doc_text` 图标**，标题文字直接对齐卡片
+      //    左右内边距（也就是与正文左缘对齐）。
+      // ⚠️ 行内**不要放 40vp 的圆形 Button**：它会把标题行撑到 32~40vp，标题字被垂直居中后
+      // 上下各空一截（"原文离卡片上边界太远"就是这么来的）。复制只是一个**图标字形** +
+      // `responseRegion` 撑出的 40vp 热区，标题行高度就是文字本身的高度，
+      // 「原文」离卡片上边界的距离＝正文离下边界的距离＝卡片内边距 16vp。
+      Row() {
         Text($r('app.string.raw_text_title'))
-          .fontSize($r('sys.float.ohos_id_text_size_body2'))
+          .fontSize($r('sys.float.ohos_id_text_size_body1'))
           .fontColor($r('sys.color.ohos_id_color_text_secondary'))
           .maxLines(1)
 
@@ -105,7 +116,7 @@ export struct TaskRawTextCard {
 
         if (this.longText) {
           Text(this.expanded ? $r('app.string.raw_text_collapse') : $r('app.string.raw_text_expand'))
-            .fontSize($r('sys.float.ohos_id_text_size_body2'))
+            .fontSize($r('sys.float.ohos_id_text_size_body1'))
             .fontColor(this.themeStore.scheme.primary)
             .maxLines(1)
             .padding({ left: Theme.GAP_S, right: Theme.GAP_S })
@@ -117,29 +128,34 @@ export struct TaskRawTextCard {
               : $r('app.string.raw_text_expand'))
         }
 
-        // 复制：整段进剪贴板（正文本身也支持长按选中复制）
-        Button({ type: ButtonType.Circle, stateEffect: true }) {
-          SymbolGlyph($r('sys.symbol.doc_text_on_doc_text'))
-            .fontSize($r('sys.float.ohos_id_text_size_body1'))
-            .fontColor([$r('sys.color.icon_secondary')])
-        }
-        .width(COPY_HIT_VP)
-        .height(COPY_HIT_VP)
-        .padding(0)
-        .backgroundColor(Color.Transparent)
-        .onClick(() => {
-          this.copyAll();
-        })
-        .accessibilityText($r('app.string.raw_text_copy'))
+        // 复制：整段进剪贴板（正文本身也支持长按选中复制）。
+        // 只画字形、不占大块布局，40vp 可点热区靠 `responseRegion` 向外撑。
+        SymbolGlyph($r('sys.symbol.doc_text_on_doc_text'))
+          .fontSize(COPY_ICON_SIZE_VP)
+          .fontColor([$r('sys.color.icon_secondary')])
+          .responseRegion({
+            x: -(COPY_HIT_VP - COPY_ICON_SIZE_VP) / 2,
+            y: -(COPY_HIT_VP - COPY_ICON_SIZE_VP) / 2,
+            width: COPY_HIT_VP,
+            height: COPY_HIT_VP
+          })
+          .onClick(() => {
+            this.copyAll();
+          })
+          .accessibilityText($r('app.string.raw_text_copy'))
       }
       .width('100%')
       .alignItems(VerticalAlign.Center)
       .margin({ bottom: HEADER_GAP_VP })
 
       // ② 正文：只读文本（长按可选中/复制），超长折叠 + 省略号
+      //
+      // 2026-10-27 需求方：「参考备注的字号 排版」—— 原来这里是 `body2`（12vp），
+      // 比上面的「备注」卡正文字号（`body1` 14vp）小一档，同一页两块正文看着不统一。
+      // 现在统一到 `body1` + `Theme.LINE_BODY`(22vp) 行高，与备注卡正文**同一套字号与行高**。
       Text(this.rawText)
         .width('100%')
-        .fontSize($r('sys.float.ohos_id_text_size_body2'))
+        .fontSize($r('sys.float.ohos_id_text_size_body1'))
         .fontColor($r('sys.color.ohos_id_color_text_primary'))
         .lineHeight(`${Theme.LINE_BODY}vp`)
         .maxLines(this.maxLines)
@@ -151,6 +167,8 @@ export struct TaskRawTextCard {
     }
     .width('100%')
     .alignItems(HorizontalAlign.Start)
+    // 四边同一档内边距：**上（「原文」到卡上边界）＝ 下（正文到卡下边界）**，
+    // 需求方 2026-10-27：「『原文』离卡片的上边界的距离改成和原文内容离下边距的距离一样」
     .padding(CARD_PADDING_VP)
     // 与备注卡、标签卡同一档：M3 `surface-container-low` + 官方卡片圆角
     .backgroundColor(this.themeStore.scheme.surfaceContainerLow)

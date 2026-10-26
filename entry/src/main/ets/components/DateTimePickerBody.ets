@@ -146,7 +146,9 @@ export struct DateTimePickerBody {
         }
       }
       .width('100%')
-      .padding({ left: Theme.GAP_L, right: Theme.GAP_L, top: Theme.GAP_M })
+      // ⚠️ 里面**不再叠左右 16vp 内边距**：弹窗外框（`CenterDialogFrame`）已经给过，
+      //    再叠一层的话标题在 16vp、输入框却从 32vp 起，左缘对不齐（2026-10-27 排版统一）。
+      .padding({ top: 0 })
 
       // ② 汇总标题：一行大字把当前选中的日期念出来（2026-10-19 对齐系统日历参考）
       Text(this.summaryLabel)
