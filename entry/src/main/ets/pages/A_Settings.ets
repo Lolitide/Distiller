@@ -159,8 +159,10 @@ export struct A_Settings {
   /** 连接状态文案（已连接 / 失败原因） */
   @Local backendState: string = '未连接';
   @Local backendBusy: boolean = false;
-  /** 「导出任务」那一行的格式菜单显隐（FE-60） */
-  @Local exportMenuShown: boolean = false;
+  /*
+   * 2026-10-27：原来这里有个 `@Local exportMenuShown`（导出格式 `bindPopup` 小浮窗的显隐），
+   * 导出现在改成 `showDialog` 三选项对话框，不再需要这个状态。
+   */
   /** 绑定状态与配对码 */
   @Local bound: boolean = false;
   @Local bindCode: string = '';
@@ -1063,46 +1065,40 @@ export struct A_Settings {
   }
 
   /**
-   * 导出菜单（FE-60）：点「导出任务」那一行弹出。
-   * 三种口径按"给人看 / 给机器看 / 贴到别处"分：CSV 白名单列、JSON 完整（含原文）、复制到剪贴板。
+   * 导出对话框（2026-10-27 需求方：「设置页导出用三选项对话弹出框（showDialog）实现」）。
+   *
+   * 三种口径按"给人看 / 给机器看 / 贴到别处"分，正文里各用一句话说清差别：
+   *  · CSV  —— 表格，给 Excel/表格软件看，**不含原文**（原文是本机溯源字段，不往外贴）；
+   *  · JSON —— 完整数据（含原文），给别的工具或以后导入用；
+   *  · 剪贴板 —— CSV 文本直接贴到聊天/文档里。
+   *
+   * 为什么用 `showDialog` 而不是 `bindPopup`：这是"三选一"的决策，不是贴着某一行的上下文菜单；
+   * 居中对话框能同时把三种口径的解释摆出来，和设置页「清空全部任务」「删除服务端数据」同一套长相。
    */
-  @Builder
-  exportMenu() {
-    Column() {
-      Text('CSV（表格，不含原文）')
-        .width('100%')
-        .height(ROW_HEIGHT_VP)
-        .fontSize($r('sys.float.ohos_id_text_size_body1'))
-        .fontColor($r('sys.color.ohos_id_color_text_primary'))
-        .textAlign(TextAlign.Start)
-        .onClick(() => {
-          this.exportMenuShown = false;
-          this.exportTasks('csv');
-        })
-      Text('JSON（完整，含原文）')
-        .width('100%')
-        .height(ROW_HEIGHT_VP)
-        .fontSize($r('sys.float.ohos_id_text_size_body1'))
-        .fontColor($r('sys.color.ohos_id_color_text_primary'))
-        .textAlign(TextAlign.Start)
-        .onClick(() => {
-          this.exportMenuShown = false;
-          this.exportTasks('json');
-        })
-      Text('复制到剪贴板（CSV）')
-        .width('100%')
-        .height(ROW_HEIGHT_VP)
-        .fontSize($r('sys.float.ohos_id_text_size_body1'))
-        .fontColor($r('sys.color.ohos_id_color_text_primary'))
-        .textAlign(TextAlign.Start)
-        .onClick(() => {
-          this.exportMenuShown = false;
-          this.exportToClipboard();
-        })
+  private showExportDialog(): void {
+    if (this.store.allTasks().length === 0) {
+      this.toast('没有可导出的任务');
+      return;
     }
-    .width(240)
-    .padding(8)
-    .alignItems(HorizontalAlign.Start)
+    this.getUIContext().getPromptAction().showDialog({
+      title: '导出任务',
+      message: 'CSV：表格（不含原文）\nJSON：完整数据（含原文）\n剪贴板：复制 CSV 文本',
+      buttons: [
+        { text: 'CSV', color: this.themeStore.scheme.primary },
+        { text: 'JSON', color: this.themeStore.scheme.primary },
+        { text: '剪贴板', color: this.themeStore.scheme.primary }
+      ]
+    }).then((result: promptAction.ShowDialogSuccessResponse) => {
+      if (result.index === 0) {
+        this.exportTasks('csv');
+      } else if (result.index === 1) {
+        this.exportTasks('json');
+      } else if (result.index === 2) {
+        this.exportToClipboard();
+      }
+    }).catch(() => {
+      // 用户点蒙层关掉：什么都不做
+    });
   }
 
   /**
@@ -1862,7 +1858,10 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
-          // 「导出任务」：点一下弹格式菜单（FE-60）。CSV/JSON 走系统保存面板，剪贴板走 pasteboard
+          // 「导出任务」：点一下弹**三选项对话框**（`showDialog`，2026-10-27 需求方指定）。
+          // 原来是 `bindPopup` 贴着这一行的小浮窗（三行纯文字），改成居中对话框后：
+          // 标题说"导出任务"、正文三行说清三种口径的差别、底部三颗按钮直接选，
+          // 与设置页其它弹窗（清空任务 / 删除服务端数据）同一套官方长相。
           Row({ space: 8 }) {
             Text('导出任务')
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
@@ -1883,20 +1882,7 @@ export struct A_Settings {
           .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
           .alignItems(VerticalAlign.Center)
           .onClick(() => {
-            this.exportMenuShown = true;
-          })
-          .bindPopup(this.exportMenuShown, {
-            builder: this.exportMenu(),
-            placement: Placement.Bottom,
-            popupColor: this.themeStore.scheme.surfaceContainerHigh,
-            radius: 16,
-            enableArrow: false,
-            focusable: true,
-            onStateChange: (event) => {
-              if (!event.isVisible) {
-                this.exportMenuShown = false;
-              }
-            }
+            this.showExportDialog();
           })
 
           this.rowDivider()
