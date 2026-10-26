@@ -1958,19 +1958,14 @@ export struct A_Settings {
         Column() {
           // 「演示模式」：列表页右下角那颗「样例」按钮搬到这里（需求方 2026-10-27）。
           // 开 → 加入一组演示任务；关 → 按 clientTaskId 前缀（`sample-`）摘掉它们，用户自己的任务不受影响。
+          // 2026-10-27 第二轮：需求方要去掉开关下面那句说明文案，只留标题 + 开关。
           Row({ space: 8 }) {
-            Column({ space: 2 }) {
-              Text('演示模式')
-                .fontSize($r('sys.float.ohos_id_text_size_body1'))
-                .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              Text('加入一组演示任务，关闭即移除')
-                .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-            }
-            .layoutWeight(1)
-            .alignItems(HorizontalAlign.Start)
+            Text('演示模式')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+              .maxLines(1)
+              .textAlign(TextAlign.Start)
 
             // 开关同样必须用 `M3Switch`（裸 `Toggle` 的选中轨道固定取系统蓝，换主题色不会变）
             M3Switch({
