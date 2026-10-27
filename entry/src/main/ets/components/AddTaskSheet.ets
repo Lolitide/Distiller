@@ -577,6 +577,9 @@ export struct AddTaskSheet {
           // 一行装不下由组件内部的 `Flex(wrap)` 自动换行；这里只留 16vp 上间距。
           AddTaskAttributeChips({
             draft: this.draft,
+            // 2026-10-27：标签管理要用 ——「添加标签」弹窗里复用了详情页的既有标签选择条
+            //（点已有标签加入 / 长按删除），两条都要读 `store.allTags` / `store.deleteTagEverywhere`。
+            store: this.store,
             aiBusy: this.aiBusy,
             showAi: true,
             lowConfidence: this.draft.certainty > 0 && this.draft.certainty < 60,
