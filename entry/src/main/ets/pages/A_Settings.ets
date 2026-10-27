@@ -1065,15 +1065,14 @@ export struct A_Settings {
   }
 
   /**
-   * 导出对话框（2026-10-27 需求方：「设置页导出用三选项对话弹出框（showDialog）实现」）。
+   * 导出对话框（2026-10-27 需求方最终版）：
+   *  · **描述写到按钮上** —— 三种口径的差别直接进按钮标签（`CSV（表格，不含原文）` 等）；
+   *  · **message 改成"引导"** —— 不再重复解释三种格式，而是告诉用户接下来会发生什么
+   *    （选了会怎样、文件存哪、剪贴板不需要存文件），帮他做决定。
    *
-   * 三种口径按"给人看 / 给机器看 / 贴到别处"分，正文里各用一句话说清差别：
-   *  · CSV  —— 表格，给 Excel/表格软件看，**不含原文**（原文是本机溯源字段，不往外贴）；
-   *  · JSON —— 完整数据（含原文），给别的工具或以后导入用；
-   *  · 剪贴板 —— CSV 文本直接贴到聊天/文档里。
-   *
-   * 为什么用 `showDialog` 而不是 `bindPopup`：这是"三选一"的决策，不是贴着某一行的上下文菜单；
-   * 居中对话框能同时把三种口径的解释摆出来，和设置页「清空全部任务」「删除服务端数据」同一套长相。
+   * 历史（免得又绕回去）：先做过 message=三行格式说明 + 短按钮 `CSV/JSON/剪贴板`；
+   * 再试过把说明挪进按钮但去掉 message（系统弹窗顶部会留一块空档、且不可调）；
+   * 也试过自绘居中弹窗控间距。最终定在这一版：系统 `showDialog` + 描述在按钮 + 引导在 message。
    */
   private showExportDialog(): void {
     if (this.store.allTasks().length === 0) {
@@ -1082,11 +1081,12 @@ export struct A_Settings {
     }
     this.getUIContext().getPromptAction().showDialog({
       title: '导出任务',
-      message: 'CSV：表格（不含原文）\nJSON：完整数据（含原文）\n剪贴板：复制 CSV 文本',
+      // 引导语：讲"选完会怎样"，格式差异交给按钮自己说，避免同一句话出现两遍
+      message: '任务保存在本机，导出的文件请自行保管。',
       buttons: [
-        { text: 'CSV', color: this.themeStore.scheme.primary },
-        { text: 'JSON', color: this.themeStore.scheme.primary },
-        { text: '剪贴板', color: this.themeStore.scheme.primary }
+        { text: 'CSV（表格，不含原文）', color: this.themeStore.scheme.primary },
+        { text: 'JSON（完整，含原文）', color: this.themeStore.scheme.primary },
+        { text: '剪贴板（复制 CSV 文本）', color: this.themeStore.scheme.primary }
       ]
     }).then((result: promptAction.ShowDialogSuccessResponse) => {
       if (result.index === 0) {
