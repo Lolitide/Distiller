@@ -39,7 +39,7 @@ import { M3Switch } from '../components/M3Switch';
 import { Task } from '../model';
 import { buildDemoTasks, DEMO_TASK_PREFIX } from '../mock/DemoTasks';
 import { TaskListStore } from '../viewmodel/TaskListStore';
-import { NAV_STACK_KEY, ROUTE_PRIVACY_POLICY } from '../viewmodel/TaskNavParams';
+import { NAV_STACK_KEY, ROUTE_CLOUD_FIELDS, ROUTE_PRIVACY_POLICY } from '../viewmodel/TaskNavParams';
 import { PrivacyConsent } from '../service/system/PrivacyConsent';
 import { TaskExportViewModel, TaskImportParseResult } from '../viewmodel/TaskExportViewModel';
 import { TaskExportResult, TaskExportService } from '../service/system/TaskExportService';
@@ -778,16 +778,16 @@ export struct A_Settings {
     AppStorage.get<NavPathStack>(NAV_STACK_KEY)?.pushPathByName(ROUTE_PRIVACY_POLICY, '');
   }
 
-  /** 云端字段清单：与隐私说明同一口径，不把「本机数据」混进来 */
-  private showCloudFields(): void {
-    this.getUIContext().getPromptAction().showDialog({
-      title: '会离开手机的字段',
-      message: '同步开启时，App 会向你的服务器发送：设备标识、绑定关系、群订阅、'
-        + '采纳/忽略反馈计数、Push 令牌（未接入则没有）。'
-        + '\n\n服务器只临时保存群消息原文（内存 30 分钟，不落盘）。'
-        + '\n\n任务名称、备注、原文、草稿、画像只存在本机；原文不会回传。',
-      buttons: [{ text: '知道了', color: this.themeStore.scheme.primary }]
-    });
+  /**
+   * 「会离开手机的字段」：2026-10-27 需求方「这个不用系统 showDialog，用一个新的页面展示」。
+   *
+   * 原来这里是 `showDialog` 弹的三段长文（字号小、行宽窄、六七行换行，读起来很挤）；
+   * 现在 push 进独立页 `B_CloudFields`：大标题 + 分节 + 14vp / 22vp 行高的正文，
+   * 与《隐私政策》同一套版式。内容口径不变（与 `SyncService` / `FeedbackService` /
+   * `PushRegistrar` 三条链路对齐），只是排版从"弹窗"换成"页面"。
+   */
+  private openCloudFields(): void {
+    AppStorage.get<NavPathStack>(NAV_STACK_KEY)?.pushPathByName(ROUTE_CLOUD_FIELDS, '');
   }
 
   /** 隐私说明：只讲本机存什么、什么会离开手机 */
@@ -1803,7 +1803,7 @@ export struct A_Settings {
           .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
           .alignItems(VerticalAlign.Center)
           .onClick(() => {
-            this.showCloudFields();
+            this.openCloudFields();
           })
 
           this.rowDivider()

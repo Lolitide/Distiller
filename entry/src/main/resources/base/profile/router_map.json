@@ -14,6 +14,11 @@
       "name": "PrivacyPolicyPage",
       "pageSourceFile": "src/main/ets/pages/B_PrivacyPolicy.ets",
       "buildFunction": "PrivacyPolicyPageBuilder"
+    },
+    {
+      "name": "CloudFieldsPage",
+      "pageSourceFile": "src/main/ets/pages/B_CloudFields.ets",
+      "buildFunction": "CloudFieldsPageBuilder"
     }
   ]
 }
