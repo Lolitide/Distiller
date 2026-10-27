@@ -39,7 +39,7 @@ import { M3Switch } from '../components/M3Switch';
 import { Task } from '../model';
 import { buildDemoTasks, DEMO_TASK_PREFIX } from '../mock/DemoTasks';
 import { TaskListStore } from '../viewmodel/TaskListStore';
-import { NAV_STACK_KEY, ROUTE_PRIVACY_POLICY } from '../viewmodel/TaskNavParams';
+import { NAV_STACK_KEY, ROUTE_CLOUD_FIELDS, ROUTE_PRIVACY_POLICY } from '../viewmodel/TaskNavParams';
 import { PrivacyConsent } from '../service/system/PrivacyConsent';
 import { TaskExportViewModel, TaskImportParseResult } from '../viewmodel/TaskExportViewModel';
 import { TaskExportResult, TaskExportService } from '../service/system/TaskExportService';
@@ -785,16 +785,16 @@ export struct A_Settings {
     AppStorage.get<NavPathStack>(NAV_STACK_KEY)?.pushPathByName(ROUTE_PRIVACY_POLICY, '');
   }
 
-  /** 云端字段清单：与隐私说明同一口径，不把「本机数据」混进来 */
-  private showCloudFields(): void {
-    this.getUIContext().getPromptAction().showDialog({
-      title: '会离开手机的字段',
-      message: '同步开启时，App 会向你的服务器发送：设备标识、绑定关系、群订阅、'
-        + '采纳/忽略反馈计数、Push 令牌（未接入则没有）。'
-        + '\n\n服务器只临时保存群消息原文（内存 30 分钟，不落盘）。'
-        + '\n\n任务名称、备注、原文、草稿、画像只存在本机；原文不会回传。',
-      buttons: [{ text: '知道了', color: this.themeStore.scheme.primary }]
-    });
+  /**
+   * 「会离开手机的字段」：2026-10-27 需求方「这个不用系统 showDialog，用一个新的页面展示」。
+   *
+   * 原来这里是 `showDialog` 弹的三段长文（字号小、行宽窄、六七行换行，读起来很挤）；
+   * 现在 push 进独立页 `B_CloudFields`：大标题 + 分节 + 14vp / 22vp 行高的正文，
+   * 与《隐私政策》同一套版式。内容口径不变（与 `SyncService` / `FeedbackService` /
+   * `PushRegistrar` 三条链路对齐），只是排版从"弹窗"换成"页面"。
+   */
+  private openCloudFields(): void {
+    AppStorage.get<NavPathStack>(NAV_STACK_KEY)?.pushPathByName(ROUTE_CLOUD_FIELDS, '');
   }
 
   /** 隐私说明：只讲本机存什么、什么会离开手机 */
@@ -1072,15 +1072,14 @@ export struct A_Settings {
   }
 
   /**
-   * 导出对话框（2026-10-27 需求方：「设置页导出用三选项对话弹出框（showDialog）实现」）。
+   * 导出对话框（2026-10-27 需求方最终版）：
+   *  · **描述写到按钮上** —— 三种口径的差别直接进按钮标签（`CSV（表格，不含原文）` 等）；
+   *  · **message 改成"引导"** —— 不再重复解释三种格式，而是告诉用户接下来会发生什么
+   *    （选了会怎样、文件存哪、剪贴板不需要存文件），帮他做决定。
    *
-   * 三种口径按"给人看 / 给机器看 / 贴到别处"分，正文里各用一句话说清差别：
-   *  · CSV  —— 表格，给 Excel/表格软件看，**不含原文**（原文是本机溯源字段，不往外贴）；
-   *  · JSON —— 完整数据（含原文），给别的工具或以后导入用；
-   *  · 剪贴板 —— CSV 文本直接贴到聊天/文档里。
-   *
-   * 为什么用 `showDialog` 而不是 `bindPopup`：这是"三选一"的决策，不是贴着某一行的上下文菜单；
-   * 居中对话框能同时把三种口径的解释摆出来，和设置页「清空全部任务」「删除服务端数据」同一套长相。
+   * 历史（免得又绕回去）：先做过 message=三行格式说明 + 短按钮 `CSV/JSON/剪贴板`；
+   * 再试过把说明挪进按钮但去掉 message（系统弹窗顶部会留一块空档、且不可调）；
+   * 也试过自绘居中弹窗控间距。最终定在这一版：系统 `showDialog` + 描述在按钮 + 引导在 message。
    */
   private showExportDialog(): void {
     if (this.store.allTasks().length === 0) {
@@ -1089,11 +1088,12 @@ export struct A_Settings {
     }
     this.getUIContext().getPromptAction().showDialog({
       title: '导出任务',
-      message: 'CSV：表格（不含原文）\nJSON：完整数据（含原文）\n剪贴板：复制 CSV 文本',
+      // 引导语：讲"选完会怎样"，格式差异交给按钮自己说，避免同一句话出现两遍
+      message: '任务保存在本机，导出的文件请自行保管。',
       buttons: [
-        { text: 'CSV', color: this.themeStore.scheme.primary },
-        { text: 'JSON', color: this.themeStore.scheme.primary },
-        { text: '剪贴板', color: this.themeStore.scheme.primary }
+        { text: 'CSV（表格，不含原文）', color: this.themeStore.scheme.primary },
+        { text: 'JSON（完整，含原文）', color: this.themeStore.scheme.primary },
+        { text: '剪贴板（复制 CSV 文本）', color: this.themeStore.scheme.primary }
       ]
     }).then((result: promptAction.ShowDialogSuccessResponse) => {
       if (result.index === 0) {
@@ -1467,22 +1467,33 @@ export struct A_Settings {
 
           // 「通知与横幅设置」：从「关于」搬到这里 —— 它管的就是上面这一颗「通知权限」（需求方 2026-10-27：
           // 「通知与横幅设置可放至通知权限下」，分类上不再混进"关于"）。
+          // 2026-10-27 第二轮：右侧从一句主色文字「去开启」改成**「去设置」按钮** ——
+          // 这一行是"跳去系统设置"的动作（不是状态），做成与「订阅消息管理 → 选择群」同一种主色胶囊，
+          // 动作与状态在这张卡里就能一眼分开（状态是浅底胶囊，动作是实底胶囊）。
           Row() {
             Text('通知与横幅设置')
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
               .fontColor($r('sys.color.ohos_id_color_text_primary'))
               .layoutWeight(1)
-            Text('去开启')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor(this.themeStore.scheme.primary)
+
+            Button({ type: ButtonType.Capsule, stateEffect: true }) {
+              Text('去设置')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor(this.themeStore.scheme.onPrimary)
+            }
+            .height(34)
+            .padding({ left: 14, right: 14 })
+            .backgroundColor(this.themeStore.scheme.primary)
+            .borderRadius(17)
+            .onClick(() => {
+              this.openNotificationSettings();
+            })
+            .accessibilityText('去设置')
           }
           .width('100%')
           .height(ROW_HEIGHT_VP)
           .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
           .alignItems(VerticalAlign.Center)
-          .onClick(() => {
-            this.openNotificationSettings();
-          })
 
           this.rowDivider()
 
@@ -1817,7 +1828,7 @@ export struct A_Settings {
           .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
           .alignItems(VerticalAlign.Center)
           .onClick(() => {
-            this.showCloudFields();
+            this.openCloudFields();
           })
 
           this.rowDivider()

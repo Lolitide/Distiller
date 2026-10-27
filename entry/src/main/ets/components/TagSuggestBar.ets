@@ -67,6 +67,33 @@ export struct TagSuggestBar {
   /** 确认（第二次点击）全局删除这个标签 */
   @Event onDelete: (tag: string) => void = () => {};
 
+  /**
+   * 是否自己带左右 16vp 内边距。
+   *
+   * 详情页那条带子是**贴着屏幕边**的，所以自己留 16vp；
+   * 但嵌进弹窗（添加任务 → 添加标签）时，弹窗外框 `CenterDialogFrame` 已经给了 16vp，
+   * 再叠一层就会让「提示行/芯片」比下面的输入框多缩进 16vp（2026-10-27 复用时的对齐问题）。
+   */
+  @Param sidePadding: boolean = true;
+
+  /**
+   * 是否**自己铺底色**。
+   *
+   * 详情页里这条带子是页面上的一段，底色必须取页面正文那档 `surface`（否则和页面有接缝）；
+   * 但嵌进弹窗时，弹窗容器是 `surfaceContainerHigh`，带子再铺一层 `surface` 就是一块**白斑**
+   * （2026-10-27 复用时实机截图确认）→ 此时传 `false`，让底色透出弹窗自己的容器色。
+   */
+  @Param ownBackground: boolean = true;
+
+  /**
+   * 顶部内边距（vp）。默认 6 —— 详情页里上面紧贴可滚区，留一点呼吸。
+   *
+   * 2026-10-27 需求方：「（标题和提示行之间）减小一点这个间距」——
+   * 嵌在弹窗里时弹窗标题自带 16vp 下留白，再叠 6vp 就是 22vp，太散；
+   * 此时传 `0`（再由 `TagInputBody` 用负 margin 收一点点）。
+   */
+  @Param topPadding: number = BAR_TOP_PADDING_VP;
+
   /** 正处在「删除」态的标签；空串 = 没有在管理标签 */
   @Local deletingTag: string = '';
   /**
@@ -278,15 +305,16 @@ export struct TagSuggestBar {
     .width('100%')
     .alignItems(HorizontalAlign.Start)
     .padding({
-      left: BAR_SIDE_PADDING_VP,
-      right: BAR_SIDE_PADDING_VP,
-      top: BAR_TOP_PADDING_VP,
+      left: this.sidePadding ? BAR_SIDE_PADDING_VP : 0,
+      right: this.sidePadding ? BAR_SIDE_PADDING_VP : 0,
+      top: this.topPadding,
       bottom: BAR_BOTTOM_PADDING_VP
     })
     // 底色跟**详情页正文**同一档 M3 取色（`surface`，见 `B_TaskDetail` 的根节点）——
     // 需求方 2026-10-27：先要「背景是白色」，再改成「和页面一样的 md 取色」，
     // 于是这条带子和页面**看不出接缝**，只有芯片浮在上面。
     // **没有圆角、没有投影、没有描边**，不再是一张卡。
-    .backgroundColor(this.themeStore.scheme.surface)
+    // 嵌在弹窗里时（`ownBackground: false`）不铺底，直接透出弹窗的 `surfaceContainerHigh`。
+    .backgroundColor(this.ownBackground ? this.themeStore.scheme.surface : Color.Transparent)
   }
 }

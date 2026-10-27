@@ -401,7 +401,12 @@ export struct RepeatRuleEditor {
             .align(Alignment.Start)
 
             if (this.monthMode === MONTH_MODE_END) {
-              Text(`月末无法用规则表达，将记录未来 ${MONTH_END_MONTHS} 个月的最后一天`)
+              // 2026-10-27 需求方：「每月月末下的这个文字…改一改表述」。
+              // 原句「月末无法用规则表达，将记录未来 12 个月的最后一天」有两个毛病：
+              // 「规则」是谁的规则没说清、而且「记录…最后一天」听着像只记一天。
+              // 现在讲清三件事：为什么（系统规则不支持）、怎么办（逐个记下月末日期）、到哪为止（12 个月后不再重复）。
+              Text(`逐个记下未来 ${MONTH_END_MONTHS} 个月的月末日期，`
+                + '之后不再自动重复')
                 .fontSize(Theme.FONT_CAPTION)
                 .fontColor($r('sys.color.ohos_id_color_text_secondary'))
                 .width('100%')
