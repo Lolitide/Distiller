@@ -1453,22 +1453,33 @@ export struct A_Settings {
 
           // 「通知与横幅设置」：从「关于」搬到这里 —— 它管的就是上面这一颗「通知权限」（需求方 2026-10-27：
           // 「通知与横幅设置可放至通知权限下」，分类上不再混进"关于"）。
+          // 2026-10-27 第二轮：右侧从一句主色文字「去开启」改成**「去设置」按钮** ——
+          // 这一行是"跳去系统设置"的动作（不是状态），做成与「订阅消息管理 → 选择群」同一种主色胶囊，
+          // 动作与状态在这张卡里就能一眼分开（状态是浅底胶囊，动作是实底胶囊）。
           Row() {
             Text('通知与横幅设置')
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
               .fontColor($r('sys.color.ohos_id_color_text_primary'))
               .layoutWeight(1)
-            Text('去开启')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor(this.themeStore.scheme.primary)
+
+            Button({ type: ButtonType.Capsule, stateEffect: true }) {
+              Text('去设置')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor(this.themeStore.scheme.onPrimary)
+            }
+            .height(34)
+            .padding({ left: 14, right: 14 })
+            .backgroundColor(this.themeStore.scheme.primary)
+            .borderRadius(17)
+            .onClick(() => {
+              this.openNotificationSettings();
+            })
+            .accessibilityText('去设置')
           }
           .width('100%')
           .height(ROW_HEIGHT_VP)
           .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
           .alignItems(VerticalAlign.Center)
-          .onClick(() => {
-            this.openNotificationSettings();
-          })
 
           this.rowDivider()
 
