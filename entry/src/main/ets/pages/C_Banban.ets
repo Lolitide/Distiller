@@ -836,8 +836,10 @@ export struct C_Banban {
   build() {
     // 空态提示要落在**整屏正中间**，所以最外层用 Stack：内容铺满，提示作为居中覆盖层
     Stack({ alignContent: Alignment.Center }) {
-      Column() {
-        // ── 上 70%：简要详情 ──
+      // 内容 + 底部遮罩单独一层：遮罩只占底部 140vp，不再用整屏覆盖层挡手势。
+      Stack({ alignContent: Alignment.Bottom }) {
+        Column() {
+          // ── 上 70%：简要详情 ──
         Column() {
           if (this.dueTasks().length === 0) {
             // 空态提示统一由下面的覆盖层负责
@@ -983,20 +985,18 @@ export struct C_Banban {
         })
       }
       }
-      .width('100%')
-      .height('100%')
-      // 底部悬浮导航（胶囊 56 + 边距 16 + 安全区）会盖住内容，这里让出来
-      .padding({ top: this.statusBarVp + 64, bottom: 112 })
-      .backgroundColor(this.themeStore.scheme.surface)
-      // 2026-10-25：本页自绘的标题行（「板板」+ 右侧可动轴时间）**已删除** ——
-      // 标题栏改由 `A_Main` 的 HDS 标题栏统一画，与设置页同一个组件、同一套样式。
-      // 原来那行是 `.position({ y: statusBarVp + 4 })` 的浮层，字号 28 / 左右 20vp 都是手写的，
-      // 与 HDS 的 MINI 标题栏对不齐，这正是作者说的「和设置页面的不一样」。
-      // 内容顶部让白保留 `statusBarVp + 64`（与 `A_Settings` 的 `TITLE_CLEARANCE_VP + statusBarVp` 同档）。
+        .width('100%')
+        .height('100%')
+        // 底部悬浮导航（胶囊 56 + 边距 16 + 安全区）会盖住内容，这里让出来
+        .padding({ top: this.statusBarVp + 64, bottom: 112 })
+        .backgroundColor(this.themeStore.scheme.surface)
+        // 2026-10-25：本页自绘的标题行（「板板」+ 右侧可动轴时间）**已删除** ——
+        // 标题栏改由 `A_Main` 的 HDS 标题栏统一画，与设置页同一个组件、同一套样式。
+        // 原来那行是 `.position({ y: statusBarVp + 4 })` 的浮层，字号 28 / 左右 20vp 都是手写的，
+        // 与 HDS 的 MINI 标题栏对不齐，这正是作者说的「和设置页面的不一样」。
+        // 内容顶部让白保留 `statusBarVp + 64`（与 `A_Settings` 的 `TITLE_CLEARANCE_VP + statusBarVp` 同档）。
 
-      // 底部渐变遮罩：与任务列表 / 设置页同一套，让甘特内容在悬浮页签和「＋」下方淡出
-      Column() {
-        Blank()
+        // 底部渐变遮罩：只占底部 140vp，且不参与命中测试，不能挡住甘特拖动
         Column()
           .width('100%')
           .height(BOTTOM_MASK_VP)
@@ -1004,10 +1004,10 @@ export struct C_Banban {
             direction: GradientDirection.Bottom,
             colors: this.bottomMaskColors
           })
+          .hitTestBehavior(HitTestMode.None)
       }
       .width('100%')
       .height('100%')
-      .hitTestBehavior(HitTestMode.None)
 
       // 空态（2026-10-25，作者：「板板页面无任务的时候，也像任务列表页面一样显示一个图标再加文字」）：
       // **复用 `EmptyHint`** —— 任务列表的空态和搜索页的两种空态用的就是它（图示 + 一句灰字），

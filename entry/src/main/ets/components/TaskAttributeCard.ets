@@ -77,7 +77,8 @@ export struct TaskAttributeCard {
   /** 到期弹窗的 dialogId */
   @Local dueDialogId: number = -1;
   @Local dueDraft: Date = new Date();
-  @Local repeatSheetOpen: boolean = false;
+  /** 重复弹窗的 dialogId（openCustomDialog 返回，-1 表示未打开） */
+  @Local repeatDialogId: number = -1;
   /** 重复面板的草稿档位（`REPEAT_OPTIONS` 的下标） */
 
   /** 提醒文案：如「在 10月16日 20:00 提醒我」；没设提醒时给「未设置提醒」 */
@@ -337,12 +338,23 @@ export struct TaskAttributeCard {
    * 一列文本正好装下；要「一选多天（周一、三、五）/ 间隔 N」得再上一层二级选择器（见 `applyRepeat`）。
    */
   private openRepeatSheet(): void {
-    this.repeatSheetOpen = true;
+    // 与提醒 / 到期统一成 M3 居中弹窗；bindSheet 在手机上会落成系统白底底部面板。
+    this.repeatDialogId = -1;
+    this.getUIContext().getPromptAction().openCustomDialog({
+      builder: () => {
+        this.repeatSheet();
+      },
+      alignment: DialogAlignment.Center,
+      isModal: true
+    }).then((id: number) => {
+      this.repeatDialogId = id;
+    });
   }
 
   /** 关掉重复面板（草稿丢弃） */
   private closeRepeatSheet(): void {
-    this.repeatSheetOpen = false;
+    this.dismissDialog(this.repeatDialogId);
+    this.repeatDialogId = -1;
   }
 
   /**
@@ -404,7 +416,7 @@ export struct TaskAttributeCard {
       this.task.repeat = [rule];
       this.task.repeatText = undefined;
     }
-    this.repeatSheetOpen = false;
+    this.closeRepeatSheet();
   }
 
   /**
@@ -506,15 +518,18 @@ export struct TaskAttributeCard {
    */
   @Builder
   repeatSheet() {
-    RepeatRuleEditor({
-      initialRule: this.firstRule(),
-      onCancel: () => {
-        this.closeRepeatSheet();
-      },
-      onConfirm: (rule: RepeatRule | undefined) => {
-        this.applyRepeatRule(rule);
-      }
-    })
+    CenterDialogFrame() {
+      DialogTitle({ text: $r('app.string.picker_title_repeat') })
+      RepeatRuleEditor({
+        initialRule: this.firstRule(),
+        onCancel: () => {
+          this.closeRepeatSheet();
+        },
+        onConfirm: (rule: RepeatRule | undefined) => {
+          this.applyRepeatRule(rule);
+        }
+      })
+    }
   }
 
   /*
@@ -643,16 +658,6 @@ export struct TaskAttributeCard {
       .height(ROW_HEIGHT_VP)
       .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
       .alignItems(VerticalAlign.Center)
-      .bindSheet(this.repeatSheetOpen, this.repeatSheet(), {
-        title: { title: $r('app.string.picker_title_repeat') },
-        preferType: SheetType.CENTER,
-        height: SheetSize.FIT_CONTENT,
-        showClose: false,
-        dragBar: false,
-        onDisappear: () => {
-          this.repeatSheetOpen = false;
-        }
-      })
     }
     .width('100%')
     // 卡片底 = M3 `surface-container-low`（2026-10-21 需求方：「详情页这些卡片的背景颜色都和设置页的卡片一样
