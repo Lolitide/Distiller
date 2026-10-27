@@ -47,8 +47,9 @@ export class RelayApi {
     return await ApiClient.post<Record<string, Object>>(BASE + '/bind/reset', {});
   }
 
-  static async groups(): Promise<ApiResult<GroupsData>> {
-    return await ApiClient.get<GroupsData>(BASE + '/groups');
+  /** @param refresh 打开群选择器时传 true，强制刷新群名（群改名后能及时显示） */
+  static async groups(refresh: boolean = false): Promise<ApiResult<GroupsData>> {
+    return await ApiClient.get<GroupsData>(BASE + '/groups' + (refresh ? '?refresh=1' : ''));
   }
 
   static async subscribe(groupOpenid: string): Promise<ApiResult<SubscribeData>> {

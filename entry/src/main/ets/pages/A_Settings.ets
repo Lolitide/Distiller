@@ -356,7 +356,8 @@ export struct A_Settings {
     this.sheetKind = SHEET_GROUPS;
     this.sheetShown = true;
     this.groupsLoading = true;
-    const res = await RelayApi.groups();
+    // 打开选择器时强制刷新群名，群改名后不用等缓存 TTL
+    const res = await RelayApi.groups(true);
     this.groupsLoading = false;
     if (!res.ok || res.data === undefined) {
       this.groupList = [];
@@ -1684,8 +1685,6 @@ export struct A_Settings {
             .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP, bottom: 12 })
             .alignItems(HorizontalAlign.Center)
           }
-
-          this.rowDivider()
         }
         .width('100%')
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)

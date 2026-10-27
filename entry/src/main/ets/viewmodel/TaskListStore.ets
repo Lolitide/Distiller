@@ -978,16 +978,17 @@ export class TaskListStore {
    * 于是「已过期」根本不是真实状态：筛选、组头计数、详情页状态分段、落盘都看不到它。
    *
    * 本方法**双向**同步，两条方向缺一不可：
-   *   ① **到期未完成**（`dueAt <= now`，当前状态 ∈ 待确认 / 已确认 / 进行中）→ 写 `EXPIRED`；
+    *   ① **到期未完成**（`dueAt <= now`，当前状态 ∈ 已确认 / 进行中）→ 写 `EXPIRED`；
    *   ② **已经是 EXPIRED 但期限被挪到将来（或清空）** → 回到 `CONFIRMED`。
    *      没有 ② 会留下一个永久的假过期：`dueLabel` **先看 `status === EXPIRED`**（见那里的分支），
    *      用户把期限往后改，卡片上仍会一直显示「已过期」。
    *
-   * 明确**不碰**的三类：
-   *   · `COMPLETED` —— `dueLabel` 的完成态分支（`COMPLETED` 时返回空串、不显示剩余时间）就靠这条守住：
-   *     已完成的任务即使早过了截止时间，也不该被改写成「已过期」；
-   *   · `DELETED` —— 软删不可逆；
-   *   · 没有 `dueAt` 的任务 —— 没期限就没有「过期」可言（`dueText` 只是原文，不拿来猜时刻）。
+    * 明确**不碰**的四类：
+    *   · `PENDING_CONFIRM` —— 先留在「待确认消息」让用户决定保留/忽略，不能被系统直接改成已过期；
+    *   · `COMPLETED` —— `dueLabel` 的完成态分支（`COMPLETED` 时返回空串、不显示剩余时间）就靠这条守住：
+    *     已完成的任务即使早过了截止时间，也不该被改写成「已过期」；
+    *   · `DELETED` —— 软删不可逆；
+    *   · 没有 `dueAt` 的任务 —— 没期限就没有「过期」可言（`dueText` 只是原文，不拿来猜时刻）。
    *
    * 过期时顺手关提醒：`alarm` 置 OFF、`reminderId` 清空（已经过期了再响没有意义）。
    * TODO(需求方): 真接 `service/system/ReminderService` 后，这里要先**撤销已发布的提醒**再改状态。
@@ -1000,7 +1001,11 @@ export class TaskListStore {
     const all: Task[] = this.allTasks();
     for (let i = 0; i < all.length; i++) {
       const task: Task = all[i];
-      if (task.status === TaskStatus.COMPLETED || task.status === TaskStatus.DELETED) {
+      // 待确认任务先留在收件箱：即使原文里的截止时间已过，也要让用户先看到并决定
+      // 「保留 / 忽略」，不能刚收到就被系统改成「已过期」而绕开待确认。
+      if (task.status === TaskStatus.PENDING_CONFIRM
+        || task.status === TaskStatus.COMPLETED
+        || task.status === TaskStatus.DELETED) {
         continue;
       }
       const due: number | undefined = task.dueAt;
