@@ -32,6 +32,7 @@ import { Chip, ChipSize, LengthMetrics, SymbolGlyphModifier } from '@kit.ArkUI';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
+import { TaskListStore } from '../viewmodel/TaskListStore';
 import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
 import { DateTimePickerBody } from './DateTimePickerBody';
 import { OptionPickerBody } from './OptionPickerBody';
@@ -109,6 +110,15 @@ export struct AddTaskAttributeChips {
    * 也没有"组件内一份、页面一份"的漂移（`@ObservedV2` + `@Trace` 会自己驱动刷新）。
    */
   @Require @Param draft: AddTaskDraft;
+  /**
+   * 任务列表 store：**只用于标签管理**（2026-10-27）。
+   *
+   * 「添加标签」弹窗现在复用了详情页那条「点击添加已有标签 / 长按删除」的交互：
+   *  · 已有标签清单 = `store.allTags`；
+   *  · 长按后确认删除 = `store.deleteTagEverywhere(tag)`（全局删，与详情页同口径）。
+   * 任务本身的落库仍然在半模态保存时做（`AddTaskSheet.save()`）。
+   */
+  @Require @Param store: TaskListStore;
   /** AI 预填是否正在跑（按钮显示「识别中…」并忽略重复点击） */
   @Param aiBusy: boolean = false;
   /** 语音页签还没接 ASR，不显示 AI 预填 */
@@ -436,6 +446,38 @@ export struct AddTaskAttributeChips {
       }
     });
     this.draft.tags = next;
+  }
+
+  /**
+   * 「添加标签」弹窗里点了一颗**已有**标签：加进 / 移出草稿（与详情页同一条交互）。
+   *
+   * 只改草稿，**不落库** —— 标签真正写进任务要等「保存」（半模态的「确定」语义），
+   * 关掉弹窗时草稿也留在表单上，用户随时可以再改。
+   */
+  private toggleDraftTag(tag: string): void {
+    const next: string[] = [];
+    let removed: boolean = false;
+    this.draft.tags.forEach((one: string) => {
+      if (one === tag) {
+        removed = true;
+        return;
+      }
+      next.push(one);
+    });
+    if (!removed) {
+      next.push(tag);
+    }
+    // 整体换新数组，保证 `@Local`/`@Trace` 的变化能被观察到
+    this.draft.tags = next;
+  }
+
+  /**
+   * 「添加标签」弹窗里长按后确认**删除**这个标签：与详情页同一口径 —— 全局删除，
+   * 撤掉所有任务上的它，同时把这个标签从当前草稿里也拿掉。
+   */
+  private deleteTagEverywhere(tag: string): void {
+    this.store.deleteTagEverywhere(tag);
+    this.removeTag(tag);
   }
 
   /**
@@ -985,12 +1027,22 @@ export struct AddTaskAttributeChips {
         }
       })
     } else if (this.pickerKind === PICKER_TAG) {
-      // 标签输入面板（新组件 TagInputBody：官方 TextInput ＋ 共用底部条）
+      // 标签输入面板（`TagInputBody`：**上面一条已有标签选择条**（与详情页同一个 `TagSuggestBar`）
+      // ＋ 官方 TextInput ＋ 共用底部条）。2026-10-27 需求方：
+      // 「添加任务中的添加标签，也复用那个任务详情里面的点击添加已有标签的功能」。
       TagInputBody({
         text: this.tagDraft,
         placeholder: $r('app.string.tag_input_hint'),
+        existingTags: this.store.allTags,
+        selectedTags: this.draft.tags,
         onTextChange: (text: string) => {
           this.tagDraft = text;
+        },
+        onPickTag: (tag: string) => {
+          this.toggleDraftTag(tag);
+        },
+        onDeleteTag: (tag: string) => {
+          this.deleteTagEverywhere(tag);
         },
         onCancel: () => {
           this.closePicker();
