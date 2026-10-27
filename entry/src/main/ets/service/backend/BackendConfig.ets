@@ -20,12 +20,10 @@ const K_CURSOR: string = 'cursor';
 const K_BOUND: string = 'bound';
 
 /**
- * 默认服务器地址：**空**。
- *
- * 之前预填 `http://192.0.2.10:8730` 会让用户误以为已经配好了（实际连不上），
- * 现在强制用户自己填一次；输入框的 placeholder 里仍给示例格式。
+ * 固定服务器地址：设置在代码里，设置页不再暴露输入框/服务器行。
+ * 换环境时只改这一处。
  */
-export const DEFAULT_BASE_URL: string = '';
+export const DEFAULT_BASE_URL: string = 'https://pipiwoof.tail27705d.ts.net';
 
 export class BackendConfig {
   /** 当前生效的服务器地址（`ApiClient` 直接读它） */
@@ -65,8 +63,14 @@ export class BackendConfig {
       return;
     }
     try {
-      const base: preferences.ValueType = store.getSync(K_BASE_URL, DEFAULT_BASE_URL);
-      BackendConfig.baseUrl = typeof base === 'string' ? base : DEFAULT_BASE_URL;
+      const rawBase: preferences.ValueType = store.getSync(K_BASE_URL, '');
+      const storedBase: string = typeof rawBase === 'string' ? rawBase : '';
+      BackendConfig.baseUrl = DEFAULT_BASE_URL;
+      // 服务器已改为代码内固定值：旧地址（含空地址）的设备身份属于旧服务器，清掉重注册。
+      if (storedBase !== DEFAULT_BASE_URL) {
+        BackendConfig.clearIdentity(context, true);
+        BackendConfig.put(context, K_BASE_URL, DEFAULT_BASE_URL);
+      }
 
       const id: preferences.ValueType = store.getSync(K_DEVICE_ID, '');
       BackendConfig.deviceId = typeof id === 'string' ? id : '';

@@ -161,8 +161,6 @@ export struct A_Settings {
   @Local remindLead: number = DEFAULT_REMIND_LEAD;
 
   /* ── 后端连接（2026-10-21 对接 qqbot-backend）── */
-  /** 输入框里的服务器地址（保存后才写进 `BackendConfig`） */
-  @Local backendUrl: string = '';
   /** 连接状态文案（已连接 / 失败原因） */
   @Local backendState: string = '未连接';
   @Local backendBusy: boolean = false;
@@ -198,6 +196,8 @@ export struct A_Settings {
 
   /* ── 权限管理（通知 / 日历 / 订阅消息）── */
   @Local notifyAllowed: boolean = false;
+  /** 系统横幅是否开启；旧系统读不到时按通知权限兜底 */
+  @Local notifyBannerAllowed: boolean = false;
   @Local calendarAllowed: boolean = false;
   /** 已订阅的群数；-1 表示还没查 */
   @Local subscribedCount: number = -1;
@@ -241,6 +241,12 @@ export struct A_Settings {
     PermissionEvents.clearListener();
   }
 
+  /** 通知权限与系统横幅都开启，才显示「已开启」 */
+  @Computed
+  get notifyReady(): boolean {
+    return this.notifyAllowed && this.notifyBannerAllowed;
+  }
+
   /* ── 权限管理 ── */
 
   /**
@@ -263,6 +269,19 @@ export struct A_Settings {
       this.notifyAllowed = await notificationManager.isNotificationEnabled();
     } catch (error) {
       // 读不到保持原值，不擅自改判
+    }
+    try {
+      const setting = await notificationManager.getNotificationSetting();
+      const banner = setting.bannerEnabled;
+      if (banner !== undefined) {
+        this.notifyBannerAllowed = banner;
+      } else {
+        // API 22 没有 bannerEnabled 字段；按通知权限兜底，避免永远卡在「去授权」。
+        this.notifyBannerAllowed = this.notifyAllowed;
+      }
+    } catch (error) {
+      // 读不到横幅状态时按通知权限兜底；不谎报「已开启」也不死锁。
+      this.notifyBannerAllowed = this.notifyAllowed;
     }
   }
 
@@ -397,8 +416,8 @@ export struct A_Settings {
     }
     try {
       await notificationManager.requestEnableNotification(context as common.UIAbilityContext);
-      this.notifyAllowed = await notificationManager.isNotificationEnabled();
-      this.toast(this.notifyAllowed ? '通知已开启' : '未获得通知权限，可到系统设置里开启');
+      await this.loadNotifyPermission();
+      this.toast(this.notifyReady ? '通知与横幅已开启' : '通知已授权，请到系统设置开启横幅');
     } catch (error) {
       const err = error as BusinessError;
       hilog.warn(DOMAIN, TAG, 'requestEnableNotification failed: %{public}s', err.message);
@@ -453,7 +472,7 @@ export struct A_Settings {
       return;
     }
     BackendConfig.init(context);
-    this.backendUrl = BackendConfig.baseUrl;
+    // 服务器地址固定写在 `BackendConfig.DEFAULT_BASE_URL`，设置页不再暴露输入框。
     // 先用本地缓存，网络回来后再以接口为准 —— 避免"切出去切回来就显示未绑定"
     this.bound = BackendConfig.bound;
     await this.refreshConnection(false);
@@ -499,42 +518,6 @@ export struct A_Settings {
 
     this.backendBusy = false;
     return true;
-  }
-
-  /**
-   * 「连接」按钮：保存地址 + 立刻尝试连接。
-   *
-   * 只有**地址变了**才清设备身份（旧 token 不能拿去打新服务器，且旧服务器的绑定对新服务器无意义）；
-   * 地址没变时保留身份与绑定状态 —— 这是"重连后显示未绑定"的根因。
-   */
-  private async connectServer(): Promise<void> {
-    const context: common.Context | undefined = this.hostContext();
-    if (context === undefined) {
-      return;
-    }
-    const oldUrl: string = BackendConfig.baseUrl;
-    const next: string = this.backendUrl.trim().replace(/\/+$/, '');
-    if (next.length === 0) {
-      this.toast('请先填写服务器地址');
-      return;
-    }
-    BackendConfig.setBaseUrl(context, next);
-    this.backendUrl = BackendConfig.baseUrl;
-    const changed: boolean = oldUrl !== BackendConfig.baseUrl;
-    if (changed) {
-      BackendConfig.clearIdentity(context, true);
-      this.bound = false;
-      SyncService.stop();
-    }
-
-    const ok: boolean = await this.refreshConnection(true);
-    if (!ok) {
-      this.toast('连接失败，请检查地址与后端是否已启动');
-      return;
-    }
-    await SyncService.syncOnce();
-    SyncService.start();
-    this.toast('已连接：' + BackendConfig.baseUrl);
   }
 
   /** 生成配对码并开始轮询绑定结果（2 秒 × 60 次） */
@@ -1425,70 +1408,38 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
+          // 2026-10-27：通知权限 + 通知与横幅设置合并为一行。
+          // 只有「系统通知权限」和「系统横幅」都开启，右侧才显示「已开启」；
+          // 权限没开先弹授权，权限已开但横幅没开则跳系统通知设置。
           Row({ space: 8 }) {
-            Text('通知权限')
+            Text('通知与横幅')
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
               .fontColor($r('sys.color.ohos_id_color_text_primary'))
               .layoutWeight(1)
               .maxLines(1)
-            // ⚠️ 2026-10-27 需求方：「去除通知权限、日历权限的重复性文本」——
-            // 这一行原来左边还有一句灰色「已开启 / 未开启」，与右边胶囊**说的是同一件事**（授权后两边都是"已开启"）。
-            // 胶囊本身就能表达两态（已开启＝状态色；去开启＝主色动作），所以灰字删掉，只留胶囊。
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
-              Text(this.notifyAllowed ? '已开启' : '去开启')
+              Text(this.notifyReady ? '已开启' : '去授权')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                // 「已开启」＝**状态**，取色与任务列表 ChipGroup 里**选中 chip** 同一套 M3 角色
-                // （`secondaryContainer` 底 + `onSecondaryContainer` 字，见 components/TaskFilterChips.ets 的
-                //  `itemStyle.selectedBackgroundColor / selectedFontColor`）；原来用的 `primaryContainer`
-                // 在蓝主题下是一块很亮的青色，比旁边的文字抢眼太多（作者 2026-10-25 截图指出）。
-                // 「去开启」是**动作**，仍用 `primary` 实底，保持可点的视觉引导。
-                .fontColor(this.notifyAllowed
+                .fontColor(this.notifyReady
                   ? this.themeStore.scheme.onSecondaryContainer
                   : this.themeStore.scheme.onPrimary)
             }
             .height(34)
             .padding({ left: 14, right: 14 })
-            .backgroundColor(this.notifyAllowed
+            .backgroundColor(this.notifyReady
               ? this.themeStore.scheme.secondaryContainer
               : this.themeStore.scheme.primary)
             .borderRadius(17)
             .onClick(() => {
+              if (this.notifyReady) {
+                return;
+              }
               if (!this.notifyAllowed) {
                 this.requestNotifyPermission();
+              } else {
+                this.openNotificationSettings();
               }
             })
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-
-          this.rowDivider()
-
-          // 「通知与横幅设置」：从「关于」搬到这里 —— 它管的就是上面这一颗「通知权限」（需求方 2026-10-27：
-          // 「通知与横幅设置可放至通知权限下」，分类上不再混进"关于"）。
-          // 2026-10-27 第二轮：右侧从一句主色文字「去开启」改成**「去设置」按钮** ——
-          // 这一行是"跳去系统设置"的动作（不是状态），做成与「订阅消息管理 → 选择群」同一种主色胶囊，
-          // 动作与状态在这张卡里就能一眼分开（状态是浅底胶囊，动作是实底胶囊）。
-          Row() {
-            Text('通知与横幅设置')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              .layoutWeight(1)
-
-            Button({ type: ButtonType.Capsule, stateEffect: true }) {
-              Text('去设置')
-                .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.themeStore.scheme.onPrimary)
-            }
-            .height(34)
-            .padding({ left: 14, right: 14 })
-            .backgroundColor(this.themeStore.scheme.primary)
-            .borderRadius(17)
-            .onClick(() => {
-              this.openNotificationSettings();
-            })
-            .accessibilityText('去设置')
           }
           .width('100%')
           .height(ROW_HEIGHT_VP)
@@ -1608,42 +1559,6 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
-          Row({ space: 8 }) {
-            Text('服务器')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              .width(64)
-            TextInput({ text: this.backendUrl, placeholder: 'http://192.0.2.10:8730' })
-              .layoutWeight(1)
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .onChange((value: string) => {
-                this.backendUrl = value;
-              })
-            Button({ type: ButtonType.Capsule, stateEffect: true }) {
-              Text(this.backendBusy ? '连接中…' : '连接')
-                .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.backendBusy
-                  ? this.themeStore.scheme.onSurfaceVariant
-                  : this.themeStore.scheme.onPrimary)
-            }
-            .height(34)
-            .padding({ left: 14, right: 14 })
-            .backgroundColor(this.backendBusy
-              ? this.themeStore.scheme.surfaceContainerHigh
-              : this.themeStore.scheme.primary)
-            .borderRadius(17)
-            .onClick(() => {
-              if (!this.backendBusy) {
-                this.connectServer();
-              }
-            })
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-
-          this.rowDivider()
           // ⚠️ 这里不能复用 `infoRow(...)`：`@Builder` 的值参数不参与刷新，
           // 状态变化后仍显示初始的「未连接」。必须直接读 `@Local` 字段。
           Row() {
@@ -1846,30 +1761,6 @@ export struct A_Settings {
           .onClick(() => {
             this.deleteServerData();
           })
-        }
-        .width('100%')
-        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
-        .borderRadius(Theme.RADIUS_CARD)
-        .clip(true)
-
-        // ⑤ 解析
-        Column() {
-          this.sectionTitle('解析')
-        }
-        .margin({ top: SECTION_GAP_VP })
-
-        Column() {
-          // 本工程**没有端侧解析**：群消息的标题/摘要全部由后端 /candidates 产出
-          // （Qwen 模型，失败回退规则拼接）。之前那个三档选择器是旧方案遗留，
-          // 「端侧优先」在这里是假的，已去掉。
-          this.infoRow('解析方式', '服务端（Qwen 模型）')
-          Row() {
-            Text('群消息由后端解析后下发；本机只负责展示与排序，不做本地抽取。')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-              .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP, bottom: 12 })
-          }
-          .width('100%')
         }
         .width('100%')
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
