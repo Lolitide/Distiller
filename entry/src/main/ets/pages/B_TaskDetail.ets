@@ -334,7 +334,10 @@ export struct B_TaskDetail {
   @Builder
   nameRow() {
     Row() {
-      this.statusIcon()
+      // 待确认消息只是候选，还不是正式任务：不展示「是否完成」的虚线圆。
+      if (!this.param.pendingMode) {
+        this.statusIcon()
+      }
 
       if (this.editingName) {
         TextInput({ text: this.draftName, controller: this.nameController })
@@ -374,7 +377,7 @@ export struct B_TaskDetail {
           // 结果文字被上下裁掉（需求方 2026-10-16 截图里字的下沿是切平的）。用 `TextInput` 默认高度最稳。
           .maxLines(1)
           .enterKeyType(EnterKeyType.Done)
-          .margin({ left: CONTENT_GAP_VP })
+          .margin({ left: this.param.pendingMode ? 0 : CONTENT_GAP_VP })
           .onChange((value: string) => {
             this.draftName = value;
           })
@@ -408,7 +411,7 @@ export struct B_TaskDetail {
         .scrollable(ScrollDirection.Horizontal)
         .scrollBar(BarState.Off)
         .layoutWeight(1)
-        .margin({ left: CONTENT_GAP_VP })
+        .margin({ left: this.param.pendingMode ? 0 : CONTENT_GAP_VP })
         .align(Alignment.Start)
       }
     }
