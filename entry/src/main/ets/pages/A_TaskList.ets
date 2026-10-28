@@ -470,6 +470,18 @@ export struct A_TaskList {
       }
       .accessibilityLevel('no')
 
+      // 同步状态细条（「正在同步…」/ 离线）放在「待确认消息」组**上面**，
+      // 它是全局状态，不属于待确认列表的尾部。
+      if (this.syncStatus.showsBanner) {
+        ListItem() {
+          Row() {
+            this.syncBanner()
+          }
+          .width('100%')
+          .padding({ left: 16, right: 16, bottom: 6 })
+        }
+      }
+
       if (this.store.pendingList.length > 0) {
         ListItemGroup({
           header: this.pendingHeader()
@@ -495,16 +507,6 @@ export struct A_TaskList {
           }
         }
         .margin({ top: -GROUP_HEADER_LIST_PULL_UP_VP })
-      }
-
-      if (this.syncStatus.showsBanner) {
-        ListItem() {
-          Row() {
-            this.syncBanner()
-          }
-          .width('100%')
-          .padding({ left: 16, right: 16, bottom: 6 })
-        }
       }
 
       ForEach(this.store.groups, (group: TaskDayGroup) => {
