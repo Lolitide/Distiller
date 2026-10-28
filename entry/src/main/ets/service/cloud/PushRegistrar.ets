@@ -28,6 +28,7 @@ export class PushRegistrar {
   private static running: boolean = false;
   /** 失败后的重试间隔（ms）：onPageShow 每次都会调用，避免频繁取 token */
   private static lastAttemptAt: number = 0;
+  private static lastSuccessAt: number = 0;
   private static readonly RETRY_GAP_MS: number = 60000;
 
   /**
@@ -35,7 +36,7 @@ export class PushRegistrar {
    *
    * @returns 是否走到「服务端可下发」（`push_ready=true`）
    */
-  static async register(): Promise<boolean> {
+  static async register(force: boolean = false): Promise<boolean> {
     const status: PushStatus = PushStatus.instance();
     // 隐私授权门禁：撤回后不再取 token、不再上报（撤回即"与所有云相关功能分隔"）
     if (!PrivacyConsent.allowed()) {
@@ -45,15 +46,18 @@ export class PushRegistrar {
     if (PushRegistrar.running) {
       return status.pushReady;
     }
-    if (status.pushReady) {
+    const now: number = Date.now();
+    // 前台恢复时 force=true：必须重新取 token。Push Kit 可能在重装/开关通知后
+    // 轮换 token，而旧 token 在服务端仍然“注册成功”，会导致消息发送管控拒绝。
+    if (!force && status.pushReady
+      && now - PushRegistrar.lastSuccessAt < PushRegistrar.RETRY_GAP_MS) {
       return true;
     }
-    const now: number = Date.now();
-    if (now - PushRegistrar.lastAttemptAt < PushRegistrar.RETRY_GAP_MS) {
+    if (!force && now - PushRegistrar.lastAttemptAt < PushRegistrar.RETRY_GAP_MS) {
       return status.pushReady;
     }
     PushRegistrar.lastAttemptAt = now;
-    hilog.info(0x0000, TAG, 'register start');
+    hilog.info(0x0000, TAG, 'register start force=%{public}s', String(force));
     PushRegistrar.running = true;
     try {
       // ① 没有服务器地址 → 连上报的地址都没有，直接标"未启用"
@@ -70,7 +74,8 @@ export class PushRegistrar {
         status.failed(tokenRes.message, tokenRes.advice);
         return false;
       }
-      hilog.info(0x0000, TAG, 'getToken ok len=%{public}d', tokenRes.token.length);
+      hilog.info(0x0000, TAG, 'getToken ok len=%{public}d prefix=%{public}s',
+        tokenRes.token.length, tokenRes.token.substring(0, 8));
       // ③ 设备身份：/push/token 需要鉴权，没身份就先注册一个（复用同步那条链路，不另造）
       const hasIdentity: boolean = await SyncService.ensureDevice();
       if (!hasIdentity) {
@@ -86,6 +91,7 @@ export class PushRegistrar {
       }
       hilog.info(0x0000, TAG, 'push/token ok registered=%{public}s ready=%{public}s',
         String(res.data.registered), String(res.data.push_ready));
+      PushRegistrar.lastSuccessAt = Date.now();
       if (res.data.push_ready) {
         status.ready(tokenRes.token, res.data.registered);
         return true;
