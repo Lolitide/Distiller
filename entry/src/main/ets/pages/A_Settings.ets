@@ -269,6 +269,27 @@ export struct A_Settings {
     }
   }
 
+  /** 日历「去设置」：优先打开权限设置页；未申请过/不支持时回退系统授权框 */
+  private async openCalendarSettings(): Promise<void> {
+    const context: common.Context | undefined = this.hostContext();
+    if (context === undefined) {
+      return;
+    }
+    try {
+      const permissionList: Permissions[] = [
+        'ohos.permission.READ_CALENDAR',
+        'ohos.permission.WRITE_CALENDAR'
+      ];
+      const at = abilityAccessCtrl.createAtManager();
+      const result = await at.requestPermissionOnSetting(context, permissionList);
+      this.calendarAllowed = result.length > 1
+        && result[1] === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+    } catch (error) {
+      // 首次申请（还没被用户拒绝过）或系统不支持设置页时，走普通授权框
+      this.requestCalendarPermission();
+    }
+  }
+
   /**
    * 查日历写权限。
    *
@@ -1426,7 +1447,7 @@ export struct A_Settings {
             .backgroundColor(this.themeStore.scheme.primary)
             .borderRadius(17)
             .onClick(() => {
-              this.requestCalendarPermission();
+              this.openCalendarSettings();
             })
           }
           .width('100%')
