@@ -196,8 +196,10 @@ export struct A_Settings {
 
   /* ── 权限管理（通知 / 日历 / 订阅消息）── */
   @Local notifyAllowed: boolean = false;
-  /** 系统横幅是否开启；旧系统读不到时按通知权限兜底 */
+  /** 系统横幅是否开启（读不到/字段缺失时保持 false，绝不冒充已开启） */
   @Local notifyBannerAllowed: boolean = false;
+  /** 是否真的读到了 bannerEnabled 字段；读不到时按钮显示「去设置」 */
+  @Local notifyBannerKnown: boolean = false;
   @Local calendarAllowed: boolean = false;
   /** 已订阅的群数；-1 表示还没查 */
   @Local subscribedCount: number = -1;
@@ -247,6 +249,21 @@ export struct A_Settings {
     return this.notifyAllowed && this.notifyBannerAllowed;
   }
 
+  /** 右侧按钮文案：权限未开「去授权」；权限开了但横幅未开「横幅未开」；读不到横幅「去设置」 */
+  @Computed
+  get notifyActionLabel(): string {
+    if (this.notifyReady) {
+      return '已开启';
+    }
+    if (!this.notifyAllowed) {
+      return '去授权';
+    }
+    if (this.notifyBannerKnown) {
+      return '横幅未开';
+    }
+    return '去设置';
+  }
+
   /* ── 权限管理 ── */
 
   /**
@@ -270,18 +287,19 @@ export struct A_Settings {
     } catch (error) {
       // 读不到保持原值，不擅自改判
     }
+    // 每次都先当作「未确认」：只有明确读到 bannerEnabled=true 才允许显示「已开启」，
+    // 否则「通知权限已给、横幅关着」会被旧代码冒充成「已开启」。
+    this.notifyBannerKnown = false;
+    this.notifyBannerAllowed = false;
     try {
       const setting = await notificationManager.getNotificationSetting();
       const banner = setting.bannerEnabled;
-      if (banner !== undefined) {
+      if (typeof banner === 'boolean') {
+        this.notifyBannerKnown = true;
         this.notifyBannerAllowed = banner;
-      } else {
-        // API 22 没有 bannerEnabled 字段；按通知权限兜底，避免永远卡在「去授权」。
-        this.notifyBannerAllowed = this.notifyAllowed;
       }
     } catch (error) {
-      // 读不到横幅状态时按通知权限兜底；不谎报「已开启」也不死锁。
-      this.notifyBannerAllowed = this.notifyAllowed;
+      // 读不到就是「未确认」，按钮走「去设置」，不谎报已开启
     }
   }
 
@@ -1419,7 +1437,7 @@ export struct A_Settings {
               .layoutWeight(1)
               .maxLines(1)
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
-              Text(this.notifyReady ? '已开启' : '去授权')
+              Text(this.notifyActionLabel)
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
                 .fontColor(this.notifyReady
                   ? this.themeStore.scheme.onSecondaryContainer
