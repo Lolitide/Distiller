@@ -243,25 +243,29 @@ export struct A_Settings {
     PermissionEvents.clearListener();
   }
 
-  /** 通知权限与系统横幅都开启，才显示「已开启」 */
+  /**
+   * 通知是否可用：通知权限必须开；横幅字段只有 API 26+ 才有，
+   * 旧系统读不到时不能因此显示「去设置」——此时按通知权限算可用，
+   * 并在副标题里说明「横幅状态需自行到系统设置确认」。
+   */
   @Computed
   get notifyReady(): boolean {
-    return this.notifyAllowed && this.notifyBannerAllowed;
+    if (!this.notifyAllowed) {
+      return false;
+    }
+    return !this.notifyBannerKnown || this.notifyBannerAllowed;
   }
 
-  /** 右侧按钮文案：权限未开「去授权」；权限开了但横幅未开「横幅未开」；读不到横幅「去设置」 */
+  /** 右侧按钮文案：权限未开「去授权」；横幅明确关闭「横幅未开」；旧系统读不到横幅「通知已开启」 */
   @Computed
   get notifyActionLabel(): string {
-    if (this.notifyReady) {
-      return '已开启';
-    }
     if (!this.notifyAllowed) {
       return '去授权';
     }
     if (this.notifyBannerKnown) {
-      return '横幅未开';
+      return this.notifyBannerAllowed ? '已开启' : '横幅未开';
     }
-    return '去设置';
+    return '通知已开启';
   }
 
   /* ── 权限管理 ── */
@@ -282,13 +286,18 @@ export struct A_Settings {
   }
 
   private async loadNotifyPermission(): Promise<void> {
+    const wasAllowed: boolean = this.notifyAllowed;
     try {
       this.notifyAllowed = await notificationManager.isNotificationEnabled();
     } catch (error) {
       // 读不到保持原值，不擅自改判
     }
-    // 每次都先当作「未确认」：只有明确读到 bannerEnabled=true 才允许显示「已开启」，
-    // 否则「通知权限已给、横幅关着」会被旧代码冒充成「已开启」。
+    // 通知权限从关到开：立刻补发/重算本地提醒，否则要等下一次冷启动
+    if (!wasAllowed && this.notifyAllowed) {
+      this.store.reconcileReminders();
+    }
+    // bannerEnabled 只有 API 26+ 才有；旧系统读不到时保持「未知」，
+    // 由 UI 显示「通知已开启」并提示去系统设置确认横幅。
     this.notifyBannerKnown = false;
     this.notifyBannerAllowed = false;
     try {
@@ -436,7 +445,13 @@ export struct A_Settings {
     try {
       await notificationManager.requestEnableNotification(context as common.UIAbilityContext);
       await this.loadNotifyPermission();
-      this.toast(this.notifyReady ? '通知与横幅已开启' : '通知已授权，请到系统设置开启横幅');
+      if (this.notifyReady && this.notifyBannerKnown) {
+        this.toast('通知与横幅已开启');
+      } else if (this.notifyAllowed) {
+        this.toast('通知已开启，请到系统设置确认横幅');
+      } else {
+        this.toast('通知未开启，请到系统设置里允许通知');
+      }
     } catch (error) {
       const err = error as BusinessError;
       hilog.warn(DOMAIN, TAG, 'requestEnableNotification failed: %{public}s', err.message);
@@ -703,7 +718,10 @@ export struct A_Settings {
     if (ctx === undefined) {
       return;
     }
-    NotificationService.openSettings(ctx as common.UIAbilityContext);
+    NotificationService.openSettings(ctx as common.UIAbilityContext).then(() => {
+      // 系统通知设置是半模态；关闭后重新读一次权限/横幅，并补发之前因权限关闭没发出去的提醒
+      this.loadNotifyPermission();
+    });
   }
 
   private replayOnboarding(): void {
@@ -1377,6 +1395,7 @@ export struct A_Settings {
       Row().width('100%').height(TITLE_CLEARANCE_VP + this.statusBarVp)
 
       Scroll() {
+        
       Column() {
 
         // ① 视觉个性化
@@ -1431,11 +1450,20 @@ export struct A_Settings {
           // 只有「系统通知权限」和「系统横幅」都开启，右侧才显示「已开启」；
           // 权限没开先弹授权，权限已开但横幅没开则跳系统通知设置。
           Row({ space: 8 }) {
-            Text('通知与横幅')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              .layoutWeight(1)
-              .maxLines(1)
+            Column({ space: 2 }) {
+              Text('通知与横幅')
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .fontColor($r('sys.color.ohos_id_color_text_primary'))
+                .maxLines(1)
+              if (this.notifyAllowed && !this.notifyBannerKnown) {
+                Text('当前系统不支持读取横幅状态，请到系统设置确认')
+                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                  .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+                  .maxLines(2)
+              }
+            }
+            .layoutWeight(1)
+            .alignItems(HorizontalAlign.Start)
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
               Text(this.notifyActionLabel)
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
@@ -1450,7 +1478,8 @@ export struct A_Settings {
               : this.themeStore.scheme.primary)
             .borderRadius(17)
             .onClick(() => {
-              if (this.notifyReady) {
+              // 横幅状态已确认且都开着才无事可做；旧系统读不到横幅时仍允许点进系统设置确认
+              if (this.notifyReady && this.notifyBannerKnown) {
                 return;
               }
               if (!this.notifyAllowed) {
