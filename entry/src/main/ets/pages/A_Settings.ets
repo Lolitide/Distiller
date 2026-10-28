@@ -196,10 +196,6 @@ export struct A_Settings {
 
   /* ── 权限管理（通知 / 日历 / 订阅消息）── */
   @Local notifyAllowed: boolean = false;
-  /** 系统横幅是否开启（读不到/字段缺失时保持 false，绝不冒充已开启） */
-  @Local notifyBannerAllowed: boolean = false;
-  /** 是否真的读到了 bannerEnabled 字段；读不到时按钮显示「去设置」 */
-  @Local notifyBannerKnown: boolean = false;
   @Local calendarAllowed: boolean = false;
   /** 已订阅的群数；-1 表示还没查 */
   @Local subscribedCount: number = -1;
@@ -243,31 +239,6 @@ export struct A_Settings {
     PermissionEvents.clearListener();
   }
 
-  /**
-   * 通知是否可用：通知权限必须开；横幅字段只有 API 26+ 才有，
-   * 旧系统读不到时不能因此显示「去设置」——此时按通知权限算可用，
-   * 并在副标题里说明「横幅状态需自行到系统设置确认」。
-   */
-  @Computed
-  get notifyReady(): boolean {
-    if (!this.notifyAllowed) {
-      return false;
-    }
-    return !this.notifyBannerKnown || this.notifyBannerAllowed;
-  }
-
-  /** 右侧按钮文案：权限未开「去授权」；横幅明确关闭「横幅未开」；旧系统读不到横幅「通知已开启」 */
-  @Computed
-  get notifyActionLabel(): string {
-    if (!this.notifyAllowed) {
-      return '去授权';
-    }
-    if (this.notifyBannerKnown) {
-      return this.notifyBannerAllowed ? '已开启' : '横幅未开';
-    }
-    return '通知已开启';
-  }
-
   /* ── 权限管理 ── */
 
   /**
@@ -295,20 +266,6 @@ export struct A_Settings {
     // 通知权限从关到开：立刻补发/重算本地提醒，否则要等下一次冷启动
     if (!wasAllowed && this.notifyAllowed) {
       this.store.reconcileReminders();
-    }
-    // bannerEnabled 只有 API 26+ 才有；旧系统读不到时保持「未知」，
-    // 由 UI 显示「通知已开启」并提示去系统设置确认横幅。
-    this.notifyBannerKnown = false;
-    this.notifyBannerAllowed = false;
-    try {
-      const setting = await notificationManager.getNotificationSetting();
-      const banner = setting.bannerEnabled;
-      if (typeof banner === 'boolean') {
-        this.notifyBannerKnown = true;
-        this.notifyBannerAllowed = banner;
-      }
-    } catch (error) {
-      // 读不到就是「未确认」，按钮走「去设置」，不谎报已开启
     }
   }
 
@@ -437,29 +394,7 @@ export struct A_Settings {
   }
 
   /** 点「去开启」：弹出系统通知授权框（用户拒绝时保持未授权，不重复骚扰） */
-  private async requestNotifyPermission(): Promise<void> {
-    const context: common.Context | undefined = this.hostContext();
-    if (context === undefined) {
-      return;
-    }
-    try {
-      await notificationManager.requestEnableNotification(context as common.UIAbilityContext);
-      await this.loadNotifyPermission();
-      if (this.notifyReady && this.notifyBannerKnown) {
-        this.toast('通知与横幅已开启');
-      } else if (this.notifyAllowed) {
-        this.toast('通知已开启，请到系统设置确认横幅');
-      } else {
-        this.toast('通知未开启，请到系统设置里允许通知');
-      }
-    } catch (error) {
-      const err = error as BusinessError;
-      hilog.warn(DOMAIN, TAG, 'requestEnableNotification failed: %{public}s', err.message);
-      this.toast('打开通知授权失败，请到系统设置里开启');
-    }
-  }
-
-  /** 点「去授权」：申请日历读写权限（user_grant，系统弹框） */
+  /** 点「去设置」：申请日历读写权限（user_grant，系统弹框） */
   private async requestCalendarPermission(): Promise<void> {
     const context: common.Context | undefined = this.hostContext();
     if (context === undefined) {
@@ -1446,47 +1381,25 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
-          // 2026-10-27：通知权限 + 通知与横幅设置合并为一行。
-          // 只有「系统通知权限」和「系统横幅」都开启，右侧才显示「已开启」；
-          // 权限没开先弹授权，权限已开但横幅没开则跳系统通知设置。
+          // 2026-10-28：按钮永远显示「去设置」，点击统一打开系统通知设置；
+          // 横幅状态在 API 26 以下读不到，不再用状态文案猜测。
           Row({ space: 8 }) {
-            Column({ space: 2 }) {
-              Text('通知与横幅')
-                .fontSize($r('sys.float.ohos_id_text_size_body1'))
-                .fontColor($r('sys.color.ohos_id_color_text_primary'))
-                .maxLines(1)
-              if (this.notifyAllowed && !this.notifyBannerKnown) {
-                Text('当前系统不支持读取横幅状态，请到系统设置确认')
-                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                  .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-                  .maxLines(2)
-              }
-            }
-            .layoutWeight(1)
-            .alignItems(HorizontalAlign.Start)
+            Text('通知与横幅')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+              .maxLines(1)
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
-              Text(this.notifyActionLabel)
+              Text('去设置')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.notifyReady
-                  ? this.themeStore.scheme.onSecondaryContainer
-                  : this.themeStore.scheme.onPrimary)
+                .fontColor(this.themeStore.scheme.onPrimary)
             }
             .height(34)
             .padding({ left: 14, right: 14 })
-            .backgroundColor(this.notifyReady
-              ? this.themeStore.scheme.secondaryContainer
-              : this.themeStore.scheme.primary)
+            .backgroundColor(this.themeStore.scheme.primary)
             .borderRadius(17)
             .onClick(() => {
-              // 横幅状态已确认且都开着才无事可做；旧系统读不到横幅时仍允许点进系统设置确认
-              if (this.notifyReady && this.notifyBannerKnown) {
-                return;
-              }
-              if (!this.notifyAllowed) {
-                this.requestNotifyPermission();
-              } else {
-                this.openNotificationSettings();
-              }
+              this.openNotificationSettings();
             })
           }
           .width('100%')
@@ -1502,25 +1415,18 @@ export struct A_Settings {
               .fontColor($r('sys.color.ohos_id_color_text_primary'))
               .layoutWeight(1)
               .maxLines(1)
-            // 同「通知权限」：灰色「已授权 / 未授权」与右边胶囊重复，已删（2026-10-27）
+            // 与「通知与横幅」一致：按钮永远显示「去设置」，点击走系统授权/设置
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
-              Text(this.calendarAllowed ? '已授权' : '去授权')
+              Text('去设置')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                // 同「通知权限」：已授权＝状态 → 与 ChipGroup 选中 chip 同色（secondaryContainer / onSecondaryContainer）
-                .fontColor(this.calendarAllowed
-                  ? this.themeStore.scheme.onSecondaryContainer
-                  : this.themeStore.scheme.onPrimary)
+                .fontColor(this.themeStore.scheme.onPrimary)
             }
             .height(34)
             .padding({ left: 14, right: 14 })
-            .backgroundColor(this.calendarAllowed
-              ? this.themeStore.scheme.secondaryContainer
-              : this.themeStore.scheme.primary)
+            .backgroundColor(this.themeStore.scheme.primary)
             .borderRadius(17)
             .onClick(() => {
-              if (!this.calendarAllowed) {
-                this.requestCalendarPermission();
-              }
+              this.requestCalendarPermission();
             })
           }
           .width('100%')
