@@ -26,6 +26,9 @@ const TAG: string = 'PushRegistrar';
 export class PushRegistrar {
   /** 防重入：启动与"重试"可能同时进来 */
   private static running: boolean = false;
+  /** 失败后的重试间隔（ms）：onPageShow 每次都会调用，避免频繁取 token */
+  private static lastAttemptAt: number = 0;
+  private static readonly RETRY_GAP_MS: number = 60000;
 
   /**
    * 取 token 并上报一次。
@@ -42,6 +45,15 @@ export class PushRegistrar {
     if (PushRegistrar.running) {
       return status.pushReady;
     }
+    if (status.pushReady) {
+      return true;
+    }
+    const now: number = Date.now();
+    if (now - PushRegistrar.lastAttemptAt < PushRegistrar.RETRY_GAP_MS) {
+      return status.pushReady;
+    }
+    PushRegistrar.lastAttemptAt = now;
+    hilog.info(0x0000, TAG, 'register start');
     PushRegistrar.running = true;
     try {
       // ① 没有服务器地址 → 连上报的地址都没有，直接标"未启用"
@@ -53,9 +65,12 @@ export class PushRegistrar {
       //    （AGC 没开推送权益 / 没重签 / 模拟器不支持），比"连不上服务器"更值得先说清楚
       const tokenRes: PushTokenResult = await PushTokenService.getToken();
       if (!tokenRes.ok) {
+        hilog.warn(0x0000, TAG, 'getToken failed code=%{public}d message=%{public}s',
+          tokenRes.code, tokenRes.message);
         status.failed(tokenRes.message, tokenRes.advice);
         return false;
       }
+      hilog.info(0x0000, TAG, 'getToken ok len=%{public}d', tokenRes.token.length);
       // ③ 设备身份：/push/token 需要鉴权，没身份就先注册一个（复用同步那条链路，不另造）
       const hasIdentity: boolean = await SyncService.ensureDevice();
       if (!hasIdentity) {
@@ -65,9 +80,12 @@ export class PushRegistrar {
       // ④ 上报
       const res: ApiResult<PushTokenData> = await RelayApi.pushToken(tokenRes.token);
       if (!res.ok || res.data === undefined) {
+        hilog.warn(0x0000, TAG, 'push/token failed: %{public}s', apiErrorMessage(res));
         status.failed('上报失败：' + apiErrorMessage(res));
         return false;
       }
+      hilog.info(0x0000, TAG, 'push/token ok registered=%{public}s ready=%{public}s',
+        String(res.data.registered), String(res.data.push_ready));
       if (res.data.push_ready) {
         status.ready(tokenRes.token, res.data.registered);
         return true;

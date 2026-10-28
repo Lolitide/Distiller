@@ -25,6 +25,7 @@
  */
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
+import { pushService } from '@kit.PushKit';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'PushTokenService';
@@ -63,9 +64,9 @@ export class PushTokenService {
     const result: PushTokenResult = new PushTokenResult();
     try {
       // 常量说明符的动态 import：编译期就能解析依赖；运行期失败也只是一次 reject
-      const ns = await Promise.resolve(import('@kit.PushKit'));
-      // 与 TextExtractService 同一条 lint 口径：包一层 Promise.resolve 才能 await（否则报 await-thenable）
-      const token = await Promise.resolve(ns.pushService.getToken());
+      // 静态 import：系统 Kit 的动态 import 在部分真机上会得到空命名空间
+      // （实测 `ns.pushService` 为 undefined，报 1000900014），所以这里静态解析。
+      const token = await Promise.resolve(pushService.getToken());
       const text: string = token !== undefined && token !== null ? token : '';
       if (text.length === 0) {
         result.code = ERR_SYSTEM;
