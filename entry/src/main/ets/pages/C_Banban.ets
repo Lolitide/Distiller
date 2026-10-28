@@ -35,7 +35,12 @@ const LANE_H_VP: number = 26;
 /** 缩放档位：时间窗口长度（天）。默认 3 天（下标 1） */
 const ZOOM_DAYS: number[] = [1, 3, 7, 14, 30];
 const DEFAULT_ZOOM_INDEX: number = 1;
-/** 甘特背景板最大高度（vp），轨道过多时内部滚动 */
+/** 底部渐变遮罩高度（vp）：与任务列表 / 设置页同一套，内容滑到胶囊和＋下方时淡出 */
+const BOTTOM_MASK_VP: number = 140;
+/** 底部悬浮导航让位高度（vp）：胶囊 56 + 边距 16 + 安全区，甘特背景要一直铺到屏幕底 */
+const BOTTOM_NAV_CLEARANCE_VP: number = 112;
+/** 在旧上限之上再多给一点上拉空间（vp）：只加高度，不做半屏态 */
+const GANTT_EXTRA_PULL_VP: number = 48;
 /** 甘特条配色（按轨道轮换；与主题无关，保证相邻轨道可分） */
 const LANE_COLORS: string[] = ['#5B8FF9', '#61DDAA', '#F6BD16', '#7262FD', '#78D3F8', '#9661BC', '#E8684A'];
 
@@ -43,6 +48,20 @@ const LANE_COLORS: string[] = ['#5B8FF9', '#61DDAA', '#F6BD16', '#7262FD', '#78D
 export struct C_Banban {
   @Require @Param store: TaskListStore;
   @Local themeStore: ThemeStore = ThemeStore.instance();
+
+  /** 底部遮罩颜色：取甘特面板同色，铺到屏幕底时不出现一条突兀的白色 */
+  @Computed
+  get bottomMaskColors(): Array<[ResourceColor, number]> {
+    const panel: string = this.themeStore.scheme.surfaceContainerLow;
+    return [
+      [Theme.withAlpha(panel, '00'), 0.0],
+      [Theme.withAlpha(panel, '40'), 0.25],
+      [Theme.withAlpha(panel, '8C'), 0.49],
+      [Theme.withAlpha(panel, 'CC'), 0.70],
+      [Theme.withAlpha(panel, 'EE'), 0.85],
+      [Theme.withAlpha(panel, 'FF'), 1.0]
+    ];
+  }
   /** 当前时间轴的位置（毫秒）；拖动时间轴时更新，上方简要详情显示它穿过的事件 */
   @Local cursorMs: number = 0;
   /** 缩放档位（只有用户点 + / − 才变） */
@@ -69,8 +88,6 @@ export struct C_Banban {
   private redrawTimer: number = -1;
   /** 状态栏高度（vp）：本页隐藏了 HDS 标题栏，自己画标题行，需要让开系统栏 */
   @Local statusBarVp: number = 0;
-  /** 标题右侧时间文本（由 updateCursor/drawGantt 主动同步，保证一定触发重绘） */
-  @Local cursorLabelStr: string = '';
 
   aboutToAppear(): void {
     const ctx: common.Context | undefined = this.getUIContext().getHostContext();
@@ -146,33 +163,6 @@ export struct C_Banban {
     return start === Number.MAX_SAFE_INTEGER ? Date.now() : start;
   }
 
-  /** 可动轴时间文案：时间刻：MM:DD HH:MM（没有 ddl / 不显示图表时为空） */
-  /**
-   * 把当前可动轴时间同步进 `cursorLabelStr`（只在文本变化时才写 `@Local`，避免无谓重绘）。
-   *
-   * 这个值的去处：**详情区顶部那一行右对齐的小字**（原来是画在自绘标题行右侧的，
-   * 标题栏改用 HDS 之后搬到内容区，见 `build()` 里那段注释）。
-   */
-  private syncCursorLabel(): void {
-    const next: string = this.dueTasks().length === 0 ? '' : this.cursorLabelText();
-    if (next !== this.cursorLabelStr) {
-      this.cursorLabelStr = next;
-    }
-  }
-
-  private cursorLabelText(): string {
-    if (this.dueTasks().length === 0) {
-      return '';
-    }
-    const ms: number = this.cursorInit ? this.cursorMs : Date.now();
-    const d: Date = new Date(ms);
-    const hh: string = d.getHours() < 10 ? `0${d.getHours()}` : `${d.getHours()}`;
-    const mi: string = d.getMinutes() < 10 ? `0${d.getMinutes()}` : `${d.getMinutes()}`;
-    const mm: string = d.getMonth() + 1 < 10 ? `0${d.getMonth() + 1}` : `${d.getMonth() + 1}`;
-    const dd: string = d.getDate() < 10 ? `0${d.getDate()}` : `${d.getDate()}`;
-    return `时间刻：${mm}:${dd} ${hh}:${mi}`;
-  }
-
   /** 固定时间窗口长度（不再按任务跨度自动拉伸，只有用户缩放才变） */
   private windowMs(): number {
     return ZOOM_DAYS[this.zoomIndex] * 86400000;
@@ -200,6 +190,22 @@ export struct C_Banban {
   /** 往下最多能收多少（最少只留 1 条轨道） */
   private ganttMinExpand(): number {
     return LANE_H_VP - this.ganttBaseBodyHeight();
+  }
+
+  /**
+   * 最大展开：轨道全露 / 面板顶到屏幕中线再多给一点空间，两者取小。
+   * 只把旧上限抬高 `GANTT_EXTRA_PULL_VP`，不再进入半屏态。
+   */
+  private ganttExpandCap(): number {
+    const screenVp: number = px2vp(display.getDefaultDisplaySync().height);
+    const boxAtBase: number = GANTT_STRIP_VP + GANTT_AXIS_H_VP + this.ganttBaseBodyHeight() + 16;
+    const byScreen: number = Math.max(0, screenVp * 0.5 - BOTTOM_NAV_CLEARANCE_VP - boxAtBase);
+    return Math.max(0, Math.min(this.ganttMaxExpand(), byScreen + GANTT_EXTRA_PULL_VP));
+  }
+
+  /** 甘特面板总高：贴底但不改变图表位置；底部多出的 112vp 只是背景延伸 */
+  private ganttPanelHeight(): number {
+    return this.ganttBoxHeight() + BOTTOM_NAV_CLEARANCE_VP;
   }
 
   /** 当前轨道区可见高度 = 默认 + 拉条展开（不超过全部轨道） */
@@ -245,7 +251,7 @@ export struct C_Banban {
     return `#33${color.substring(1)}`;
   }
 
-  /** 表头顶部拉条：按住上下拖，调整表头高度 */
+  /** 表头顶部拉条：按住上下拖，调整轨道可见高度；上限比旧版多 48vp */
   private handleStripTouch(event: TouchEvent): void {
     if (event.touches.length === 0) {
       return;
@@ -261,11 +267,7 @@ export struct C_Banban {
     } else if (event.type === TouchType.Move) {
       // 卡片底边固定、上沿跟手：往上拖 → 多露出轨道
       const want: number = this.stripStartExpand + (this.stripStartY - p.screenY);
-      // 上限 ①：所有轨道都露出来；上限 ②：表头顶到屏幕中线（面板最多占下半屏）
-      const screenVp: number = px2vp(display.getDefaultDisplaySync().height);
-      const boxAtBase: number = GANTT_STRIP_VP + GANTT_AXIS_H_VP + this.ganttBaseBodyHeight() + 16;
-      const byScreen: number = Math.max(0, screenVp * 0.5 - 112 - boxAtBase);
-      const cap: number = Math.min(this.ganttMaxExpand(), byScreen);
+      const cap: number = this.ganttExpandCap();
       // 收起方向允许到负值，但最少保留 1 条轨道
       this.ganttExpandVp = Math.min(cap, Math.max(this.ganttMinExpand(), want));
     } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
@@ -576,7 +578,6 @@ export struct C_Banban {
       this.cursorMs = cursor;
       this.cursorInit = true;
     }
-    this.syncCursorLabel();
     const cx: number = plotX + ((cursor - start) / span) * plotW;
     ctx.strokeStyle = this.themeStore.scheme.primary;
     // 可动轴细一半（原来 2vp，太抢眼）
@@ -680,7 +681,6 @@ export struct C_Banban {
       this.cursorMs = start + ((rel - plotX) / plotW) * Math.max(1, end - start);
     }
     this.cursorInit = true;
-    this.syncCursorLabel();
     this.drawGantt();
   }
 
@@ -852,27 +852,11 @@ export struct C_Banban {
   build() {
     // 空态提示要落在**整屏正中间**，所以最外层用 Stack：内容铺满，提示作为居中覆盖层
     Stack({ alignContent: Alignment.Center }) {
-      Column() {
-        // ── 上 70%：简要详情 ──
+      // 内容 + 底部遮罩单独一层：遮罩只占底部 140vp，不再用整屏覆盖层挡手势。
+      Stack({ alignContent: Alignment.Bottom }) {
         Column() {
-          // **可动轴时间**（2026-10-25 搬家）：原来画在本页**自绘标题行**的右侧；
-          // 标题栏改用 HDS 之后（与设置页一致，见 `A_Main` 那条注释），标题区归 HDS 管，
-          // 这行文字就挪到这里 —— 放在它描述的这块内容（时间轴穿过的事件）正上方、右对齐。
-          // 显示规则不变：没有 ddl / 不显示图表时 `cursorLabelStr` 为空，整行不渲染。
-          if (this.cursorLabelStr.length > 0) {
-            Row() {
-              Blank()
-              Text(this.cursorLabelStr)
-                .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.themeStore.scheme.onSurfaceVariant)
-                .maxLines(1)
-            }
-            .width('100%')
-            .padding({ left: 16, right: 16, top: 4, bottom: 2 })
-            // 纯展示：不挡下面卡片的点击
-            .hitTestBehavior(HitTestMode.None)
-          }
-
+          // ── 上 70%：简要详情 ──
+        Column() {
           if (this.dueTasks().length === 0) {
             // 空态提示统一由下面的覆盖层负责
             Column()
@@ -1005,28 +989,43 @@ export struct C_Banban {
           .layoutWeight(1)
         }
         .width('100%')
-        .height(this.ganttBoxHeight())
-        .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+        .height(this.ganttPanelHeight())
+        // 底部多留出悬浮导航的 112vp，但背景仍然铺到屏幕底；上半部分图表位置不变
+        .padding({ left: 12, right: 12, top: 8, bottom: 8 + BOTTOM_NAV_CLEARANCE_VP })
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
         .borderRadius({ topLeft: Theme.RADIUS_CARD, topRight: Theme.RADIUS_CARD })
-        // 拖动中：整块甘特容器向上浮起一层阴影
+        // 默认留一点点上浮阴影；拖动时明显加深，强调面板被拉起
         .shadow({
-          radius: this.headerDragging ? 12 : 0,
-          color: this.headerDragging ? '#55000000' : '#00000000',
-          offsetY: this.headerDragging ? -4 : 0
+          radius: this.headerDragging ? 18 : 6,
+          color: this.headerDragging ? '#55000000' : '#14000000',
+          offsetY: this.headerDragging ? -6 : -1
         })
       }
       }
+        .width('100%')
+        .height('100%')
+        // 底部悬浮导航的让位改到甘特面板内部（见 ganttPanelHeight），
+        // 这样甘特背景能一直铺到屏幕底，而图表本身的位置保持不变。
+        .padding({ top: this.statusBarVp + 64 })
+        .backgroundColor(this.themeStore.scheme.surface)
+        // 2026-10-25：本页自绘的标题行（「板板」+ 右侧可动轴时间）**已删除** ——
+        // 标题栏改由 `A_Main` 的 HDS 标题栏统一画，与设置页同一个组件、同一套样式。
+        // 原来那行是 `.position({ y: statusBarVp + 4 })` 的浮层，字号 28 / 左右 20vp 都是手写的，
+        // 与 HDS 的 MINI 标题栏对不齐，这正是作者说的「和设置页面的不一样」。
+        // 内容顶部让白保留 `statusBarVp + 64`（与 `A_Settings` 的 `TITLE_CLEARANCE_VP + statusBarVp` 同档）。
+
+        // 底部渐变遮罩：只占底部 140vp，且不参与命中测试，不能挡住甘特拖动
+        Column()
+          .width('100%')
+          .height(BOTTOM_MASK_VP)
+          .linearGradient({
+            direction: GradientDirection.Bottom,
+            colors: this.bottomMaskColors
+          })
+          .hitTestBehavior(HitTestMode.None)
+      }
       .width('100%')
       .height('100%')
-      // 底部悬浮导航（胶囊 56 + 边距 16 + 安全区）会盖住内容，这里让出来
-      .padding({ top: this.statusBarVp + 64, bottom: 112 })
-      .backgroundColor(this.themeStore.scheme.surface)
-      // 2026-10-25：本页自绘的标题行（「板板」+ 右侧可动轴时间）**已删除** ——
-      // 标题栏改由 `A_Main` 的 HDS 标题栏统一画，与设置页同一个组件、同一套样式。
-      // 原来那行是 `.position({ y: statusBarVp + 4 })` 的浮层，字号 28 / 左右 20vp 都是手写的，
-      // 与 HDS 的 MINI 标题栏对不齐，这正是作者说的「和设置页面的不一样」。
-      // 内容顶部让白保留 `statusBarVp + 64`（与 `A_Settings` 的 `TITLE_CLEARANCE_VP + statusBarVp` 同档）。
 
       // 空态（2026-10-25，作者：「板板页面无任务的时候，也像任务列表页面一样显示一个图标再加文字」）：
       // **复用 `EmptyHint`** —— 任务列表的空态和搜索页的两种空态用的就是它（图示 + 一句灰字），

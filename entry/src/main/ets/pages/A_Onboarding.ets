@@ -9,7 +9,9 @@ import { ThemeStore } from '../utils/Theme';
 import { NotificationService } from '../service/system/NotificationService';
 import { CalendarService } from '../service/system/CalendarService';
 import { PermissionEvents } from '../service/system/PermissionEvents';
+import { PrivacyConsent } from '../service/system/PrivacyConsent';
 import { WindowInsets } from '../utils/WindowInsets';
+import { NAV_STACK_KEY, ROUTE_PRIVACY_POLICY } from '../viewmodel/TaskNavParams';
 import { M3Switch } from '../components/M3Switch';
 
 @ComponentV2
@@ -20,6 +22,8 @@ export struct A_Onboarding {
   @Local notifyOn: boolean = false;
   @Local calendarOn: boolean = false;
   @Local busy: boolean = false;
+  /** 是否已勾选同意《隐私政策》（未勾选时「开始使用」不可点） */
+  @Local consentChecked: boolean = false;
   /** 状态栏让位：全屏窗口下引导页要自己避开通知栏 */
   @Local statusBarVp: number = 0;
 
@@ -37,6 +41,25 @@ export struct A_Onboarding {
 
   private hostContext(): common.Context | undefined {
     return this.getUIContext().getHostContext();
+  }
+
+  /** 打开《隐私政策》独立页（引导页是全屏覆盖层，页面通过全局导航栈 push） */
+  private openPrivacyPolicy(): void {
+    AppStorage.get<NavPathStack>(NAV_STACK_KEY)?.pushPathByName(ROUTE_PRIVACY_POLICY, '');
+  }
+
+  /**
+   * 点「开始使用」：**先落隐私授权**再通知宿主收起引导。
+   *
+   * 合规要点：同意必须是"勾选后显式发生"的行为，所以这里才写 `privacy_consent = true`；
+   * 用户不勾选就点不了这个按钮（`enabled` 已按勾选态控制）。
+   */
+  private async finish(): Promise<void> {
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx !== undefined && this.consentChecked) {
+      await PrivacyConsent.setGranted(ctx, true);
+    }
+    this.onFinish();
   }
 
   private async toggleNotify(isOn: boolean): Promise<void> {
@@ -175,6 +198,46 @@ export struct A_Onboarding {
           .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
           .borderRadius(14)
 
+          // 隐私政策同意（2026-10-27 合规补强）：**必须显式勾选**才能「开始使用」，
+          // 且随时可以在「设置 → 关于 → 隐私说明」的独立页面里撤回。
+          // 撤回后 AI 与云端能力停用，本机基础功能（手动增删改、提醒、通知、日历、导入导出）照常。
+          Column({ space: 8 }) {
+            Row({ space: 10 }) {
+              Checkbox({ name: 'privacyConsent', group: 'privacy' })
+                .select(this.consentChecked)
+                .selectedColor(this.themeStore.scheme.primary)
+                .width(22)
+                .height(22)
+                .onChange((value: boolean) => {
+                  this.consentChecked = value;
+                })
+                .accessibilityText('我已阅读并同意隐私政策')
+
+              Text() {
+                Span('我已阅读并同意')
+                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                  .fontColor($r('sys.color.ohos_id_color_text_primary'))
+                Span('《隐私政策》')
+                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                  .fontColor(this.themeStore.scheme.primary)
+                  .onClick(() => {
+                    this.openPrivacyPolicy();
+                  })
+                Span('，同意后才会使用云端同步与 AI 解析；可随时在设置里撤回。')
+                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                  .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+              }
+              .layoutWeight(1)
+            }
+            .width('100%')
+            .alignItems(VerticalAlign.Top)
+          }
+          .width('100%')
+          .padding(14)
+          .alignItems(HorizontalAlign.Start)
+          .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
+          .borderRadius(14)
+
           Column() {
             Text('可选通道（默认关闭）')
               .fontSize($r('sys.float.ohos_id_text_size_body2'))
@@ -217,11 +280,15 @@ export struct A_Onboarding {
       }
       .width('100%')
       .height(44)
-      .backgroundColor(this.themeStore.scheme.primary)
+      // 未勾选隐私政策时按钮变灰且点不动（合规：先取得同意再处理个人信息）
+      .enabled(this.consentChecked)
+      .backgroundColor(this.consentChecked
+        ? this.themeStore.scheme.primary
+        : this.themeStore.scheme.surfaceContainerHighest)
       .borderRadius(22)
       .margin({ top: 12, bottom: 20 })
       .onClick(() => {
-        this.onFinish();
+        this.finish();
       })
     }
     .width('100%')

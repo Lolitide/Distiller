@@ -1,16 +1,30 @@
 /*
- * 文本输入面板（`TextInput` ＋ 底部取消/确定），给 `bindSheet` 当 body 用。
+ * 文本输入面板（`TextInput` ＋ 底部取消/确定），给 `openCustomDialog` 的居中弹窗当 body 用。
  *
- * 需求方 2026-10-17：「＋ 添加标签」（六颗 chip 的最后一块）—— 点它弹一个输入框填标签名。
- * 与 `DateTimePickerBody` / `OptionPickerBody` 同构，底部条共用 `PickerFooter`；
+ * 需求方 2026-10-17：「＋ 添加标签」点它弹一个输入框填标签名。
+ * 与 `DateTimePickerBody` / `OptionPickerBody` / `RepeatRuleEditor` 同构，底部条共用 `PickerFooter`；
  * 草稿由**父组件**持有（`@Param text` 进来、`@Event onTextChange` 出去），点「确定」才落库。
  *
- * ⚠️ 输入框的左右留白**用外层 `Row` 的 `padding`，不要给 `TextInput` 自己加 `margin`**：
- * 第一版写的是 `.margin({ left: $r(...), right: $r(...) })`，实测**没生效**、输入框仍然贴着半模态两边
- * （需求方 2026-10-17：「半模态的添加标签的文本输入框贴到两边了」，`.cache/tag-3-input.png`）——
- * 外层 `Row` 撑满 + `padding` 是稳的写法，也不会连带把底部那条「取消/确定」挤窄（它是 `Column` 的另一个子节点）。
+ * ## 2026-10-27：复用详情页的「点击添加已有标签」
+ *
+ * 需求方：「添加任务中的添加标签，也复用那个任务详情里面的点击添加已有标签的功能」——
+ * 于是弹窗顶部嵌进来同一条 `TagSuggestBar`（**同一个组件**，不是复制一份视觉）：
+ *  · 点一颗芯片 → `onPickTag`，父组件把它加进/移出当前草稿的标签；
+ *  · 长按一颗 → 变「删除」态，再点一次 → `onDeleteTag`，父组件全局删掉这个标签。
+ * 详情页里 `TagSuggestBar` 是浮在输入法上方的一条带子；这里嵌在弹窗里，所以传 `sidePadding: false`
+ * （弹窗外框已经给了 16vp，再叠一层会让提示行/芯片比输入框多缩进一截）。
+ *
+ * 2026-10-27 排版统一（需求方：「弹窗的字号（标题、正文）、字重、排版、间距调整得更合适、统一」）：
+ *  · 输入框**不再自己加左右 16vp 内边距** —— 弹窗外框 `CenterDialogFrame` 已经给了 16vp，
+ *    再叠一层的话标题在 16vp、输入框却从 32vp 起，左缘对不齐（与「设置重复」「设置到期时间」两个弹窗
+ *    同一处毛病，一起改掉了）；
+ *  · 输入框字号/高度/圆角与 `DateTimePickerBody` 的手动输入框**取同一套**
+ *    （`Theme.FONT_BODY` 14vp / 44vp 高 / `Theme.RADIUS_CHIP` 圆角 / `comp_background_secondary` 背板）；
+ *  · 上下内边距去掉：标题下方已有 16vp，输入框下只留 12vp 到操作条。
  */
 import { PickerFooter } from './PickerFooter';
+import { TagSuggestBar } from './TagSuggestBar';
+import { Theme } from '../utils/Theme';
 
 @ComponentV2
 export struct TagInputBody {
@@ -25,36 +39,62 @@ export struct TagInputBody {
   /** 点「确定」 */
   @Event onConfirm: () => void = () => {};
 
+  /** 全部已创建的标签（空数组＝没有已有标签，那条选择条整块不渲染） */
+  @Param existingTags: string[] = [];
+  /** 当前草稿上已经有的标签（决定芯片画不画成「已添加」） */
+  @Param selectedTags: string[] = [];
+  /** 点了一颗已有标签：父组件负责加进/移出草稿 */
+  @Event onPickTag: (tag: string) => void = () => {};
+  /** 长按后再点确认删除：父组件负责全局删除 */
+  @Event onDeleteTag: (tag: string) => void = () => {};
+
   build() {
     Column() {
-      // 外层 Row 只负责「左右留白 + 让输入框占满剩余宽度」
-      Row() {
-        TextInput({ text: this.text, placeholder: this.placeholder })
-          .width('100%')
-          // 稳定 id：UI 自动化（`devecocli ui text --id`）要用它定位
-          .id('tagNameInput')
-          // 输入框自己的内边距（文字与边框的距离）：官方 `padding_level8`
-          .padding({
-            left: $r('sys.float.padding_level8'),
-            right: $r('sys.float.padding_level8')
-          })
-          .backgroundColor($r('sys.color.comp_background_secondary'))
-          .borderRadius($r('sys.float.corner_radius_level8'))
-          .maxLines(1)
-          .enterKeyType(EnterKeyType.Done)
-          .onChange((value: string) => {
-            this.onTextChange(value);
-          })
-          // 回车＝确定（与其它输入框的手感一致）
-          .onSubmit(() => {
-            this.onConfirm();
-          })
+      // 已有标签选择条（与任务详情页**同一个组件**；没有已有标签时整块不出现）
+      if (this.existingTags.length > 0) {
+        TagSuggestBar({
+          tags: this.existingTags,
+          selected: this.selectedTags,
+          // 弹窗外框已经给了 16vp 内边距、容器色是 `surfaceContainerHigh`：
+          // 这两项都交给弹窗，自带的话会多缩进一截并多一块白斑
+          sidePadding: false,
+          ownBackground: false,
+          // 与标题之间的间距：弹窗标题自带 16vp 下留白，这里不再叠 6vp；
+          // 再用负 margin 收 4vp（2026-10-27 需求方：「减小一点这个间距」）
+          topPadding: 0,
+          onPick: (tag: string) => {
+            this.onPickTag(tag);
+          },
+          onDelete: (tag: string) => {
+            this.onDeleteTag(tag);
+          }
+        })
+          .margin({ top: -Theme.GAP_S })
       }
-      .width('100%')
-      .padding({
-        left: $r('sys.float.padding_level8'),
-        right: $r('sys.float.padding_level8')
-      })
+
+      TextInput({ text: this.text, placeholder: this.placeholder })
+        .width('100%')
+        // 稳定 id：UI 自动化（`devecocli ui text --id`）要用它定位
+        .id('tagNameInput')
+        // 与日期面板的手动输入框同一套尺寸/字号/圆形背板
+        .height(Theme.HIT_MIN + Theme.GAP_S)
+        .fontSize(Theme.FONT_BODY)
+        .fontColor($r('sys.color.ohos_id_color_text_primary'))
+        .placeholderColor($r('sys.color.ohos_id_color_text_secondary'))
+        .backgroundColor($r('sys.color.comp_background_secondary'))
+        .borderRadius(Theme.RADIUS_CHIP)
+        .padding({ left: Theme.GAP_M, right: Theme.GAP_M })
+        .maxLines(1)
+        .enterKeyType(EnterKeyType.Done)
+        // 输入框与操作条之间留 12vp；不要再给顶部留白（标题下方已经是 16vp）
+        .margin({ bottom: Theme.GAP_M })
+        .onChange((value: string) => {
+          this.onTextChange(value);
+        })
+        // 回车＝确定（与其它输入框的手感一致）
+        .onSubmit(() => {
+          this.onConfirm();
+        })
 
       PickerFooter({
         onCancel: () => {
@@ -66,6 +106,5 @@ export struct TagInputBody {
       })
     }
     .width('100%')
-    .padding({ top: $r('sys.float.padding_level8'), bottom: $r('sys.float.padding_level8') })
   }
 }

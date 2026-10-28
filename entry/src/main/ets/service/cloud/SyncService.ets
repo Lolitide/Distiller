@@ -14,10 +14,11 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { BackendConfig } from '../backend/BackendConfig';
 import { RelayApi } from '../backend/RelayApi';
 import { candidateToTask } from '../backend/TaskMapper';
-import { CandidateItem, ServeMessage, apiErrorMessage } from '../backend/BackendTypes';
+import { ApiResult, CandidateItem, CandidatesData, ServeMessage, apiErrorMessage } from '../backend/BackendTypes';
 import { TaskRepository } from '../../repository/TaskRepository';
 import { TaskListStore } from '../../viewmodel/TaskListStore';
 import { TaskExpiryService } from '../system/TaskExpiryService';
+import { PrivacyConsent } from '../system/PrivacyConsent';
 import { Task } from '../../model';
 import { SyncStatus } from './SyncStatus';
 
@@ -48,6 +49,13 @@ export class SyncService {
 
   /** 设置页开关：关闭立即停轮询；打开立刻拉一次 */
   static setEnabled(enabled: boolean): void {
+    // 隐私授权已撤回 → 不允许开云同步（撤回后「与所有 AI、云相关功能分隔」）
+    if (enabled && !PrivacyConsent.allowed()) {
+      SyncService.stop();
+      SyncStatus.instance().disabled();
+      SyncService.lastError = '已撤回隐私授权，云端同步不可用';
+      return;
+    }
     SyncService.enabled = enabled;
     if (!enabled) {
       SyncService.stop();
@@ -127,6 +135,11 @@ export class SyncService {
       SyncStatus.instance().disabled();
       return 0;
     }
+    // 隐私授权门禁：撤回后一条候选都不拉（撤回即"与所有云相关功能分隔"）
+    if (!PrivacyConsent.allowed()) {
+      SyncStatus.instance().disabled();
+      return 0;
+    }
     if (showBusy) {
       SyncStatus.instance().syncing();
     }
@@ -145,7 +158,16 @@ export class SyncService {
       }
       await SyncService.ensureSubscribed(false);
 
-      const res = await RelayApi.candidates(BackendConfig.cursor, 200);
+      let res: ApiResult<CandidatesData> = await RelayApi.candidates(BackendConfig.cursor, 200);
+      // 后端重启后候选流在内存里重建，rev_seq 会从 1 重新开始；本机游标若还停在旧的
+      // 大数字，`after=` 会永远拉不到东西（表现为「消息被过滤了」）。发现服务端游标
+      // 比本机还小，就立刻归零并重拉一次。
+      if (res.ok && res.data !== undefined && res.data.cursor < BackendConfig.cursor) {
+        hilog.info(DOMAIN, TAG, 'server cursor reset: local=%{public}d server=%{public}d',
+          BackendConfig.cursor, res.data.cursor);
+        BackendConfig.setCursor(context, 0);
+        res = await RelayApi.candidates(0, 200);
+      }
       if (!res.ok || res.data === undefined) {
         // 身份失效（BE-05）：清掉本机身份与绑定，停止轮询，等用户重新配对
         if (!res.ok && res.error !== undefined && res.error.code === 'unauthorized') {

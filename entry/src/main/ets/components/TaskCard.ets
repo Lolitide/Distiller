@@ -165,12 +165,21 @@ export struct TaskCard {
   }
 
   /**
+   * 是否设置过提醒日期：没有 `remindAt` 的待办右侧不出现铃铛。
+   * 取消提醒只关 `alarm`，`setRemind` 会保留 `remindAt`，所以铃铛仍在（显示 `bell_slash`），日期不会消失。
+   */
+  @Computed
+  get hasReminderDate(): boolean {
+    const remindAt: number | undefined = this.task.remindAt;
+    return remindAt !== undefined && remindAt > 0;
+  }
+
+  /**
    * 右侧 C 区：**铃铛按钮**（2026-10-19 定：「每一项任务最右侧是是否启用提醒的铃铛按钮」）。
    *
    * 两处与旧实现的差别：
    *  1. 旧的是 `SuffixSwitch` 开关，现在是**图标按钮**（点一下切 `alarm`）；
-   *  2. 旧的**只在 `remindAt` 有值时才显示**，现在**每一项都显示** ——
-   *     没设提醒时间的任务走「设置页的默认提醒通道」（提前量），所以铃铛永远有意义。
+   *  2. 只在 `remindAt` 有值（用户设置过提醒日期）时才显示；没有提醒日期的任务右侧留空。
    *
    * 图标：开＝`bell`（强调色）、关＝`bell_slash`（次级色）。
    * 用 `SuffixCustomBuilder` 自绘：官方 `SuffixIcon` 的选项里没有 `onClick`，点不动
@@ -194,19 +203,22 @@ export struct TaskCard {
   @Builder
   suffixRow() {
     Row() {
-      // 重复标识槽：**固定占位**（无重复时为空也不塌陷）
-      Stack() {
-        if (this.repeatLabel !== '') {
+      // 重复标识：只在有重复规则时占位
+      if (this.repeatLabel !== '') {
+        Stack() {
           SymbolGlyph($r('sys.symbol.repeat'))
             .fontSize(REPEAT_ICON_SIZE_VP)
             .fontColor([$r('sys.color.icon_secondary')])
         }
+        .width(REPEAT_SLOT_WIDTH_VP)
+        .height(BELL_HIT_SIZE_VP)
+        .accessibilityText(this.repeatLabel)
       }
-      .width(REPEAT_SLOT_WIDTH_VP)
-      .height(BELL_HIT_SIZE_VP)
-      .accessibilityText(this.repeatLabel)
 
-      this.bellGlyph()
+      // 没有设置提醒日期就不画铃铛；取消提醒时 remindAt 仍保留，所以铃铛继续显示为 bell_slash
+      if (this.hasReminderDate) {
+        this.bellGlyph()
+      }
     }
     .alignItems(VerticalAlign.Center)
   }

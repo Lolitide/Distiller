@@ -1,17 +1,21 @@
 /*
- * 任务详情的「更多信息」卡 —— 第一行是**状态**（六态状态机里用户可写四态的入口），
- * 之后承载字段表 v1 里标了**详情 ✅ 但此前没有任何渲染点**的各项：
+ * 任务详情的「更多信息」卡 —— 承载字段表 v1 里标了**详情 ✅ 但此前没有任何渲染点**的各项：
  *
- *   `status` 状态 · `level` 难易程度 · `category` 类型 · `place` 地点
- *   `urls` 链接 · `certainty` 置信度 · `createdAt` 创建于 · `finishedAt` 完成于
+ *   `level` 难易程度 · `place` 地点 · `urls` 链接 · `certainty` 置信度
+ *   `createdAt` 创建于 · `finishedAt` 完成于
  *
  * 造型取「标签–值」两列行（不再画图标圈）：这些是**属性读数 / 属性选择**，不是动作，
  * 左列固定文案、右列值或分段，空值统一显示「未设置」，比一堆形状相近的 Symbol 更好读。
  *
+ * 2026-10-27 搬出去两项（需求方）：
+ *   · **状态**（`status`）—— 「这东西只有系统能编辑管理」，整行从详情页删掉；
+ *     用户的入口只剩名称前面那颗状态圆圈（完成 / 退回），四档分段不再露出。
+ *   · **类型**（`category`）—— 「把『类型』置于『添加标签』下一个」→ 搬到标签卡的
+ *     `TaskCategoryRow`，与标签排在一起。
+ *   所以本卡也不再需要 `store`（状态那一行是它唯一的用处）。
+ *
  * 哪些能改：
- *   · `status` —— 四档分段（待确认 / 已确认 / 进行中 / 已完成），**写回走 `store.setStatus`**
- *     （状态流转只有一个写入口，卡片不许直接写 `task.status`）；
- *   · `level` / `category` / `place` —— **全部行内直改**（三档分段 / 预设胶囊 / 输入框），
+ *   · `level` / `place` —— **全部行内直改**（三档分段 / 输入框），
  *   · `certainty` / `createdAt` / `finishedAt` —— **只读**：置信度来自解析、两个时间戳由系统写
  *     （字段表：`createdAt` 非用户填；`finishedAt` 只有系统能写）。
  *   · `urls` —— 只读展示（多条用换行拼接）；手动增删链接留到下一轮。
@@ -22,9 +26,8 @@
  */
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
-import { Task, TaskLevel, TaskPriority, TaskStatus, TASK_CATEGORY_PRESETS } from '../model';
+import { Task, TaskLevel, TaskPriority } from '../model';
 import { SegmentRow } from './SegmentRow';
-import { TaskListStore } from '../viewmodel/TaskListStore';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 import { Theme, ThemeStore } from '../utils/Theme';
 
@@ -59,25 +62,13 @@ const PRIORITY_OPTIONS: string[] = ['普通', '重要', '紧急'];
 const SEGMENT_GAP_VP: number = 8;
 /** 分段按钮高度（vp） */
 const SEGMENT_HEIGHT_VP: number = 32;
-/** 类型胶囊高度（vp） */
-const CHIP_HEIGHT_VP: number = 28;
-/** 类型胶囊间距（vp） */
-const CHIP_GAP_VP: number = 6;
 
 @ComponentV2
 export struct TaskInfoCard {
   @Require @Param task: Task;
-  /**
-   * 任务 store：**只为了「状态」这一行** —— 状态流转有且只有一个写入口 `store.setStatus`
-   * （它同时负责 `finishedAt` / 响铃 / "完成前状态"记忆），卡片自己不许直接写 `task.status`。
-   * 其余各行（重要程度 / 难易程度 / 类型 / 地点）是纯字段直改，不需要 store。
-   */
-  @Require @Param store: TaskListStore;
 
   /** 视觉个性化：卡片底取 M3 容器色（见卡片上 `backgroundColor` 的说明） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
-
-  /** 类型选择器的草稿下标（-1 ＝ 未设置） */
 
   /* ── 文案 ── */
 
@@ -115,18 +106,6 @@ export struct TaskInfoCard {
   @Computed
   get levelSet(): boolean {
     return this.task.level !== undefined;
-  }
-
-  @Computed
-  get categoryLabel(): string {
-    const value: string | undefined = this.task.category;
-    return value === undefined || value === '' ? this.unsetText : value;
-  }
-
-  @Computed
-  get categorySet(): boolean {
-    const value: string | undefined = this.task.category;
-    return value !== undefined && value !== '';
   }
 
   @Computed
@@ -226,39 +205,6 @@ export struct TaskInfoCard {
       : (index === 2 ? TaskLevel.HARD : TaskLevel.MEDIUM);
   }
 
-  /* ── 状态（六态状态机里用户可写的那四态；写回一律走 `store.setStatus`）── */
-
-  /**
-   * 四档文案（与 `TaskListStore.USER_STATUSES` **一一对应**，改一边必须改另一边）。
-   * 文案的来源是 `TaskListViewModel.statusLabel`（六态中文只有那一份），这里只负责取四态那几项。
-   */
-  @Computed
-  get statusOptions(): string[] {
-    const labels: string[] = [];
-    TaskListStore.USER_STATUSES.forEach((status: TaskStatus) => {
-      labels.push(TaskListViewModel.statusLabel(status));
-    });
-    return labels;
-  }
-
-  /**
-   * 当前状态在四档里的下标。
-   * 已过期（4）/ 已删除（5）是系统写的那两态，不在四档里 → `-1`（一颗都不选中）；
-   * 于是过期任务也能直接点「已确认」重新做，不用先等系统改。
-   */
-  @Computed
-  get statusIndex(): number {
-    return TaskListStore.USER_STATUSES.indexOf(this.task.status);
-  }
-
-  /** 点某一档：换算回枚举再交给 store —— 卡片里不出现"状态数字"，也不直接写 `task.status` */
-  private applyStatus(index: number): void {
-    const statuses: TaskStatus[] = TaskListStore.USER_STATUSES;
-    if (index < 0 || index >= statuses.length) {
-      return;
-    }
-    this.store.setStatus(this.task, statuses[index]);
-  }
 
   /** 重要性在分段按钮里的选中下标（0 普通 / 1 重要 / 2 紧急），显式换算不拿枚举当数组下标 */
   @Computed
@@ -282,24 +228,6 @@ export struct TaskInfoCard {
     }
   }
 
-  /* ── 类型（改为按钮组：与难易程度同一套分段按钮，超宽横向滑动）── */
-
-  /** 当前类型在 `TASK_CATEGORY_PRESETS` 里的下标；没设置 → -1（一颗都不选中） */
-  @Computed
-  get categoryIndex(): number {
-    const value: string | undefined = this.task.category;
-    if (value === undefined || value === '') {
-      return -1;
-    }
-    return TASK_CATEGORY_PRESETS.indexOf(value);
-  }
-
-  /** 点某一颗类型按钮：直接写回 `task.category`（`Task` 是 `@ObservedV2`，卡片会跟着刷新） */
-  private applyCategory(index: number): void {
-    if (index >= 0 && index < TASK_CATEGORY_PRESETS.length) {
-      this.task.category = TASK_CATEGORY_PRESETS[index];
-    }
-  }
 
   /* ── 行（**值一律在 build 里直接读 `@Computed`**）── */
 
@@ -323,37 +251,7 @@ export struct TaskInfoCard {
 
   build() {
     Column() {
-      // ① 状态（可改）—— 本卡第一行。
-      //    2026-10 需求方：「把任务详情的状态添加到重要性那个 card 里面的第一个」。
-      //    之前状态分段独立挂在**任务名下方**（一次性四档全亮）；挪进这张卡后与「重要性 / 难易程度」
-      //    同一套「标签 + 分段」行式，视觉上归到"属性"一类，也不再在标题下面压一大块。
-      //    ⚠️ 四档 + 88vp 的标签列在 360vp 宽度下放不下（约 388vp），所以外面套**横向 Scroll**，
-      //       与下面「类型」那行同一套做法（放得下时左对齐贴标签，放不下时左右滑）。
-      Row({ space: VALUE_GAP_VP }) {
-        this.rowLabel($r('app.string.task_status_caption'))
-        Scroll() {
-          SegmentRow({
-            options: this.statusOptions,
-            selectedIndex: this.statusIndex,
-            onSelect: (index: number) => {
-              this.applyStatus(index);
-            }
-          })
-        }
-        .scrollable(ScrollDirection.Horizontal)
-        .scrollBar(BarState.Off)
-        .edgeEffect(EdgeEffect.Spring)
-        .layoutWeight(1)
-        .align(Alignment.Start)
-      }
-      .width('100%')
-      .height(ROW_HEIGHT_VP)
-      .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-      .alignItems(VerticalAlign.Center)
-
-      this.rowDivider()
-
-      // ② 重要性（可改）—— 与难易程度**同一张卡、同一行式**。
+      // ① 重要性（可改）—— 与难易程度**同一张卡、同一行式**。
       //    2026-10-21（需求方：「重要性、类型使用按钮」）：从锚定浮窗改回**三档按钮**，
       //    与难易程度长得一样，扫一眼就能看出"现在选的是哪一档"。
       Row({ space: VALUE_GAP_VP }) {
@@ -393,34 +291,7 @@ export struct TaskInfoCard {
 
       this.rowDivider()
 
-      // ④ 类型：**按钮组**（2026-10-21 需求方：「类型的按钮超出则横向滑动」）。
-      //    5 档（作业/考试/活动/通知/其他）在 360vp 宽度下放不下，所以外面套一层横向 `Scroll`：
-      //    能放下时左对齐贴着标签，放不下时用户左右滑——和任务名、步骤、链接同一套做法。
-      Row({ space: VALUE_GAP_VP }) {
-        this.rowLabel($r('app.string.info_category'))
-        Scroll() {
-          SegmentRow({
-            options: TASK_CATEGORY_PRESETS,
-            selectedIndex: this.categoryIndex,
-            onSelect: (index: number) => {
-              this.applyCategory(index);
-            }
-          })
-        }
-        .scrollable(ScrollDirection.Horizontal)
-        .scrollBar(BarState.Off)
-        .edgeEffect(EdgeEffect.Spring)
-        .layoutWeight(1)
-        .align(Alignment.Start)
-      }
-      .width('100%')
-      .height(ROW_HEIGHT_VP)
-      .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-      .alignItems(VerticalAlign.Center)
-
-      this.rowDivider()
-
-      // ⑤ 地点（可改）
+      // ③ 地点（可改）
       Row({ space: VALUE_GAP_VP }) {
         this.rowLabel($r('app.string.info_place'))
         // 地点：**行内输入框**（2026-10-19：「多数字段可直接点击文本进行编辑」）。

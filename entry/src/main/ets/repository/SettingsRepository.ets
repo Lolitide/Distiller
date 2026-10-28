@@ -36,6 +36,21 @@ const KEY_GROUP_EXPANDED: string = 'task_group_expanded';
 const KEY_SYNC_ENABLED: string = 'sync_enabled';
 /** 首次启动引导是否已看过 */
 const KEY_FIRST_LAUNCH: string = 'first_launch_done';
+/**
+ * 演示模式开关（设置 → 关于）：打开时列表里放一组演示任务，关掉即摘掉。
+ *
+ * 2026-10-27：原来任务列表右下角有颗「样例」按钮做这件事，需求方要求删掉按钮、
+ * 统一收到设置页的「关于」里，于是多了一个需要记住的开关状态。
+ */
+const KEY_DEMO_MODE: string = 'demo_mode';
+/**
+ * 隐私授权（用户是否同意《隐私政策》）。
+ *
+ * 2026-10-27：隐私政策改成独立页面后，需要一条可**撤回**的授权状态 ——
+ * 撤回后 AI / 云相关能力全部停用，只留本地基础功能（见 `service/system/PrivacyConsent.ets`）。
+ * 默认 **true**：升级上来的老用户不会被突然锁住；首次启动引导里必须勾选才继续。
+ */
+const KEY_PRIVACY_CONSENT: string = 'privacy_consent';
 
 /** 默认提醒提前量：0 分钟（到点提醒） */
 export const DEFAULT_REMIND_LEAD: number = 0;
@@ -303,6 +318,88 @@ export class SettingsRepository {
     } catch (error) {
       const err = error as BusinessError;
       hilog.error(DOMAIN, TAG, 'setFirstLaunchDone failed: %{public}s', err.message);
+      return false;
+    }
+  }
+
+  /** 演示模式是否开启（默认关） */
+  static async getDemoMode(context: common.Context): Promise<boolean> {    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
+    if (store === undefined) {
+      return false;
+    }
+    try {
+      const value: preferences.ValueType = await store.get(KEY_DEMO_MODE, false);
+      return value === true;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'getDemoMode failed: %{public}s', err.message);
+      return false;
+    }
+  }
+
+  static async setDemoMode(context: common.Context, enabled: boolean): Promise<boolean> {
+    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
+    if (store === undefined) {
+      return false;
+    }
+    try {
+      await store.put(KEY_DEMO_MODE, enabled);
+      await store.flush();
+      return true;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'setDemoMode failed: %{public}s', err.message);
+      return false;
+    }
+  }
+
+  /**
+   * 隐私授权状态（默认 **true**）。
+   *
+   * 默认 true 的理由：这是**已上线用户**的升级路径 —— 他们早已在使用 AI/云功能，
+   * 升级后突然被锁成"未授权"会直接坏掉主流程。首次启动引导里则是**必须勾选**才放行，
+   * 所以新装用户的那份同意是显式取得的。
+   */
+  static async getPrivacyConsent(context: common.Context): Promise<boolean> {
+    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
+    if (store === undefined) {
+      return true;
+    }
+    try {
+      const value: preferences.ValueType = await store.get(KEY_PRIVACY_CONSENT, true);
+      return value !== false;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'getPrivacyConsent failed: %{public}s', err.message);
+      return true;
+    }
+  }
+
+  /** 同步版：给启动路径/服务层做**同步门禁**用（读首选项的同步接口） */
+  static getPrivacyConsentSync(context: common.Context, fallback: boolean = true): boolean {
+    try {
+      const store: preferences.Preferences = preferences.getPreferencesSync(context, { name: STORE_NAME });
+      const value: preferences.ValueType = store.getSync(KEY_PRIVACY_CONSENT, fallback);
+      return value !== false;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'getPrivacyConsentSync failed: %{public}s', err.message);
+      return fallback;
+    }
+  }
+
+  static async setPrivacyConsent(context: common.Context, granted: boolean): Promise<boolean> {
+    const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
+    if (store === undefined) {
+      return false;
+    }
+    try {
+      await store.put(KEY_PRIVACY_CONSENT, granted);
+      await store.flush();
+      return true;
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.error(DOMAIN, TAG, 'setPrivacyConsent failed: %{public}s', err.message);
       return false;
     }
   }

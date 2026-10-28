@@ -197,9 +197,13 @@ export struct AddTaskSheet {
     .width('100%')
     .alignItems(VerticalAlign.Center)
     // 上下各 16vp：与系统标题区的节奏一致（半模态顶 → 分段控件 ≈ 240px，见上面注释第 3 点）
+    //
+    // 右边距 2026-10-27：原来是 `padding_level2`（4vp），那颗 32vp 的圆形关闭钮几乎贴着
+    // 半模态的圆角，看着像"压在边框上"（需求方截图圈的就是它）。改成与左边标题同一个
+    // `HEADER_SIDE_PADDING_VP`（16vp）：标题左缘、关闭钮右缘对称，也让开了圆角那一段弧。
     .padding({
       left: HEADER_SIDE_PADDING_VP,
-      right: $r('sys.float.padding_level2'),
+      right: HEADER_SIDE_PADDING_VP,
       top: $r('sys.float.padding_level8'),
       bottom: $r('sys.float.padding_level8')
     })
@@ -573,6 +577,9 @@ export struct AddTaskSheet {
           // 一行装不下由组件内部的 `Flex(wrap)` 自动换行；这里只留 16vp 上间距。
           AddTaskAttributeChips({
             draft: this.draft,
+            // 2026-10-27：标签管理要用 ——「添加标签」弹窗里复用了详情页的既有标签选择条
+            //（点已有标签加入 / 长按删除），两条都要读 `store.allTags` / `store.deleteTagEverywhere`。
+            store: this.store,
             aiBusy: this.aiBusy,
             showAi: true,
             lowConfidence: this.draft.certainty > 0 && this.draft.certainty < 60,

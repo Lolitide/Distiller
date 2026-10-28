@@ -8,6 +8,7 @@ import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { RelayApi } from '../backend/RelayApi';
 import { Task } from '../../model';
+import { PrivacyConsent } from '../system/PrivacyConsent';
 
 const DOMAIN: number = 0x0000;
 const TAG: string = 'FeedbackService';
@@ -24,6 +25,10 @@ interface RawFeedbackCandidate {
 export class FeedbackService {
   /** action: accept / dismiss；失败只记日志，不影响本地任务操作。 */
   static async send(task: Task, action: string): Promise<boolean> {
+    // 隐私授权门禁：撤回后不再向服务器回传任何计数
+    if (!PrivacyConsent.allowed()) {
+      return false;
+    }
     const candidateId: string = task.clientTaskId !== undefined ? task.clientTaskId : '';
     if (candidateId.length === 0) {
       return false;

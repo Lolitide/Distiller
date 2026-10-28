@@ -192,8 +192,11 @@ export class TaskListStore {
     this.dataContext = context;
     this.rebuildGroups(TaskRepository.load(context));
     this.expireOverdue();
-    // 启动即回写一次：把旧 `__ob_` 键文件/迁移数据规整成普通 JSON
-    this.persist();
+    // 启动即回写一次：把旧 `__ob_` 键文件/迁移数据规整成普通 JSON。
+    // 但读出来是空列表时不要回写：文件可能只是暂时解析失败，直接写空会把唯一副本抹掉。
+    if (this.allTasks().length > 0) {
+      this.persist();
+    }
   }
 
   /**
@@ -688,6 +691,121 @@ export class TaskListStore {
     return 0;
   }
 
+  /*
+   * ── 标签（`Task.tags`）的**写入口**（2026-10-27 收口）──
+   *
+   * 为什么收口：标签现在有**两处**要改 ——
+   *   ① 详情页标签卡里的内联输入（只影响本任务：加 / 删 / 改名）；
+   *   ② 详情页「添加标签」时浮在输入法上方的**已有标签选择条**（本任务加删 + **全局删除**一个标签）。
+   * 两处各自 `task.tags = next` 的话，「去空白 / 去重 / 换新数组（`@Trace` 只有换引用才通知界面）」
+   * 这套口径迟早各写一份、然后漂移。所以加 / 删一律走下面三个方法。
+   *
+   * 落盘纪律：① 属于单任务编辑，跟详情页其它字段一样等离开页面时 `saveNow()` 统一落盘；
+   * ② 的全局删除跨多条任务、且不可撤销，**当场落盘**。
+   */
+
+  /**
+   * 给一个任务加一个标签（去空白、去重）。
+   * @returns 是否真的加了（已经有的再点一次不会重复加）
+   */
+  addTagTo(task: Task, tag: string): boolean {
+    const text: string = tag.trim();
+    if (text.length === 0) {
+      return false;
+    }
+    const own: string[] | undefined = task.tags;
+    const current: string[] = own === undefined ? [] : own;
+    if (current.indexOf(text) >= 0) {
+      return false;
+    }
+    const next: string[] = current.slice();
+    next.push(text);
+    // 整体换新数组：`@Trace` 数组只有换引用才会通知界面
+    task.tags = next;
+    return true;
+  }
+
+  /** 从一个任务里删掉一个标签（只动本任务）。返回是否真的删了 */
+  removeTagFrom(task: Task, tag: string): boolean {
+    const own: string[] | undefined = task.tags;
+    if (own === undefined || own.indexOf(tag) < 0) {
+      return false;
+    }
+    task.tags = own.filter((each: string) => each !== tag);
+    return true;
+  }
+
+  /**
+   * **全局删掉一个标签**：把所有任务（含待确认消息）身上的这个标签都摘掉。
+   *
+   * 这是「已有标签选择条」里长按 → 标签变成「删除」→ 再点一次的落点，属于标签管理；
+   * 语义是「这个标签以后不要了」，不是「从这一条任务上拿掉一个」，所以走 `removeTagFrom` 的不适用。
+   *
+   * 顺带收尾三件事：
+   *  · 清掉它的点选次数（`tagUsages`），免得 `chips` 排序里留一条孤儿；
+   *  · 正在按它筛选 → 把筛选键写回「全部」（`effectiveFilter` 只是兜底）；
+   *  · **当场落盘**（跨多条任务、且删了不可恢复，不能等离开详情页）。
+   *
+   * @returns 受影响的任务条数（0 ＝ 没有任何任务带这个标签，什么都没写）
+   */
+  deleteTagEverywhere(tag: string): number {
+    let changed: number = 0;
+    const all: Task[] = this.allTasks();
+    all.forEach((task: Task) => {
+      if (this.removeTagFrom(task, tag)) {
+        changed++;
+      }
+    });
+    if (changed === 0) {
+      return 0;
+    }
+    this.tagUsages = this.tagUsages.filter((usage: TagUsage) => usage.tag !== tag);
+    if (this.activeFilter === `${FILTER_TAG_PREFIX}${tag}`) {
+      this.activeFilter = FILTER_ALL;
+    }
+    this.persist();
+    return changed;
+  }
+
+  /**
+   * **演示模式关掉**时用：把 `clientTaskId` 以 `prefix` 开头的任务**软删**掉。
+   *
+   * 为什么按前缀而不是按 id：演示任务的 `clientTaskId` 固定带 `sample-` 前缀
+   * （见 `mock/DemoTasks.ets`），而 `id` 是本机自增主键、重装/导入后会变；
+   * 前缀只可能命中演示任务，不会误删用户自己写的或后端推来的任务。
+   *
+   * 与 `deleteTask` 同一条口径：软删（`status = DELETED`）—— `groupByDay` 会过滤掉已删任务，
+   * 所以界面立刻看不到；同时关掉响铃并交给对账器撤销已发布的提醒句柄。
+   *
+   * @returns 删掉的条数（0 ＝ 当前没有演示任务，什么都不写）
+   */
+  removeTasksByClientIdPrefix(prefix: string): number {
+    if (prefix.length === 0) {
+      return 0;
+    }
+    let removed: number = 0;
+    const all: Task[] = this.allTasks();
+    all.forEach((task: Task) => {
+      const key: string | undefined = task.clientTaskId;
+      if (key === undefined || !key.startsWith(prefix)) {
+        return;
+      }
+      if (task.status === TaskStatus.DELETED) {
+        return;
+      }
+      task.status = TaskStatus.DELETED;
+      task.alarm = TaskAlarm.OFF;
+      removed++;
+    });
+    if (removed === 0) {
+      return 0;
+    }
+    this.refreshGroups();
+    this.persist();
+    this.reconcileReminders();
+    return removed;
+  }
+
   /**
    * 按 Chip 的 key 过滤：
    * · `all` 不过滤；`done` 已完成；`todo` 未完成；`urgent` 紧急（`TaskPriority.URGENT`）；
@@ -863,16 +981,17 @@ export class TaskListStore {
    * 于是「已过期」根本不是真实状态：筛选、组头计数、详情页状态分段、落盘都看不到它。
    *
    * 本方法**双向**同步，两条方向缺一不可：
-   *   ① **到期未完成**（`dueAt <= now`，当前状态 ∈ 待确认 / 已确认 / 进行中）→ 写 `EXPIRED`；
+    *   ① **到期未完成**（`dueAt <= now`，当前状态 ∈ 已确认 / 进行中）→ 写 `EXPIRED`；
    *   ② **已经是 EXPIRED 但期限被挪到将来（或清空）** → 回到 `CONFIRMED`。
    *      没有 ② 会留下一个永久的假过期：`dueLabel` **先看 `status === EXPIRED`**（见那里的分支），
    *      用户把期限往后改，卡片上仍会一直显示「已过期」。
    *
-   * 明确**不碰**的三类：
-   *   · `COMPLETED` —— `dueLabel` 的完成态分支（`COMPLETED` 时返回空串、不显示剩余时间）就靠这条守住：
-   *     已完成的任务即使早过了截止时间，也不该被改写成「已过期」；
-   *   · `DELETED` —— 软删不可逆；
-   *   · 没有 `dueAt` 的任务 —— 没期限就没有「过期」可言（`dueText` 只是原文，不拿来猜时刻）。
+    * 明确**不碰**的四类：
+    *   · `PENDING_CONFIRM` —— 先留在「待确认消息」让用户决定保留/忽略，不能被系统直接改成已过期；
+    *   · `COMPLETED` —— `dueLabel` 的完成态分支（`COMPLETED` 时返回空串、不显示剩余时间）就靠这条守住：
+    *     已完成的任务即使早过了截止时间，也不该被改写成「已过期」；
+    *   · `DELETED` —— 软删不可逆；
+    *   · 没有 `dueAt` 的任务 —— 没期限就没有「过期」可言（`dueText` 只是原文，不拿来猜时刻）。
    *
    * 过期时顺手关提醒：`alarm` 置 OFF、`reminderId` 清空（已经过期了再响没有意义）。
    * TODO(需求方): 真接 `service/system/ReminderService` 后，这里要先**撤销已发布的提醒**再改状态。
@@ -885,7 +1004,11 @@ export class TaskListStore {
     const all: Task[] = this.allTasks();
     for (let i = 0; i < all.length; i++) {
       const task: Task = all[i];
-      if (task.status === TaskStatus.COMPLETED || task.status === TaskStatus.DELETED) {
+      // 待确认任务先留在收件箱：即使原文里的截止时间已过，也要让用户先看到并决定
+      // 「保留 / 忽略」，不能刚收到就被系统改成「已过期」而绕开待确认。
+      if (task.status === TaskStatus.PENDING_CONFIRM
+        || task.status === TaskStatus.COMPLETED
+        || task.status === TaskStatus.DELETED) {
         continue;
       }
       const due: number | undefined = task.dueAt;
