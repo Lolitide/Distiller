@@ -150,6 +150,11 @@ struct A_Main {
     if (shareError.length > 0) {
       this.toast(shareError);
     }
+    // 从后台回来：立刻补一次同步，并重试 Push Token 上报（首次启动时网络可能还没就绪）
+    if (SyncService.enabled && !this.showOnboarding) {
+      SyncService.syncOnce(true);
+      PushRegistrar.register();
+    }
   }
 
   private async pullForwarded(): Promise<void> {
