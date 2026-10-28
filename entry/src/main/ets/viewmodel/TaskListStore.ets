@@ -192,8 +192,11 @@ export class TaskListStore {
     this.dataContext = context;
     this.rebuildGroups(TaskRepository.load(context));
     this.expireOverdue();
-    // 启动即回写一次：把旧 `__ob_` 键文件/迁移数据规整成普通 JSON
-    this.persist();
+    // 启动即回写一次：把旧 `__ob_` 键文件/迁移数据规整成普通 JSON。
+    // 但读出来是空列表时不要回写：文件可能只是暂时解析失败，直接写空会把唯一副本抹掉。
+    if (this.allTasks().length > 0) {
+      this.persist();
+    }
   }
 
   /**
