@@ -994,11 +994,11 @@ export struct C_Banban {
         .padding({ left: 12, right: 12, top: 8, bottom: 8 + BOTTOM_NAV_CLEARANCE_VP })
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
         .borderRadius({ topLeft: Theme.RADIUS_CARD, topRight: Theme.RADIUS_CARD })
-        // 拖动中：整块甘特容器向上浮起一层阴影
+        // 默认留一点点上浮阴影；拖动时明显加深，强调面板被拉起
         .shadow({
-          radius: this.headerDragging ? 12 : 0,
-          color: this.headerDragging ? '#55000000' : '#00000000',
-          offsetY: this.headerDragging ? -4 : 0
+          radius: this.headerDragging ? 18 : 6,
+          color: this.headerDragging ? '#55000000' : '#14000000',
+          offsetY: this.headerDragging ? -6 : -1
         })
       }
       }
