@@ -39,6 +39,8 @@ const DEFAULT_ZOOM_INDEX: number = 1;
 const BOTTOM_MASK_VP: number = 140;
 /** 底部悬浮导航让位高度（vp）：胶囊 56 + 边距 16 + 安全区，甘特背景要一直铺到屏幕底 */
 const BOTTOM_NAV_CLEARANCE_VP: number = 112;
+/** 在旧上限之上再多给一点上拉空间（vp）：只加高度，不做半屏态 */
+const GANTT_EXTRA_PULL_VP: number = 48;
 /** 甘特条配色（按轨道轮换；与主题无关，保证相邻轨道可分） */
 const LANE_COLORS: string[] = ['#5B8FF9', '#61DDAA', '#F6BD16', '#7262FD', '#78D3F8', '#9661BC', '#E8684A'];
 
@@ -70,8 +72,6 @@ export struct C_Banban {
   @Local pressedTaskId: number = -1;
   /** 拉条额外展开的高度：露出更多轨道（轨道全露或表头顶到屏幕中线就停） */
   @Local ganttExpandVp: number = 0;
-  /** 第二阶段：面板继续上拉到半屏，展示全部类别的待办 */
-  @Local ganttFullExpanded: boolean = false;
   /** 是否正在拖表头拉条（拖动时给表头加一道向上的阴影） */
   @Local headerDragging: boolean = false;
   private cursorInit: boolean = false;
@@ -79,12 +79,7 @@ export struct C_Banban {
   /** 轨道区纵向滚动器（自己接管手势，保证与横向拖轴互斥） */
   private ganttScroller: Scroller = new Scroller();
   private stripStartY: number = 0;
-  private stripStartX: number = 0;
   private stripStartExpand: number = 0;
-  /** 进入半屏前的普通展开高度，下拉/再点一下时还原 */
-  private expandBeforeFull: number = 0;
-  /** 本次触摸是否发生过拖动（用于区分单击拉条） */
-  private stripMoved: boolean = false;
   private canvasSettings: RenderingContextSettings = new RenderingContextSettings(true);
   private canvasCtx: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.canvasSettings);
   /** 表头（时间刻 + 金色下三角）单独一块画布，纵向滚动时固定不动 */
@@ -159,24 +154,6 @@ export struct C_Banban {
     return out;
   }
 
-  /** 面板上半部分显示什么：普通态看时间轴命中的事件；半屏态列出全部类别的待办 */
-  private panelTasks(): Task[] {
-    if (!this.ganttFullExpanded) {
-      return this.detailTasks();
-    }
-    const list: Task[] = this.dueTasks();
-    const lanes: string[] = this.lanes();
-    list.sort((a: Task, b: Task) => {
-      const ia: number = lanes.indexOf(this.laneOf(a));
-      const ib: number = lanes.indexOf(this.laneOf(b));
-      if (ia !== ib) {
-        return ia - ib;
-      }
-      return (a.dueAt as number) - (b.dueAt as number);
-    });
-    return list;
-  }
-
   private rangeStart(): number {
     const list: Task[] = this.dueTasks();
     let start: number = Number.MAX_SAFE_INTEGER;
@@ -215,19 +192,19 @@ export struct C_Banban {
     return LANE_H_VP - this.ganttBaseBodyHeight();
   }
 
-  /** 普通阶段的最大展开：轨道全露 / 面板顶到屏幕中线，两者取小 */
+  /**
+   * 最大展开：轨道全露 / 面板顶到屏幕中线再多给一点空间，两者取小。
+   * 只把旧上限抬高 `GANTT_EXTRA_PULL_VP`，不再进入半屏态。
+   */
   private ganttExpandCap(): number {
     const screenVp: number = px2vp(display.getDefaultDisplaySync().height);
     const boxAtBase: number = GANTT_STRIP_VP + GANTT_AXIS_H_VP + this.ganttBaseBodyHeight() + 16;
     const byScreen: number = Math.max(0, screenVp * 0.5 - BOTTOM_NAV_CLEARANCE_VP - boxAtBase);
-    return Math.max(0, Math.min(this.ganttMaxExpand(), byScreen));
+    return Math.max(0, Math.min(this.ganttMaxExpand(), byScreen + GANTT_EXTRA_PULL_VP));
   }
 
-  /** 甘特面板总高：普通态贴底但不改变图表位置；半屏态直接占屏幕一半 */
+  /** 甘特面板总高：贴底但不改变图表位置；底部多出的 112vp 只是背景延伸 */
   private ganttPanelHeight(): number {
-    if (this.ganttFullExpanded) {
-      return px2vp(display.getDefaultDisplaySync().height) * 0.5;
-    }
     return this.ganttBoxHeight() + BOTTOM_NAV_CLEARANCE_VP;
   }
 
@@ -274,13 +251,7 @@ export struct C_Banban {
     return `#33${color.substring(1)}`;
   }
 
-  /**
-   * 表头顶部拉条：
-   *  · 普通阶段：上下拖调整轨道可见高度，最多到「轨道全露 / 面板顶到屏幕中线」；
-   *  · 到顶后继续上拉：进入半屏态，面板升到屏幕一半，上方列出全部类别的待办；
-   *  · 半屏态下拉或再点一下：还原到进入前的普通展开高度；
-   *  · 只点一下拉条：在普通态与半屏态之间切换。
-   */
+  /** 表头顶部拉条：按住上下拖，调整轨道可见高度；上限比旧版多 48vp */
   private handleStripTouch(event: TouchEvent): void {
     if (event.touches.length === 0) {
       return;
@@ -292,67 +263,18 @@ export struct C_Banban {
       });
       // 用屏幕坐标：面板变高时控件本身会移动，组件内坐标会跟着漂
       this.stripStartY = p.screenY;
-      this.stripStartX = p.x;
       this.stripStartExpand = this.ganttExpandVp;
-      this.stripMoved = false;
-      return;
-    }
-    if (event.type === TouchType.Move) {
-      const upDy: number = this.stripStartY - p.screenY;
-      if (Math.abs(upDy) > 6 || Math.abs(p.x - this.stripStartX) > 6) {
-        this.stripMoved = true;
-      }
-      if (this.ganttFullExpanded) {
-        // 半屏态下拉：先退回进入前的普通展开高度，松手后不会停在半屏
-        if (upDy < -12) {
-          this.ganttFullExpanded = false;
-          this.ganttExpandVp = this.expandBeforeFull;
-          this.stripStartY = p.screenY;
-          this.stripStartExpand = this.ganttExpandVp;
-          this.stripMoved = true;
-        }
-        return;
-      }
+    } else if (event.type === TouchType.Move) {
+      // 卡片底边固定、上沿跟手：往上拖 → 多露出轨道
+      const want: number = this.stripStartExpand + (this.stripStartY - p.screenY);
       const cap: number = this.ganttExpandCap();
-      const want: number = this.stripStartExpand + upDy;
-      // 到普通阶段顶部后继续上拉 24vp：进入半屏态
-      if (want > cap + 24) {
-        this.expandBeforeFull = cap;
-        this.getUIContext().animateTo({ duration: 240, curve: Curve.EaseOut }, () => {
-          this.ganttFullExpanded = true;
-          this.ganttExpandVp = cap;
-        });
-        this.stripMoved = true;
-        return;
-      }
       // 收起方向允许到负值，但最少保留 1 条轨道
       this.ganttExpandVp = Math.min(cap, Math.max(this.ganttMinExpand(), want));
-      return;
-    }
-    if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+    } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
       this.getUIContext().animateTo({ duration: 160, curve: Curve.EaseOut }, () => {
         this.headerDragging = false;
       });
-      // 单击（没有拖动）拉条：拉起 / 折叠
-      if (!this.stripMoved && event.type === TouchType.Up) {
-        this.toggleGanttFull();
-      }
-      this.stripMoved = false;
     }
-  }
-
-  /** 单击拉条：普通态 → 半屏全量；半屏 → 还原进入前的高度 */
-  private toggleGanttFull(): void {
-    this.getUIContext().animateTo({ duration: 240, curve: Curve.EaseOut }, () => {
-      if (this.ganttFullExpanded) {
-        this.ganttFullExpanded = false;
-        this.ganttExpandVp = this.expandBeforeFull;
-      } else {
-        this.expandBeforeFull = this.ganttExpandVp;
-        this.ganttExpandVp = this.ganttExpandCap();
-        this.ganttFullExpanded = true;
-      }
-    });
   }
 
   /** 甘特画布总高（表头 + 轨道） */
@@ -941,35 +863,14 @@ export struct C_Banban {
           } else {
           Scroll() {
             Column({ space: 12 }) {
-              // 半屏态：先给出「全部类别」总览，再列出所有待办（不再受小窗高度限制）
-              if (this.ganttFullExpanded) {
-                Row({ space: 8 }) {
-                  Text('全部待办')
-                    .fontSize($r('sys.float.ohos_id_text_size_body1'))
-                    .fontWeight(FontWeight.Medium)
-                    .fontColor($r('sys.color.ohos_id_color_text_primary'))
-                  Text('共 ' + this.panelTasks().length + ' 条 · ' + this.lanes().length + ' 类')
-                    .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                    .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-                }
-                .width('100%')
-                .alignItems(VerticalAlign.Center)
-
-                Flex({ wrap: FlexWrap.Wrap, space: { main: LengthMetrics.vp(6), cross: LengthMetrics.vp(6) } }) {
-                  ForEach(this.lanes(), (lane: string) => {
-                    this.summaryChip(lane, this.themeStore.scheme.primary)
-                  }, (lane: string) => lane)
-                }
-                .width('100%')
-              }
-              // 普通态：时间轴穿过几条甘特条，这里就显示几条事件
-              if (this.panelTasks().length === 0) {
+              // 时间轴穿过几条甘特条，这里就显示几条事件
+              if (this.detailTasks().length === 0) {
                 Text('时间轴没有经过任何事件（拖动下方蓝线试试）')
                   .fontSize($r('sys.float.ohos_id_text_size_body1'))
                   .fontColor($r('sys.color.ohos_id_color_text_secondary'))
                   .padding({ top: 24 })
               } else {
-                ForEach(this.panelTasks(), (t: Task) => {
+                ForEach(this.detailTasks(), (t: Task) => {
                   this.summary(t)
                 }, (t: Task) => '' + t.id)
               }
@@ -1091,7 +992,6 @@ export struct C_Banban {
         .height(this.ganttPanelHeight())
         // 底部多留出悬浮导航的 112vp，但背景仍然铺到屏幕底；上半部分图表位置不变
         .padding({ left: 12, right: 12, top: 8, bottom: 8 + BOTTOM_NAV_CLEARANCE_VP })
-        .animation({ duration: 240, curve: Curve.EaseOut })
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
         .borderRadius({ topLeft: Theme.RADIUS_CARD, topRight: Theme.RADIUS_CARD })
         // 拖动中：整块甘特容器向上浮起一层阴影
