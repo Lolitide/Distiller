@@ -14,7 +14,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { BackendConfig } from '../backend/BackendConfig';
 import { RelayApi } from '../backend/RelayApi';
 import { candidateToTask } from '../backend/TaskMapper';
-import { CandidateItem, ServeMessage, apiErrorMessage } from '../backend/BackendTypes';
+import { ApiResult, CandidateItem, CandidatesData, ServeMessage, apiErrorMessage } from '../backend/BackendTypes';
 import { TaskRepository } from '../../repository/TaskRepository';
 import { TaskListStore } from '../../viewmodel/TaskListStore';
 import { TaskExpiryService } from '../system/TaskExpiryService';
@@ -158,7 +158,16 @@ export class SyncService {
       }
       await SyncService.ensureSubscribed(false);
 
-      const res = await RelayApi.candidates(BackendConfig.cursor, 200);
+      let res: ApiResult<CandidatesData> = await RelayApi.candidates(BackendConfig.cursor, 200);
+      // 后端重启后候选流在内存里重建，rev_seq 会从 1 重新开始；本机游标若还停在旧的
+      // 大数字，`after=` 会永远拉不到东西（表现为「消息被过滤了」）。发现服务端游标
+      // 比本机还小，就立刻归零并重拉一次。
+      if (res.ok && res.data !== undefined && res.data.cursor < BackendConfig.cursor) {
+        hilog.info(DOMAIN, TAG, 'server cursor reset: local=%{public}d server=%{public}d',
+          BackendConfig.cursor, res.data.cursor);
+        BackendConfig.setCursor(context, 0);
+        res = await RelayApi.candidates(0, 200);
+      }
       if (!res.ok || res.data === undefined) {
         // 身份失效（BE-05）：清掉本机身份与绑定，停止轮询，等用户重新配对
         if (!res.ok && res.error !== undefined && res.error.code === 'unauthorized') {

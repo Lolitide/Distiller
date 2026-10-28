@@ -17,7 +17,10 @@ const K_BASE_URL: string = 'base_url';
 const K_DEVICE_ID: string = 'device_id';
 const K_TOKEN: string = 'token';
 const K_CURSOR: string = 'cursor';
+const K_CURSOR_SCHEMA: string = 'cursor_schema';
 const K_BOUND: string = 'bound';
+/** 候选游标版本：升到 4 时强制下一次启动全量拉一次，修复旧版本漏掉的候选 */
+const CURSOR_SCHEMA: number = 4;
 
 /**
  * 固定服务器地址：设置在代码里，设置页不再暴露输入框/服务器行。
@@ -80,6 +83,15 @@ export class BackendConfig {
 
       const cur: preferences.ValueType = store.getSync(K_CURSOR, 0);
       BackendConfig.cursor = typeof cur === 'number' ? cur : 0;
+
+      // 旧版本曾把游标推到最新但没落库部分候选；升级后强制 after=0 重拉一次。
+      const schemaRaw: preferences.ValueType = store.getSync(K_CURSOR_SCHEMA, 0);
+      const schema: number = typeof schemaRaw === 'number' ? schemaRaw : 0;
+      if (schema < CURSOR_SCHEMA) {
+        BackendConfig.cursor = 0;
+        BackendConfig.put(context, K_CURSOR, 0);
+        BackendConfig.put(context, K_CURSOR_SCHEMA, CURSOR_SCHEMA);
+      }
 
       const bound: preferences.ValueType = store.getSync(K_BOUND, false);
       BackendConfig.bound = typeof bound === 'boolean' ? bound : false;
