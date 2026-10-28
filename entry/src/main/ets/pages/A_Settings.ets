@@ -76,6 +76,8 @@ const PAGE_SIDE_PADDING_VP: number = 16;
 const TITLE_CLEARANCE_VP: number = 64;
 /** 让开悬浮页签栏（vp）：与 `A_TaskList.LIST_BOTTOM_CLEARANCE_VP` 同值 */
 const BOTTOM_CLEARANCE_VP: number = 80;
+/** QQ 官方「快速创建机器人」入口（用户自建 Bot，拿到 AppID/AppSecret 后接后端） */
+const BOT_CREATE_URL: string = 'https://q.qq.com/qqbot/openclaw/login.html';
 
 /**
  * 底部渐变遮罩高度（vp）：与 A_TaskList.BOTTOM_MASK_VP 同值同理由 ——
@@ -170,6 +172,13 @@ export struct A_Settings {
    */
   /** 绑定状态与配对码 */
   @Local bound: boolean = false;
+  /** BYOB：用户自建 Bot 的 AppID / AppSecret（Secret 只提交给后端，不落本机） */
+  @Local showByobForm: boolean = false;
+  @Local byobAppId: string = '';
+  @Local byobSecret: string = '';
+  @Local byobBusy: boolean = false;
+  @Local byobError: string = '';
+  @Local boundAppId: string = '';
   @Local bindCode: string = '';
   @Local bindHint: string = '';
   /** 配对码已过期：显示「重新生成」而不是继续倒计时 */
@@ -502,12 +511,72 @@ export struct A_Settings {
     const status = await RelayApi.bindStatus();
     if (status.ok && status.data !== undefined) {
       this.bound = status.data.bound;
+      this.boundAppId = status.data.bot_app_id !== undefined ? status.data.bot_app_id : '';
       BackendConfig.setBound(context, this.bound);
     }
     // status 失败时保持本地缓存值（网络抖动不等于解绑）
 
     this.backendBusy = false;
     return true;
+  }
+
+  /** 打开 QQ 官方「创建机器人」页面（用户自建 Bot 的入口） */
+  private openBotCreatePage(): void {
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx === undefined) {
+      return;
+    }
+    const ability: common.UIAbilityContext = ctx as common.UIAbilityContext;
+    ability.startAbility({
+      action: 'ohos.want.action.viewData',
+      uri: BOT_CREATE_URL
+    }).catch((error: BusinessError) => {
+      this.toast('打不开 QQ 创建页面：' + error.message);
+    });
+  }
+
+  private showByob(): void {
+    this.showByobForm = true;
+    this.byobError = '';
+    this.byobAppId = this.boundAppId;
+    this.byobSecret = '';
+  }
+
+  /** BYOB：把用户自建 Bot 的 AppID / AppSecret 交给后端托管 */
+  private async submitByob(): Promise<void> {
+    if (this.byobBusy) {
+      return;
+    }
+    const appId: string = this.byobAppId.trim();
+    const secret: string = this.byobSecret.trim();
+    if (!/^\d{5,20}$/.test(appId)) {
+      this.byobError = 'AppID 应为 5–20 位数字';
+      return;
+    }
+    if (secret.length < 8) {
+      this.byobError = 'AppSecret 长度不正确';
+      return;
+    }
+    this.byobBusy = true;
+    this.byobError = '';
+    const res = await RelayApi.registerTenant(appId, secret);
+    if (!res.ok || res.data === undefined) {
+      this.byobError = apiErrorMessage(res);
+      this.byobBusy = false;
+      return;
+    }
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx !== undefined) {
+      BackendConfig.setBound(ctx, true);
+    }
+    this.bound = true;
+    this.boundAppId = appId;
+    this.showByobForm = false;
+    this.byobSecret = '';
+    this.byobBusy = false;
+    const nickname: string = res.data.bot_nickname !== undefined && res.data.bot_nickname.length > 0
+      ? res.data.bot_nickname : appId;
+    this.toast('绑定成功，现在把消息转发给「' + nickname + '」');
   }
 
   /** 生成配对码并开始轮询绑定结果（2 秒 × 60 次） */
@@ -651,7 +720,7 @@ export struct A_Settings {
     // 取消重新绑定：旧绑定没有被解掉，保持原来的状态
   }
 
-  /** 复制配对码到剪贴板（用户要粘贴到 QQ 私聊里发给机器人） */
+  /** 复制配对码到剪贴板（旧版配对流程保留，当前 UI 不再使用） */
   private async copyBindCode(): Promise<void> {
     if (this.bindCode.length === 0) {
       return;
@@ -1569,20 +1638,15 @@ export struct A_Settings {
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
               Text(this.bound ? '重新绑定' : '去绑定')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.bindCode.length === 0
-                  ? this.themeStore.scheme.onPrimary
-                  : this.themeStore.scheme.onSurfaceVariant)
+                .fontColor(this.themeStore.scheme.onPrimary)
             }
             .height(34)
             .padding({ left: 14, right: 14 })
-            .backgroundColor(this.bindCode.length === 0
-              ? this.themeStore.scheme.primary
-              : this.themeStore.scheme.surfaceContainerHigh)
+            .backgroundColor(this.themeStore.scheme.primary)
             .borderRadius(17)
+            .enabled(!this.byobBusy)
             .onClick(() => {
-              if (this.bindCode.length === 0) {
-                this.startBind();
-              }
+              this.showByob();
             })
           }
           .width('100%')
@@ -1590,74 +1654,123 @@ export struct A_Settings {
           .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
           .alignItems(VerticalAlign.Center)
 
-          if (this.bindCode.length > 0) {
-            Column({ space: 6 }) {
-              Text(this.bindCode)
-                .fontSize(30)
-                .fontWeight(FontWeight.Bold)
-                .letterSpacing(4)
-              Text(this.bindHint)
+          if (this.showByobForm) {
+            Column({ space: 10 }) {
+              Text('1. 先创建一个 QQ 机器人')
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .fontColor($r('sys.color.ohos_id_color_text_primary'))
+                .width('100%')
+              Text('点下面打开 QQ 创建页面，按提示创建；创建后到机器人管理端复制 AppID 和 AppSecret。')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
                 .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-                .textAlign(TextAlign.Center)
-              Text('剩余 ' + this.bindLeftSec + ' 秒')
-                .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.themeStore.scheme.onSurfaceVariant)
-              Row({ space: 10 }) {
-                Button({ type: ButtonType.Capsule, stateEffect: true }) {
-                  Text('复制配对码')
-                    .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                    .fontColor(this.themeStore.scheme.onPrimary)
-                }
-                .height(32)
-                .padding({ left: 14, right: 14 })
-                .backgroundColor(this.themeStore.scheme.primary)
-                .borderRadius(16)
-                .onClick(() => {
-                  this.copyBindCode();
+                .width('100%')
+
+              Button({ type: ButtonType.Capsule, stateEffect: true }) {
+                Text('打开 QQ 创建机器人')
+                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                  .fontColor(this.themeStore.scheme.primary)
+              }
+              .height(36)
+              .padding({ left: 16, right: 16 })
+              .backgroundColor(Color.Transparent)
+              .border({ width: 1, color: this.themeStore.scheme.outline })
+              .borderRadius(18)
+              .onClick(() => {
+                this.openBotCreatePage();
+              })
+
+              Text('2. 填入机器人凭据')
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .fontColor($r('sys.color.ohos_id_color_text_primary'))
+                .width('100%')
+                .margin({ top: 4 })
+              TextInput({ text: this.byobAppId, placeholder: 'AppID（机器人 ID）' })
+                .height(44)
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .padding({ left: 12, right: 12 })
+                .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
+                .borderRadius(12)
+                .maxLength(20)
+                .onChange((value: string) => {
+                  this.byobAppId = value;
+                  this.byobError = '';
+                })
+              TextInput({ text: this.byobSecret, placeholder: 'AppSecret' })
+                .height(44)
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .padding({ left: 12, right: 12 })
+                .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
+                .borderRadius(12)
+                .type(InputType.Password)
+                .maxLength(128)
+                .onChange((value: string) => {
+                  this.byobSecret = value;
+                  this.byobError = '';
                 })
 
+              if (this.byobError.length > 0) {
+                Text(this.byobError)
+                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                  .fontColor($r('sys.color.ohos_id_color_warning'))
+                  .width('100%')
+              }
+
+              Row({ space: 10 }) {
                 Button({ type: ButtonType.Capsule, stateEffect: true }) {
                   Text('取消')
                     .fontSize($r('sys.float.ohos_id_text_size_body2'))
                     .fontColor(this.themeStore.scheme.primary)
                 }
-                .height(32)
-                .padding({ left: 14, right: 14 })
+                .layoutWeight(1)
+                .height(34)
                 .backgroundColor(Color.Transparent)
                 .border({ width: 1, color: this.themeStore.scheme.outline })
-                .borderRadius(16)
+                .borderRadius(17)
+                .enabled(!this.byobBusy)
                 .onClick(() => {
-                  this.cancelBind();
+                  this.showByobForm = false;
+                  this.byobSecret = '';
+                  this.byobError = '';
+                })
+
+                Button({ type: ButtonType.Capsule, stateEffect: true }) {
+                  Text(this.byobBusy ? '绑定中…' : '绑定')
+                    .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                    .fontColor(this.themeStore.scheme.onPrimary)
+                }
+                .layoutWeight(1)
+                .height(34)
+                .backgroundColor(this.themeStore.scheme.primary)
+                .borderRadius(17)
+                .enabled(!this.byobBusy)
+                .onClick(() => {
+                  this.submitByob();
                 })
               }
+              .width('100%')
+
+              Text('绑定成功后，在 QQ 里找到刚创建的机器人，把要添加的消息直接发给它；回到 App 会自动进入「待确认」。')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+                .width('100%')
             }
             .width('100%')
-            .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP, bottom: 12 })
-            .alignItems(HorizontalAlign.Center)
+            .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP, bottom: 14 })
+            .alignItems(HorizontalAlign.Start)
           }
 
-          if (this.bindExpired && this.bindCode.length === 0) {
-            Column({ space: 8 }) {
-              Text('配对码已过期，请重新生成')
+          if (this.bound && !this.showByobForm) {
+            Column({ space: 4 }) {
+              Text(this.boundAppId.length > 0 ? '已绑定 Bot：' + this.boundAppId : '已绑定 Bot')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.themeStore.scheme.onSurfaceVariant)
-              Button({ type: ButtonType.Capsule, stateEffect: true }) {
-                Text('重新生成')
-                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                  .fontColor(this.themeStore.scheme.onPrimary)
-              }
-              .height(32)
-              .padding({ left: 16, right: 16 })
-              .backgroundColor(this.themeStore.scheme.primary)
-              .borderRadius(16)
-              .onClick(() => {
-                this.startBind();
-              })
+                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+              Text('在 QQ 里把消息直接发给这个 Bot，回到 App 会自动收进「待确认」。')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
             }
             .width('100%')
             .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP, bottom: 12 })
-            .alignItems(HorizontalAlign.Center)
+            .alignItems(HorizontalAlign.Start)
           }
         }
         .width('100%')
