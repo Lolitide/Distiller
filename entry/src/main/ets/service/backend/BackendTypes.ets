@@ -296,6 +296,8 @@ export interface ForwardItem {
   kind?: string;
   text: string;
   url?: string;
+  filename?: string;
+  mime?: string;
   created_at: number;
 }
 

@@ -292,6 +292,57 @@ export class TaskListViewModel {
     return `${offset}${DUE_IN_DAYS_SUFFIX}`;
   }
 
+  /**
+   * 时段前缀：0-4 凌晨 / 5-10 上午 / 11-12 正午 / 13-17 下午 / 18-22 晚上 / 23 深夜。
+   * 板板页标题栏与 DDL 共用同一套口径，不要各写一份。
+   */
+  static periodLabel(hour: number): string {
+    if (hour < 5) {
+      return '凌晨';
+    }
+    if (hour < 11) {
+      return '上午';
+    }
+    if (hour < 13) {
+      return '正午';
+    }
+    if (hour < 18) {
+      return '下午';
+    }
+    if (hour < 23) {
+      return '晚上';
+    }
+    return '深夜';
+  }
+
+  /** 12 小时制小时数：0 点、12 点都写 12 */
+  static hour12(hour: number): string {
+    return '' + (hour % 12 === 0 ? 12 : hour % 12);
+  }
+
+  /** 0=周日 … 6=周六 → 星期日 … 星期六 */
+  static weekdayCn(index: number): string {
+    if (index === 0) {
+      return '星期日';
+    }
+    if (index === 1) {
+      return '星期一';
+    }
+    if (index === 2) {
+      return '星期二';
+    }
+    if (index === 3) {
+      return '星期三';
+    }
+    if (index === 4) {
+      return '星期四';
+    }
+    if (index === 5) {
+      return '星期五';
+    }
+    return '星期六';
+  }
+
   /** 两个时刻相差几个整日（按**自然日**算，不是按 24h 除）；due 早于 now 时为负 */
   static wholeDayOffset(due: number, now: number): number {
     const dueDate: Date = new Date(due);

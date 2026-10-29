@@ -19,6 +19,8 @@ const DOMAIN: number = 0x0000;
 const TAG: string = 'ManualParse';
 /** 单张图上限：后端那边也是 8MB base64（约 6MB 原图） */
 const MAX_IMAGE_BYTES: number = 6 * 1024 * 1024;
+/** 后端 file_b64 上限 4MB（base64），原始文件留余量 */
+const MAX_FILE_BYTES: number = 3 * 1024 * 1024;
 
 export interface ManualParseResult {
   ok: boolean;
@@ -103,7 +105,7 @@ export class ManualParseService {
     }
 
     // ③ 端侧识别不到（模拟器/图片太糊/非文字）：回退到后端多模态 OCR
-    const base64: string = ManualParseService.readImageBase64(uri);
+    const base64: string = ManualParseService.readBase64(uri, MAX_IMAGE_BYTES);
     if (base64.length === 0) {
       return { ok: false, message: '读不到这张图片，请重新选择', text: '' };
     }
@@ -112,6 +114,30 @@ export class ManualParseService {
       return { ok: false, message: apiErrorMessage(res), text: '', code: res.error !== undefined ? res.error.code : 'unknown' };
     }
     return { ok: true, message: '', candidate: res.data.candidate, text: res.data.text, localOcr: false };
+  }
+
+  /** 转发文件 → base64 → 后端抽取文本 → 候选（不落盘；过大时返回可读提示） */
+  static async parseFile(uri: string, fileName: string): Promise<ManualParseResult> {
+    if (!PrivacyConsent.allowed()) {
+      return ManualParseService.denied();
+    }
+    if ((uri || '').length === 0 || (fileName || '').length === 0) {
+      return { ok: false, message: '读不到这个文件', text: '' };
+    }
+    const base64: string = ManualParseService.readBase64(uri, MAX_FILE_BYTES);
+    if (base64.length === 0) {
+      return { ok: false, message: '文件读不到或超过 3MB，请换一个文件', text: '' };
+    }
+    const res = await RelayApi.parseFile(base64, fileName, 'manual_file');
+    if (!res.ok || res.data === undefined) {
+      return {
+        ok: false,
+        message: apiErrorMessage(res),
+        text: '',
+        code: res.error !== undefined ? res.error.code : 'unknown'
+      };
+    }
+    return { ok: true, message: '', candidate: res.data.candidate, text: res.data.text };
   }
 
   private static isHttpUrl(text: string): boolean {
@@ -163,12 +189,12 @@ export class ManualParseService {
   }
 
   /** 读文件 → base64；失败返回空串（页面据此提示换图） */
-  private static readImageBase64(uri: string): string {
+  private static readBase64(uri: string, maxBytes: number): string {
     let file: fileIo.File | undefined = undefined;
     try {
       file = fileIo.openSync(uri, fileIo.OpenMode.READ_ONLY);
       const stat: fileIo.Stat = fileIo.statSync(file.fd);
-      if (stat.size <= 0 || stat.size > MAX_IMAGE_BYTES) {
+      if (stat.size <= 0 || stat.size > maxBytes) {
         return '';
       }
       const buffer: ArrayBuffer = new ArrayBuffer(stat.size);
@@ -180,7 +206,7 @@ export class ManualParseService {
       return new util.Base64Helper().encodeToStringSync(bytes);
     } catch (error) {
       const err = error as BusinessError;
-      hilog.warn(DOMAIN, TAG, 'read image failed: %{public}s', err.message);
+      hilog.warn(DOMAIN, TAG, 'read file failed: %{public}s', err.message);
       return '';
     } finally {
       if (file !== undefined) {

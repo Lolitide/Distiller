@@ -107,6 +107,15 @@ export class RelayApi {
     });
   }
 
+  /** 手动添加：文件 → 后端抽取文本 → 候选（docx/xlsx/pptx/pdf/txt…） */
+  static async parseFile(fileB64: string, fileName: string, source: string): Promise<ApiResult<ParseData>> {
+    return await ApiClient.post<ParseData>(BASE + '/parse', {
+      'file_b64': fileB64,
+      'file_name': fileName,
+      'source': source
+    });
+  }
+
   static async feedback(body: FeedbackBody): Promise<ApiResult<Record<string, Object>>> {
     return await ApiClient.post<Record<string, Object>>(BASE + '/feedback', {
       'candidate_id': body.candidate_id,
