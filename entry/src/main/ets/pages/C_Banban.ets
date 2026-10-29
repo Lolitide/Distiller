@@ -13,10 +13,12 @@ import { common } from '@kit.AbilityKit';
 import { display, LengthMetrics } from '@kit.ArkUI';
 import { Theme, ThemeStore } from '../utils/Theme';
 import { WindowInsets } from '../utils/WindowInsets';
-import { Task, TaskPriority, TaskStep } from '../model';
+import { Task, TaskPriority, TaskStatus, TaskStep } from '../model';
 import { TaskListStore } from '../viewmodel/TaskListStore';
+import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
 import { NAV_STACK_KEY, ROUTE_TASK_DETAIL, TaskDetailParam } from '../viewmodel/TaskNavParams';
 import { EmptyHint } from '../components/EmptyHint';
+import { showDeleteConfirmDialog } from '../utils/DeleteConfirmDialog';
 
 /** 甘特图左侧轨道名列宽（vp） */
 const GANTT_LABEL_W_VP: number = 64;
@@ -44,6 +46,33 @@ const GANTT_EXTRA_PULL_VP: number = 48;
 /** 甘特条配色（按轨道轮换；与主题无关，保证相邻轨道可分） */
 const LANE_COLORS: string[] = ['#5B8FF9', '#61DDAA', '#F6BD16', '#7262FD', '#78D3F8', '#9661BC', '#E8684A'];
 
+/** 已完成任务标题右侧对钩的颜色（绿色） */
+const COMPLETED_CHECK_COLOR: string = '#2E7D32';
+/** 已完成对钩图标尺寸（vp） */
+const COMPLETED_CHECK_SIZE: number = 22;
+/** 左滑操作按钮：删除的警示红、按钮宽度（vp） */
+const SWIPE_DELETE_COLOR: string = '#D32F2F';
+/** 已完成任务的「撤销」按钮：黑底白标 */
+const SWIPE_UNDO_COLOR: string = '#1F1F1F';
+const SWIPE_ACTION_WIDTH_VP: number = 56;
+/** 按钮区左侧留白（vp）：露出的总宽度 = 56 + 8 */
+const SWIPE_ACTION_PADDING_VP: number = 8;
+/** 左滑展开宽度（vp） */
+const SWIPE_REVEAL_VP: number = SWIPE_ACTION_WIDTH_VP + SWIPE_ACTION_PADDING_VP;
+
+/**
+ * 甘特条命中矩形（像素坐标）：用来判断**同一轨道内**哪些时间段有多条任务重叠。
+ * 重叠部分画成深色，非重叠部分保持原来的轨道色。
+ */
+class GanttBar {
+  laneIndex: number = 0;
+  x0: number = 0;
+  x1: number = 0;
+}
+
+/** 重叠段颜色 = 轨道色 × 该系数（只比原色稍深一点，太深会显得脏） */
+const OVERLAP_DARKEN_FACTOR: number = 0.85;
+
 @ComponentV2
 export struct C_Banban {
   @Require @Param store: TaskListStore;
@@ -70,6 +99,16 @@ export struct C_Banban {
   @Local windowStartMs: number = 0;
   /** 正在按下的卡片（按下微缩） */
   @Local pressedTaskId: number = -1;
+  /** 正在按下的左滑按钮 key（`任务id-check` / `任务id-trash`），用于下浮动画 */
+  @Local pressedActionKey: string = '';
+  /** 当前处于展开（左滑）状态的任务 id；-1 表示没有 */
+  @Local swipeOpenTaskId: number = -1;
+  /** 硬切收起时：临时禁用该卡片的出入场 transition，避免重建时闪一下 */
+  @Local suppressEnterTaskId: number = -1;
+  /** 每个任务的 key 版本号：需要硬切时 +1，让该 ListItem 重建（左滑状态直接归零） */
+  private swipeTokens: Record<string, number> = {};
+  /** 摘要卡列表的控制器：点操作按钮后用它收起左滑（原生 swipeAction 的复位入口） */
+  private summaryScroller: ListScroller = new ListScroller();
   /** 拉条额外展开的高度：露出更多轨道（轨道全露或表头顶到屏幕中线就停） */
   @Local ganttExpandVp: number = 0;
   /** 是否正在拖表头拉条（拖动时给表头加一道向上的阴影） */
@@ -109,16 +148,28 @@ export struct C_Banban {
     }
   }
 
-  /** 有 ddl 的任务，按截止时间升序 */
+  /**
+   * 有 ddl 的任务，按截止时间升序。
+   *
+   * ⚠️ `store.allTasks()` 把「待确认消息」也摊平进来了（见 TaskListStore.allTasks），
+   * 而板板只该画**已确认的待办** —— 待确认还只是候选，用户没点「保留」前不该出现在甘特图上。
+   * 所以这里显式过滤掉 `PENDING_CONFIRM`（2026-10-29 修 bug）。
+   */
   private dueTasks(): Task[] {
     const out: Task[] = [];
     const all: Task[] = this.store.allTasks();
     for (let i = 0; i < all.length; i++) {
       const t: Task = all[i];
+      if (t.status === TaskStatus.PENDING_CONFIRM) {
+        continue;
+      }
       if (t.dueAt !== undefined && t.dueAt > 0) {
         out.push(t);
       }
     }
+    // ⚠️ 这里**不按完成状态排序**：轨道顺序与每根条的纵向位置只由 ddl 决定，
+    // 任务被勾完成时甘特图必须保持原样，不能因为排序变化把轨道搬到别处（2026-10-29 需求方）。
+    // 「已完成排到最后」只作用于上方摘要列表（见 `detailTasks`）。
     out.sort((a: Task, b: Task) => (a.dueAt as number) - (b.dueAt as number));
     return out;
   }
@@ -141,9 +192,14 @@ export struct C_Banban {
         out.push(t);
       }
     }
-    // 与图表左侧轨道从上到下同序；同一轨道内按 ddl 先后
+    // 与图表左侧轨道从上到下同序；同一轨道内按 ddl 先后；已完成的任务排最后
     const lanes: string[] = this.lanes();
     out.sort((a: Task, b: Task) => {
+      const ac: number = a.status === TaskStatus.COMPLETED ? 1 : 0;
+      const bc: number = b.status === TaskStatus.COMPLETED ? 1 : 0;
+      if (ac !== bc) {
+        return ac - bc;
+      }
       const ia: number = lanes.indexOf(this.laneOf(a));
       const ib: number = lanes.indexOf(this.laneOf(b));
       if (ia !== ib) {
@@ -173,7 +229,16 @@ export struct C_Banban {
    * 按住顶部拉条往上拖会多露轨道（不是加高空白表头），轨道全露或顶到屏幕中线就停。
    */
   private ganttBoxHeight(): number {
+    // 完全收起时只留顶部触发行（表头 + 轨道区一起隐藏）
+    if (this.ganttCollapsed()) {
+      return GANTT_STRIP_VP + 16;
+    }
     return GANTT_STRIP_VP + GANTT_AXIS_H_VP + this.ganttVisibleBodyHeight() + 16;
+  }
+
+  /** 是否已折叠到只剩顶部拉条（触发行） */
+  private ganttCollapsed(): boolean {
+    return this.ganttVisibleBodyHeight() <= 0;
   }
 
   /** 默认可见的轨道区高度（最多 VISIBLE_LANES 条） */
@@ -187,9 +252,9 @@ export struct C_Banban {
     return Math.max(0, this.ganttLanesHeight() - this.ganttBaseBodyHeight());
   }
 
-  /** 往下最多能收多少（最少只留 1 条轨道） */
+  /** 往下最多能收多少：可以一路收掉表头与轨道区，只剩顶部触发行 */
   private ganttMinExpand(): number {
-    return LANE_H_VP - this.ganttBaseBodyHeight();
+    return -(GANTT_AXIS_H_VP + this.ganttBaseBodyHeight());
   }
 
   /**
@@ -208,10 +273,10 @@ export struct C_Banban {
     return this.ganttBoxHeight() + BOTTOM_NAV_CLEARANCE_VP;
   }
 
-  /** 当前轨道区可见高度 = 默认 + 拉条展开（不超过全部轨道） */
+  /** 当前轨道区可见高度 = 默认 + 拉条展开（不超过全部轨道；可一直收到 0） */
   private ganttVisibleBodyHeight(): number {
     const want: number = this.ganttBaseBodyHeight() + this.ganttExpandVp;
-    return Math.min(this.ganttLanesHeight(), Math.max(LANE_H_VP, want));
+    return Math.min(this.ganttLanesHeight(), Math.max(0, want));
   }
 
   /** 轨道 = 去重后的「第一个标签」；没有标签归到「未分类」 */
@@ -336,13 +401,73 @@ export struct C_Banban {
     this.windowStartMs = Math.min(Math.max(next, minStart), maxStart);
   }
 
+  /**
+   * DDL 文案（2026-10-29 需求方）：
+   *  · 今天 / 明天 / 后天 → 只写「今天 / 明天 / 后天」，不再重复日期；
+   *  · 其它日期 → 统一 `YYYY.MM.DD`；
+   *  · 时间 → 时段前缀（凌晨 / 上午 / 正午 / 下午 / 晚上 / 深夜）+ 12 小时制时间。
+   */
   private formatDate(ms: number): string {
     const d: Date = new Date(ms);
-    const mo: number = d.getMonth() + 1;
-    const day: number = d.getDate();
-    const hh: string = d.getHours() < 10 ? '0' + d.getHours() : '' + d.getHours();
-    const mm: string = d.getMinutes() < 10 ? '0' + d.getMinutes() : '' + d.getMinutes();
-    return `${d.getFullYear()}年${mo}月${day}日 ${hh}:${mm}`;
+    const now: Date = new Date();
+    const dayStart: number = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const nowStart: number = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const offset: number = Math.round((dayStart - nowStart) / 86400000);
+    let datePart: string;
+    if (offset === 0) {
+      datePart = '今天';
+    } else if (offset === 1) {
+      datePart = '明天';
+    } else if (offset === 2) {
+      datePart = '后天';
+    } else {
+      // 本周内 → 周X；下周 → 下周X；再往后才显示日期
+      const nowWeekStart: number = this.weekStartMs(nowStart);
+      const dueWeekStart: number = this.weekStartMs(dayStart);
+      const weekday: string = this.weekdayLabel(d.getDay());
+      if (dueWeekStart === nowWeekStart) {
+        datePart = weekday;
+      } else if (dueWeekStart === nowWeekStart + 7 * 86400000) {
+        datePart = '下' + weekday;
+      } else {
+        const mo: string = d.getMonth() + 1 < 10 ? '0' + (d.getMonth() + 1) : '' + (d.getMonth() + 1);
+        const day: string = d.getDate() < 10 ? '0' + d.getDate() : '' + d.getDate();
+        datePart = `${d.getFullYear()}.${mo}.${day}`;
+      }
+    }
+    return `${datePart} ${TaskListViewModel.periodLabel(d.getHours())} `
+      + `${TaskListViewModel.hour12(d.getHours())}:${TaskListViewModel.pad2(d.getMinutes())}`;
+  }
+
+  /** 本周 / 下周判断用：把某天的 0 点归到所在周（周一）的 0 点 */
+  private weekStartMs(dayStart: number): number {
+    const d: Date = new Date(dayStart);
+    // getDay(): 周日=0；换成「周一=0」的偏移
+    const offset: number = (d.getDay() + 6) % 7;
+    return dayStart - offset * 86400000;
+  }
+
+  /** 0=周日 … 6=周六 → 周日 / 周一 … 周六 */
+  private weekdayLabel(index: number): string {
+    if (index === 0) {
+      return '周日';
+    }
+    if (index === 1) {
+      return '周一';
+    }
+    if (index === 2) {
+      return '周二';
+    }
+    if (index === 3) {
+      return '周三';
+    }
+    if (index === 4) {
+      return '周四';
+    }
+    if (index === 5) {
+      return '周五';
+    }
+    return '周六';
   }
 
   /** 刻度文字：小于一天用 HH:mm，否则 M.D */
@@ -537,6 +662,9 @@ export struct C_Banban {
       ctx.stroke();
     }
 
+    // 事件矩形高度减半，并在轨道内垂直居中（所有轨道共用同一高度）
+    const barH: number = Math.max(8, (laneH - 8) / 2);
+    const bars: GanttBar[] = [];
     for (let i = 0; i < tasks.length; i++) {
       const t: Task = tasks[i];
       const laneIndex: number = lanes.indexOf(this.laneOf(t));
@@ -550,12 +678,39 @@ export struct C_Banban {
       }
       const x: number = plotX + ((clamp0 - start) / span) * plotW;
       const barW: number = Math.max(6, ((clamp1 - clamp0) / span) * plotW);
-      // 事件矩形高度减半，并在轨道内垂直居中
-      const barH: number = Math.max(8, (laneH - 8) / 2);
       const y: number = plotY + laneIndex * pitch + (laneH - barH) / 2;
       ctx.fillStyle = LANE_COLORS[laneIndex % LANE_COLORS.length];
       // 圆角矩形（不做任何选中态：点事件没有反应）
       this.fillRoundRect(ctx, x, y, barW, barH);
+      // 记下这根条的像素范围，稍后画重叠段
+      const bar: GanttBar = new GanttBar();
+      bar.laneIndex = laneIndex;
+      bar.x0 = x;
+      bar.x1 = x + barW;
+      bars.push(bar);
+    }
+
+    // ②-b 同一轨道内**多条任务在时间上重叠**的部分画深色（2026-10-29 需求方）：
+    // 只把重叠那一段加深，不是整根条加深，所以逐对求交集后只填交集区间。
+    for (let lane = 0; lane < lanes.length; lane++) {
+      const base: string = LANE_COLORS[lane % LANE_COLORS.length];
+      ctx.fillStyle = this.darkenHex(base, OVERLAP_DARKEN_FACTOR);
+      const y: number = plotY + lane * pitch + (laneH - barH) / 2;
+      for (let a = 0; a < bars.length; a++) {
+        if (bars[a].laneIndex !== lane) {
+          continue;
+        }
+        for (let b = a + 1; b < bars.length; b++) {
+          if (bars[b].laneIndex !== lane) {
+            continue;
+          }
+          const ox0: number = Math.max(bars[a].x0, bars[b].x0);
+          const ox1: number = Math.min(bars[a].x1, bars[b].x1);
+          if (ox1 - ox0 > 0.5) {
+            this.fillRoundRect(ctx, ox0, y, ox1 - ox0, barH);
+          }
+        }
+      }
     }
 
     // ③ 金色「现在」轴：固定不随拖动，只表示当前真实时间
@@ -654,6 +809,24 @@ export struct C_Banban {
     ctx.fill();
   }
 
+  /** 把 `#RRGGBB` 按系数调暗（用于重叠段的深色） */
+  private darkenHex(hex: string, factor: number): string {
+    const value: string = hex.startsWith('#') ? hex.substring(1) : hex;
+    if (value.length !== 6) {
+      return hex;
+    }
+    const r: number = Math.round(parseInt(value.substring(0, 2), 16) * factor);
+    const g: number = Math.round(parseInt(value.substring(2, 4), 16) * factor);
+    const b: number = Math.round(parseInt(value.substring(4, 6), 16) * factor);
+    return `#${this.hex2(r)}${this.hex2(g)}${this.hex2(b)}`;
+  }
+
+  private hex2(value: number): string {
+    const clamped: number = Math.max(0, Math.min(255, value));
+    const text: string = clamped.toString(16);
+    return text.length === 1 ? '0' + text : text;
+  }
+
   /** 拖动时间轴：把手指 x 换算成时间，刷新上方列表 */
   private updateCursor(x: number): void {
     const ctx: CanvasRenderingContext2D = this.canvasCtx;
@@ -732,14 +905,27 @@ export struct C_Banban {
   @Builder
   summaryBody(task: Task) {
     Column({ space: 10 }) {
-      Text(task.name)
-        .fontSize(22)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('sys.color.ohos_id_color_text_primary'))
-        .width('100%')
-        .maxLines(2)
-        .textOverflow({ overflow: TextOverflow.Ellipsis })
+      Row({ space: 8 }) {
+        Text(task.name)
+          .fontSize(22)
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('sys.color.ohos_id_color_text_primary'))
+          .layoutWeight(1)
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
 
+        // 已完成任务：标题右侧绿色对钩（2026-10-29 需求方）
+        if (task.status === TaskStatus.COMPLETED) {
+          SymbolGlyph($r('sys.symbol.checkmark_circle_fill'))
+            .fontSize(COMPLETED_CHECK_SIZE)
+            .fontColor([COMPLETED_CHECK_COLOR])
+            .accessibilityText('已完成')
+        }
+      }
+      .width('100%')
+      .alignItems(VerticalAlign.Top)
+
+      // 2026-10-29 需求方：摘要区不再显示「AI 生成」chip（详情页标识条保留）。
       // 类型 tag 放最前，并用甘特条同色，方便和下方图表对照；
       // 后面依次是 重要性 / 难易 / 重复 / 来源 / 附件
       Flex({ wrap: FlexWrap.Wrap, space: { main: LengthMetrics.vp(6), cross: LengthMetrics.vp(6) } }) {
@@ -824,10 +1010,13 @@ export struct C_Banban {
     .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
     .borderRadius(Theme.RADIUS_CARD)
     .alignItems(HorizontalAlign.Start)
-    // 出/入场：轻微上下浮动 + 淡入淡出
-    .transition(TransitionEffect.OPACITY
-      .combine(TransitionEffect.translate({ y: 16 }))
-      .animation({ duration: 220, curve: Curve.EaseOut }))
+    // 出/入场：轻微上下浮动 + 淡入淡出；
+    // 硬切复位时用 IDENTITY，重建 ListItem 不会闪一下（2026-10-29）
+    .transition(this.suppressEnterTaskId === task.id
+      ? TransitionEffect.IDENTITY
+      : TransitionEffect.OPACITY
+        .combine(TransitionEffect.translate({ y: 16 }))
+        .animation({ duration: 220, curve: Curve.EaseOut }))
     // 按压：微微下浮、阴影收一点；松开恢复
     .scale({ x: this.pressedTaskId === task.id ? 0.985 : 1, y: this.pressedTaskId === task.id ? 0.985 : 1 })
     .translate({ y: this.pressedTaskId === task.id ? 2 : 0 })
@@ -845,8 +1034,169 @@ export struct C_Banban {
       }
     })
     .onClick(() => {
+      // 左滑展开时点卡片只收起（避免误进详情页）
+      if (this.swipeOpenTaskId === task.id) {
+        this.closeSwipeAnimated();
+        return;
+      }
       this.openDetailFor(task);
     })
+  }
+
+  /**
+   * 左滑卡片露出的两个操作按钮（2026-10-29 需求方）：
+   * 上＝未完成时绿底白对钩 / 已完成时黑底白「撤销」；下＝红底白垃圾桶（确认后删除）。
+   * 小按钮与卡片使用同一套「按下下浮」动画。
+   */
+  @Builder
+  taskSwipeActions(task: Task) {
+    Column({ space: 8 }) {
+      Button({ type: ButtonType.Normal, stateEffect: false }) {
+        SymbolGlyph(task.status === TaskStatus.COMPLETED
+          ? $r('sys.symbol.undo')
+          : $r('sys.symbol.checkmark'))
+          .fontSize(20)
+          .fontColor([Color.White])
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .backgroundColor(task.status === TaskStatus.COMPLETED
+        ? SWIPE_UNDO_COLOR
+        : COMPLETED_CHECK_COLOR)
+      .borderRadius(12)
+      // 阴影与大卡片同一套（radius 8 / offsetY 3）
+      .shadow({ radius: 8, color: '#22000000', offsetY: 3 })
+      .scale({
+        x: this.pressedActionKey === this.actionKey(task, 'check') ? 0.93 : 1,
+        y: this.pressedActionKey === this.actionKey(task, 'check') ? 0.93 : 1
+      })
+      .translate({ y: this.pressedActionKey === this.actionKey(task, 'check') ? 1.5 : 0 })
+      .animation({ duration: 100, curve: Curve.EaseOut })
+      .onTouch((event: TouchEvent) => {
+        this.markActionPressed(task, 'check', event);
+      })
+      .onClick(() => {
+        this.completeFromSwipe(task);
+      })
+
+      Button({ type: ButtonType.Normal, stateEffect: false }) {
+        SymbolGlyph($r('sys.symbol.trash'))
+          .fontSize(20)
+          .fontColor([Color.White])
+      }
+      .width('100%')
+      .layoutWeight(1)
+      .backgroundColor(SWIPE_DELETE_COLOR)
+      .borderRadius(12)
+      // 阴影与大卡片同一套（radius 8 / offsetY 3）
+      .shadow({ radius: 8, color: '#22000000', offsetY: 3 })
+      .scale({
+        x: this.pressedActionKey === this.actionKey(task, 'trash') ? 0.93 : 1,
+        y: this.pressedActionKey === this.actionKey(task, 'trash') ? 0.93 : 1
+      })
+      .translate({ y: this.pressedActionKey === this.actionKey(task, 'trash') ? 1.5 : 0 })
+      .animation({ duration: 100, curve: Curve.EaseOut })
+      .onTouch((event: TouchEvent) => {
+        this.markActionPressed(task, 'trash', event);
+      })
+      .onClick(() => {
+        this.confirmDeleteFromSwipe(task);
+      })
+    }
+    .width(SWIPE_REVEAL_VP)
+    // 原生 swipeAction 会把这里按 ListItem 的高度测量，所以 100% 是卡片高度（不会变成视口高度）
+    .height('100%')
+    .padding({ left: SWIPE_ACTION_PADDING_VP })
+  }
+
+  private actionKey(task: Task, kind: string): string {
+    return task.id + '-' + kind;
+  }
+
+  /** 小按钮的按下/松开（只记录状态，点击本身仍由 onClick 触发） */
+  private markActionPressed(task: Task, kind: string, event: TouchEvent): void {
+    if (event.type === TouchType.Down) {
+      this.pressedActionKey = this.actionKey(task, kind);
+    } else if (event.type === TouchType.Up || event.type === TouchType.Cancel) {
+      this.pressedActionKey = '';
+    }
+  }
+
+  /** 带收起动画地复位（卡片位置不变时使用） */
+  private closeSwipeAnimated(): void {
+    try {
+      this.summaryScroller.closeAllSwipeActions();
+    } catch (error) {
+      // 没有展开项 / 控制器未绑定：忽略
+    }
+    this.swipeOpenTaskId = -1;
+  }
+
+  /**
+   * 硬切复位（卡片会换位置时使用）：给该任务的 ListItem 换 key，
+   * 节点重建后左滑状态直接归零，不播放收起动画；同时临时禁用出入场 transition。
+   */
+  private hardCutSwipe(taskId: number): void {
+    this.swipeOpenTaskId = -1;
+    this.suppressEnterTaskId = taskId;
+    const key: string = String(taskId);
+    const token: number | undefined = this.swipeTokens[key];
+    this.swipeTokens[key] = token === undefined ? 1 : token + 1;
+    // 重建完成后清掉标记，避免影响这张卡之后的正常入场动画
+    setTimeout(() => {
+      if (this.suppressEnterTaskId === taskId) {
+        this.suppressEnterTaskId = -1;
+      }
+    }, 120);
+  }
+
+  /** 模拟「切换完成状态」后该任务在摘要列表里的下标（排序口径与 detailTasks 一致） */
+  private detailIndexOf(taskId: number, assumeCompleted: boolean): number {
+    const list: Task[] = this.detailTasks().slice();
+    const lanes: string[] = this.lanes();
+    list.sort((a: Task, b: Task) => {
+      const ac: number = (a.id === taskId ? assumeCompleted : a.status === TaskStatus.COMPLETED) ? 1 : 0;
+      const bc: number = (b.id === taskId ? assumeCompleted : b.status === TaskStatus.COMPLETED) ? 1 : 0;
+      if (ac !== bc) {
+        return ac - bc;
+      }
+      const ia: number = lanes.indexOf(this.laneOf(a));
+      const ib: number = lanes.indexOf(this.laneOf(b));
+      if (ia !== ib) {
+        return ia - ib;
+      }
+      return (a.dueAt as number) - (b.dueAt as number);
+    });
+    return list.findIndex((t: Task) => t.id === taskId);
+  }
+
+  /** 切换完成状态后卡片是否换位置：换位置 → 硬切；位置不变 → 播收起动画 */
+  private willChangePosition(task: Task): boolean {
+    const currentIndex: number = this.detailTasks().findIndex((t: Task) => t.id === task.id);
+    if (currentIndex < 0) {
+      return false;
+    }
+    const willComplete: boolean = task.status !== TaskStatus.COMPLETED;
+    return this.detailIndexOf(task.id, willComplete) !== currentIndex;
+  }
+
+  /** 左滑动作：完成 ↔ 撤销（已完成的任务显示撤销图标） */
+  private completeFromSwipe(task: Task): void {
+    if (this.willChangePosition(task)) {
+      this.hardCutSwipe(task.id);
+    } else {
+      this.closeSwipeAnimated();
+    }
+    this.store.toggleComplete(task);
+  }
+
+  /** 左滑删除：先收起左滑，再弹官方确认弹窗，确认后软删除（进回收站） */
+  private confirmDeleteFromSwipe(task: Task): void {
+    this.closeSwipeAnimated();
+    showDeleteConfirmDialog(this.getUIContext(), '删除任务',
+      '确定要删除这个任务吗？删除后可在回收站恢复。', () => {
+        this.store.deleteTask(task.id);
+      });
   }
 
   build() {
@@ -861,30 +1211,49 @@ export struct C_Banban {
             // 空态提示统一由下面的覆盖层负责
             Column()
           } else {
-          Scroll() {
-            Column({ space: 12 }) {
-              // 时间轴穿过几条甘特条，这里就显示几条事件
-              if (this.detailTasks().length === 0) {
+          // 用 List + ListItem 承接卡片：只有 ListItem 才有 `.swipeAction()`，
+          // 左滑露出的操作按钮才能跟着卡片一起走（2026-10-29 需求方）。
+          List({ scroller: this.summaryScroller, space: 12 }) {
+            // 时间轴穿过几条甘特条，这里就显示几条事件
+            if (this.detailTasks().length === 0) {
+              ListItem() {
                 Text('时间轴没有经过任何事件（拖动下方蓝线试试）')
                   .fontSize($r('sys.float.ohos_id_text_size_body1'))
                   .fontColor($r('sys.color.ohos_id_color_text_secondary'))
                   .padding({ top: 24 })
-              } else {
-                ForEach(this.detailTasks(), (t: Task) => {
-                  this.summary(t)
-                }, (t: Task) => '' + t.id)
               }
+            } else {
+              ForEach(this.detailTasks(), (t: Task) => {
+                ListItem() {
+                  this.summary(t)
+                }
+                // 原生 swipeAction：按钮高度/层级/卡片阴影都由框架处理。
+                // `SwipeEdgeEffect.None` = 到边界立即停住：
+                //  · 未定义 start → 向右没有内容，且不会再有回弹位移；
+                //  · 向左最多展开到按钮宽度，不能继续过度左滑。
+                .swipeAction({
+                  end: {
+                    builder: () => {
+                      this.taskSwipeActions(t);
+                    },
+                    onStateChange: (state: SwipeActionState) => {
+                      if (state === SwipeActionState.EXPANDED) {
+                        this.swipeOpenTaskId = t.id;
+                      } else if (this.swipeOpenTaskId === t.id) {
+                        this.swipeOpenTaskId = -1;
+                      }
+                    }
+                  },
+                  edgeEffect: SwipeEdgeEffect.None
+                })
+              }, (t: Task) => t.id + '-' + (this.swipeTokens[String(t.id)] ?? 0))
             }
-            .width('100%')
-            .padding({ left: 16, right: 16, top: 8, bottom: 12 })
           }
           .width('100%')
-          // 顶部左对齐：原来 `Top` 是「顶部居中」，卡片淡出后列宽缩到灰字 tip 的宽度，
-          // 整列被重新居中 → 剩下的卡片会在淡出瞬间向右跳一点。固定左上角可消除。
-          .align(Alignment.TopStart)
+          .padding({ left: 16, right: 16, top: 8, bottom: 12 })
           .scrollBar(BarState.Off)
           .edgeEffect(EdgeEffect.Spring)
-          // 让上面的内容撑满 70%（否则 Scroll 按内容高度收缩，下面会空出一大块）
+          // 让上面的内容撑满 70%（否则列表按内容高度收缩，下面会空出一大块）
           .layoutWeight(1)
         }
       }
@@ -913,6 +1282,8 @@ export struct C_Banban {
               this.handleStripTouch(event);
             })
 
+            // 收起到只剩触发行时，时间刻度与缩放键一起隐藏
+            if (!this.ganttCollapsed()) {
             Stack({ alignContent: Alignment.TopEnd }) {
             Canvas(this.headerCtx)
               .width('100%')
@@ -964,9 +1335,11 @@ export struct C_Banban {
           .width('100%')
           .height(GANTT_AXIS_H_VP)
           }
+          }
           .width('100%')
 
           // 轨道区：表头固定，这一层内部纵向滚动（手势自己接管，见 handleGanttTouch）
+          if (!this.ganttCollapsed()) {
           Scroll(this.ganttScroller) {
             Canvas(this.canvasCtx)
               .width('100%')
@@ -987,6 +1360,7 @@ export struct C_Banban {
           .scrollBar(BarState.Off)
           .width('100%')
           .layoutWeight(1)
+          }
         }
         .width('100%')
         .height(this.ganttPanelHeight())
