@@ -7,7 +7,7 @@
  * 这一版按作者的原话改：
  *   · **主题色** → 三个**颜色圆点**（不写色名）；
  *   · **卡片密度 / 提醒提前量 / 解析方式** → **点一行弹选择器**，不再铺按钮；
- *   · 权限管理补齐 **通知 / 日历 / 订阅消息管理 / 绑定 QQ**；
+ *   · 权限管理补齐 **通知 / 日历 / 绑定 QQ**；
  *   · 修「滑到底看不全」：`Scroll` 加 `contentEndOffset`，最后一项不再被页签栏压住；
  *   · 修「大标题压住内容」：让位段做成内容首项，与任务列表同一套。
  *
@@ -199,7 +199,7 @@ export struct A_Settings {
   /** 配对码到期绝对时刻（后台定时器被节流也按真实时间算） */
   private bindExpireAt: number = 0;
 
-  /* ── 权限管理（通知 / 日历 / 订阅消息 / 绑定 QQ）── */
+  /* ── 权限管理（通知 / 日历 / 绑定 QQ）── */
   @Local notifyAllowed: boolean = false;
   @Local calendarAllowed: boolean = false;
   /** 已订阅的群数；-1 表示还没查 */
@@ -1406,7 +1406,7 @@ export struct A_Settings {
         .borderRadius(Theme.RADIUS_CARD)
         .clip(true)
 
-        // ③ 权限管理：通知 / 日历 / 订阅消息 / 绑定 QQ
+        // ③ 权限管理：通知 / 日历 / 绑定 QQ
         Column() {
           this.sectionTitle('权限管理')
         }
@@ -1459,45 +1459,6 @@ export struct A_Settings {
             .borderRadius(17)
             .onClick(() => {
               this.openCalendarSettings();
-            })
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-
-          this.rowDivider()
-
-          Row({ space: 8 }) {
-            Text('订阅消息管理')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              .layoutWeight(1)
-              .maxLines(1)
-            Text(!this.bound
-              ? '未绑定 QQ'
-              : (this.subscribedCount < 0 ? '未连接' : '已订阅 ' + this.subscribedCount + ' 个群'))
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-            Button({ type: ButtonType.Capsule, stateEffect: true }) {
-              Text('选择群')
-                .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.bound
-                  ? this.themeStore.scheme.onPrimary
-                  : this.themeStore.scheme.onSurfaceVariant)
-            }
-            .height(34)
-            .padding({ left: 14, right: 14 })
-            .backgroundColor(this.bound
-              ? this.themeStore.scheme.primary
-              : this.themeStore.scheme.surfaceContainerHigh)
-            .borderRadius(17)
-            .onClick(() => {
-              if (this.bound) {
-                this.openGroupSheet();
-              } else {
-                this.toast('请先绑定 QQ');
-              }
             })
           }
           .width('100%')
