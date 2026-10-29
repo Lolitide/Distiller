@@ -7,7 +7,7 @@
  * 这一版按作者的原话改：
  *   · **主题色** → 三个**颜色圆点**（不写色名）；
  *   · **卡片密度 / 提醒提前量 / 解析方式** → **点一行弹选择器**，不再铺按钮；
- *   · 权限管理补齐 **通知 / 日历 / 订阅消息管理** 三项（先占位，如实标未接入）；
+ *   · 权限管理补齐 **通知 / 日历 / 订阅消息管理 / 绑定 QQ**；
  *   · 修「滑到底看不全」：`Scroll` 加 `contentEndOffset`，最后一项不再被页签栏压住；
  *   · 修「大标题压住内容」：让位段做成内容首项，与任务列表同一套。
  *
@@ -199,7 +199,7 @@ export struct A_Settings {
   /** 配对码到期绝对时刻（后台定时器被节流也按真实时间算） */
   private bindExpireAt: number = 0;
 
-  /* ── 权限管理（通知 / 日历 / 订阅消息）── */
+  /* ── 权限管理（通知 / 日历 / 订阅消息 / 绑定 QQ）── */
   @Local notifyAllowed: boolean = false;
   @Local calendarAllowed: boolean = false;
   /** 已订阅的群数；-1 表示还没查 */
@@ -1406,7 +1406,7 @@ export struct A_Settings {
         .borderRadius(Theme.RADIUS_CARD)
         .clip(true)
 
-        // ③ 权限管理：通知 / 日历 / 订阅消息（先占位，如实标未接入）
+        // ③ 权限管理：通知 / 日历 / 订阅消息 / 绑定 QQ
         Column() {
           this.sectionTitle('权限管理')
         }
