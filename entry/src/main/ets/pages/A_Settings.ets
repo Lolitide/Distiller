@@ -1659,9 +1659,15 @@ export struct A_Settings {
                 .fontSize($r('sys.float.ohos_id_text_size_body1'))
                 .fontColor($r('sys.color.ohos_id_color_text_primary'))
                 .width('100%')
-              Text('点下面复制创建链接，然后到 QQ 里粘贴打开（浏览器直接打开会跳转失败）。')
+              Text('点下面复制创建链接，然后到 QQ 里粘贴打开')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
                 .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+                .width('100%')
+
+              Text(BOT_CREATE_URL)
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor(this.themeStore.scheme.primary)
+                .copyOption(CopyOptions.LocalDevice)
                 .width('100%')
 
               Button({ type: ButtonType.Capsule, stateEffect: true }) {
@@ -1677,12 +1683,6 @@ export struct A_Settings {
               .onClick(() => {
                 this.copyBotCreateLink();
               })
-
-              Text(BOT_CREATE_URL)
-                .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.themeStore.scheme.primary)
-                .copyOption(CopyOptions.LocalDevice)
-                .width('100%')
 
               Text('2. 填入机器人凭据')
                 .fontSize($r('sys.float.ohos_id_text_size_body1'))
