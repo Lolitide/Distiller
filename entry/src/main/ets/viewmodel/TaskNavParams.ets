@@ -17,6 +17,8 @@ export const ROUTE_TASK_DETAIL: string = 'TaskDetailPage';
 export const ROUTE_PRIVACY_POLICY: string = 'PrivacyPolicyPage';
 /** 「会离开手机的字段」独立页（2026-10-27：从设置页的系统弹窗改成独立页面） */
 export const ROUTE_CLOUD_FIELDS: string = 'CloudFieldsPage';
+/** 回收站（忽略的消息 / 删除的待办） */
+export const ROUTE_RECYCLE_BIN: string = 'RecycleBinPage';
 
 /**
  * 导航栈在 `AppStorage` 里的键。
@@ -32,12 +34,19 @@ export const NAV_STACK_KEY: string = 'appNavPathStack';
 export class TaskDetailParam {
   task: Task;
   store: TaskListStore;
-  /** 待确认消息详情：底部显示「保留 / 忽略」，不显示普通反馈 */
+  /** 待确认消息详情：顶部显示「保留 / 忽略」，不显示普通反馈 */
   pendingMode: boolean;
+  /**
+   * 回收站详情：顶部改成「恢复 / 彻底删除」。
+   * 此时 `pendingMode` 仍可能为 true（被忽略的消息本来就是待确认），
+   * 但页面只认 `trashMode` 优先，不会再出现「保留 / 忽略」。
+   */
+  trashMode: boolean;
 
-  constructor(task: Task, store: TaskListStore, pendingMode: boolean = false) {
+  constructor(task: Task, store: TaskListStore, pendingMode: boolean = false, trashMode: boolean = false) {
     this.task = task;
     this.store = store;
     this.pendingMode = pendingMode;
+    this.trashMode = trashMode;
   }
 }

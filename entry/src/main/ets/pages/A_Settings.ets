@@ -39,8 +39,7 @@ import { M3Switch } from '../components/M3Switch';
 import { Task } from '../model';
 import { buildDemoTasks, DEMO_TASK_PREFIX } from '../mock/DemoTasks';
 import { TaskListStore } from '../viewmodel/TaskListStore';
-import { NAV_STACK_KEY, ROUTE_CLOUD_FIELDS, ROUTE_PRIVACY_POLICY } from '../viewmodel/TaskNavParams';
-import { PrivacyConsent } from '../service/system/PrivacyConsent';
+import { NAV_STACK_KEY, ROUTE_CLOUD_FIELDS, ROUTE_PRIVACY_POLICY, ROUTE_RECYCLE_BIN } from '../viewmodel/TaskNavParams';
 import { TaskExportViewModel, TaskImportParseResult } from '../viewmodel/TaskExportViewModel';
 import { TaskExportResult, TaskExportService } from '../service/system/TaskExportService';
 import { TaskImportFileResult, TaskImportService } from '../service/system/TaskImportService';
@@ -128,12 +127,6 @@ export struct A_Settings {
 
   /** 视觉个性化状态（跨页共享，见 utils/Theme.ets） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
-
-  /**
-   * 隐私授权状态（单例的 `@Trace` 字段）：撤回/重新授权会驱动「隐私说明」那一行的状态文案刷新。
-   * 真实判定在服务层（`PrivacyConsent.allowed()`），这里只读来显示。
-   */
-  @Local consent: PrivacyConsent = PrivacyConsent.instance();
 
   /**
    * 底部遮罩的两端色（`GradientDirection.Bottom`：第一项画在**上**边，所以上透下实）。
@@ -1050,7 +1043,7 @@ export struct A_Settings {
     this.getUIContext().getPromptAction().showDialog({
       title: '导出任务',
       // 引导语：讲"选完会怎样"，格式差异交给按钮自己说，避免同一句话出现两遍
-      message: '任务保存在本机，导出的文件请自行保管。',
+      message: '导出文件保存至本地，请自行保管',
       buttons: [
         { text: 'CSV（表格，不含原文）', color: this.themeStore.scheme.primary },
         { text: 'JSON（完整，含原文）', color: this.themeStore.scheme.primary },
@@ -1089,12 +1082,16 @@ export struct A_Settings {
     const content: string = csv ? TaskExportViewModel.buildCsv(tasks) : TaskExportViewModel.buildJson(tasks);
     const fileName: string = TaskExportViewModel.fileName(ext);
     const suffix: string = csv ? 'CSV|.csv' : 'JSON|.json';
-    const result: TaskExportResult = await TaskExportService.saveFile(context, fileName, suffix, content);
+    // CSV 无法承载元数据段 → 同时落一份 `xxx.csv.meta.json` 隐式标识（合规要求）
+    const metaName: string | undefined = csv ? fileName + '.meta.json' : undefined;
+    const meta: string | undefined = csv ? TaskExportViewModel.buildCsvMeta() : undefined;
+    const result: TaskExportResult =
+      await TaskExportService.saveFile(context, fileName, suffix, content, metaName, meta);
     if (result.cancelled) {
       return;
     }
     if (result.ok) {
-      this.toast(`已导出 ${tasks.length} 条任务` + (csv ? '（CSV）' : '（JSON，含原文）'));
+      this.toast(`已导出 ${tasks.length} 条任务` + (csv ? '（CSV，含 AI 生成标识）' : '（JSON，含原文与 AI 元数据）'));
       return;
     }
     this.toast(result.message.length > 0 ? result.message : '导出失败');
@@ -1156,7 +1153,7 @@ export struct A_Settings {
     const content: string = TaskExportViewModel.buildCsv(tasks);
     const result: TaskExportResult = await TaskExportService.copyToClipboard(content);
     if (result.ok) {
-      this.toast(`已复制 ${tasks.length} 条任务（CSV）到剪贴板`);
+      this.toast(`已复制 ${tasks.length} 条任务（CSV，含 AI 生成标识）到剪贴板`);
       return;
     }
     this.toast(result.message.length > 0 ? result.message : '复制失败');
@@ -1585,7 +1582,7 @@ export struct A_Settings {
               Text(this.boundAppId.length > 0 ? '已绑定 Bot：' + this.boundAppId : '已绑定 Bot')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
                 .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-              Text('在 QQ 里把消息直接发给这个 Bot，回到 App 会自动收进「待确认」。')
+              Text('将消息转发给 Bot，可以自动收进知了 APP')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
                 .fontColor($r('sys.color.ohos_id_color_text_secondary'))
             }
@@ -1599,59 +1596,35 @@ export struct A_Settings {
         .borderRadius(Theme.RADIUS_CARD)
         .clip(true)
 
-        // ⑤ 云端数据：字段清单 + 整包删除
-        Column() {
-          this.sectionTitle('云端数据')
-        }
-        .margin({ top: SECTION_GAP_VP })
-
-        Column() {
-          Row({ space: 8 }) {
-            Text('会离开手机的字段')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              .layoutWeight(1)
-              .maxLines(1)
-            Text('查看')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor(this.themeStore.scheme.primary)
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-          .onClick(() => {
-            this.openCloudFields();
-          })
-
-          this.rowDivider()
-          Row() {
-            Text('删除服务端数据')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_warning'))
-              .layoutWeight(1)
-              .textAlign(TextAlign.Start)
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-          .onClick(() => {
-            this.deleteServerData();
-          })
-        }
-        .width('100%')
-        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
-        .borderRadius(Theme.RADIUS_CARD)
-        .clip(true)
-
-        // ⑤ 数据
+        // ⑤ 数据（2026-10-29 需求方：与「云端数据」调换位置，本机数据在前）
         Column() {
           this.sectionTitle('数据')
         }
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
+          // 「回收站」：忽略的消息 + 删除的待办；点进去是独立页
+          Row({ space: 8 }) {
+            Text('回收站')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+              .maxLines(1)
+              .textAlign(TextAlign.Start)
+            SymbolGlyph($r('sys.symbol.chevron_right'))
+              .fontSize(Theme.FONT_CAPTION)
+              .fontColor([$r('sys.color.icon_tertiary')])
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            AppStorage.get<NavPathStack>(NAV_STACK_KEY)?.pushPathByName(ROUTE_RECYCLE_BIN, this.store);
+          })
+
+          this.rowDivider()
+
           // 「导出任务」：点一下弹**三选项对话框**（`showDialog`，2026-10-27 需求方指定）。
           // 原来是 `bindPopup` 贴着这一行的小浮窗（三行纯文字），改成居中对话框后：
           // 标题说"导出任务"、正文三行说清三种口径的差别、底部三颗按钮直接选，
@@ -1663,9 +1636,9 @@ export struct A_Settings {
               .layoutWeight(1)
               .maxLines(1)
               .textAlign(TextAlign.Start)
-            Text('CSV / JSON / 剪贴板')
+            Text('导出')
               .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+              .fontColor(this.themeStore.scheme.primary)
               .maxLines(1)
             SymbolGlyph($r('sys.symbol.chevron_right'))
               .fontSize(Theme.FONT_CAPTION)
@@ -1723,7 +1696,53 @@ export struct A_Settings {
         .borderRadius(Theme.RADIUS_CARD)
         .clip(true)
 
-        // ⑥ 关于
+        // ⑥ 云端数据：字段清单 + 整包删除（2026-10-29 与「数据」调换位置，排在它后面）
+        Column() {
+          this.sectionTitle('云端数据')
+        }
+        .margin({ top: SECTION_GAP_VP })
+
+        Column() {
+          Row({ space: 8 }) {
+            Text('会离开本机的字段')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+              .maxLines(1)
+            Text('查看')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.openCloudFields();
+          })
+
+          this.rowDivider()
+          Row() {
+            Text('删除服务端数据')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_warning'))
+              .layoutWeight(1)
+              .textAlign(TextAlign.Start)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.deleteServerData();
+          })
+        }
+        .width('100%')
+        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
+        .borderRadius(Theme.RADIUS_CARD)
+        .clip(true)
+
+        // ⑦ 关于
         Column() {
           this.sectionTitle('关于')
         }
@@ -1765,11 +1784,6 @@ export struct A_Settings {
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
               .fontColor($r('sys.color.ohos_id_color_text_primary'))
               .layoutWeight(1)
-            Text(this.consent.granted ? '已授权' : '已撤回')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor(this.consent.granted
-                ? $r('sys.color.ohos_id_color_text_secondary')
-                : this.themeStore.scheme.error)
             Text('查看')
               .fontSize($r('sys.float.ohos_id_text_size_body2'))
               .fontColor(this.themeStore.scheme.primary)
@@ -1791,7 +1805,7 @@ export struct A_Settings {
               .layoutWeight(1)
             Text('下次启动')
               .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+              .fontColor(this.themeStore.scheme.primary)
           }
           .width('100%')
           .height(ROW_HEIGHT_VP)

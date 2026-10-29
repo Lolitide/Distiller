@@ -407,6 +407,10 @@ export struct A_TaskList {
       store: this.store,
       pendingMode: true,
       onOpen: () => {
+        if (this.store.editing) {
+          this.store.toggleSelect(task.id);
+          return;
+        }
         this.store.markPendingSeen(task);
         AppStorage.get<NavPathStack>(NAV_STACK_KEY)
           ?.pushPathByName(ROUTE_TASK_DETAIL, new TaskDetailParam(task, this.store, true));

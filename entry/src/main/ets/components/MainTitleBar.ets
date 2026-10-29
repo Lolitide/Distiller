@@ -11,7 +11,7 @@
  * 症状：未滚动时右上角是**深灰圆 + 深色图标**，图标几乎看不见（取色实测：圆 #292929、图标 #3A3C3B）。
  * 根因有两条，都在这个文件里：
  *  1. **图标色被我们自己刷了**：之前每个菜单项的 `icon` 都写成
- *     `new SymbolGlyphModifier($r('sys.symbol.x')).fontColor([Theme.STATUS_BAR_CONTENT])`，
+ *     `new SymbolGlyphModifier(<图标资源>).fontColor([Theme.STATUS_BAR_CONTENT])`，
  *     而 `Theme.STATUS_BAR_CONTENT` 是**深色** `#1A1A1A`。HDS 在「未滚动」态给图标垫的底
  *     是它自己的**深色**半透圆（immersive 那套「提亮压暗」），它**期待白色图标** → 深底压深图标。
  *     官方示例（《设置标题栏沉浸式样式》）写的是 `icon: $r('sys.symbol.search_things')`——
@@ -215,6 +215,27 @@ export class MainTitleBar {
             icon: $r('sys.symbol.magnifyingglass'),
             isEnabled: true,
             action: onSearch
+          }
+        }
+      ]
+    };
+  }
+
+  /**
+   * 回收站页的右上角：**只有一颗「多选」图标按钮**。
+   *
+   * 图标、文案、语义与任务列表那颗完全一致（`checkmark_square_on_square` + `menu_multi_select`），
+   * 只是不带搜索项 —— 回收站自己页内有搜索框，右上角再放一颗放大镜就重复了。
+   */
+  static multiSelectMenu(onEdit: () => void): HdsNavigationMenuContentOptions {
+    return {
+      value: [
+        {
+          content: {
+            label: $r('app.string.menu_multi_select'),
+            icon: $r('sys.symbol.checkmark_square_on_square'),
+            isEnabled: true,
+            action: onEdit
           }
         }
       ]

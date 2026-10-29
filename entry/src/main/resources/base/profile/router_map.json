@@ -19,6 +19,11 @@
       "name": "CloudFieldsPage",
       "pageSourceFile": "src/main/ets/pages/B_CloudFields.ets",
       "buildFunction": "CloudFieldsPageBuilder"
+    },
+    {
+      "name": "RecycleBinPage",
+      "pageSourceFile": "src/main/ets/pages/B_RecycleBin.ets",
+      "buildFunction": "RecycleBinPageBuilder"
     }
   ]
 }
