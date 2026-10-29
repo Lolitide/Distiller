@@ -30,6 +30,7 @@ import { common } from '@kit.AbilityKit';
 import { AddTaskDraft } from '../viewmodel/AddTaskDraft';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
+import { AiLabelBar } from './AiLabelBar';
 import { AddTaskAttributeChips } from './AddTaskAttributeChips';
 import { AddTaskNameInput } from './AddTaskNameInput';
 import { AddTaskRecorder } from './AddTaskRecorder';
@@ -443,6 +444,15 @@ export struct AddTaskSheet {
     return names.join('、');
   }
 
+  /**
+   * 这份草稿是否来自 AI 生成：只要走过解析（有置信度 / 规则降级 / 返回了缺失字段），
+   * 就常驻显示「AI 生成」标识 —— 合规要求「生成时即时提示」，不能只在低可信时才出现。
+   */
+  @Computed
+  get isAiDraft(): boolean {
+    return this.draft.certainty > 0 || this.draft.degraded || this.draft.parsedMissing.length > 0;
+  }
+
   /** 解析提示条要不要出现：低可信，或者有没识别出来的字段 */
   @Computed
   get showParseEvidence(): boolean {
@@ -588,6 +598,12 @@ export struct AddTaskSheet {
             }
           })
           .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
+
+          // AI 生成内容显式标识：AI 生成成功后始终显示（合规要求「生成时即时提示」）
+          if (this.isAiDraft) {
+            AiLabelBar()
+              .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
+          }
         }
         .width('100%')
         // 滚动内容的留白：左右/下 `padding_level8`(16vp)，上 8vp（标题行自己带了下留白）。

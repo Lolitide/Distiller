@@ -12,6 +12,7 @@
  *
  * 时间：CSV 用本地时区的 `YYYY-MM-DD HH:mm`（给人看）；JSON 保留**毫秒时间戳原值**（给机器/回灌用）。
  */
+import { util } from '@kit.ArkTS';
 import { Task, TaskLevel, TaskPriority, TaskSource, TaskStatus, TaskStep } from '../model';
 import { TaskListViewModel } from './TaskListViewModel';
 
@@ -19,8 +20,17 @@ import { TaskListViewModel } from './TaskListViewModel';
 const CSV_COLUMNS: string[] = [
   '名称', '状态', '重要性', '难易程度', '类型', '来源', '来源展示名', '标签',
   '到期时间', '到期原文', '提醒时间', '地点', '对象', '子任务', '置信度',
-  '缺失字段', '创建时间', '完成时间', '备注'
+  '缺失字段', '创建时间', '完成时间', '备注',
+  // 显式标识列：值为「AI生成」或「手动录入」，Excel 打开就能看出内容来源
+  '生成方式'
 ];
+
+/** 显式标识：AI 生成内容的文字标签（必须同时含「AI」与「生成」） */
+const AI_LABEL: string = 'AI生成';
+/** 非 AI 内容的标注 */
+const MANUAL_LABEL: string = '手动录入';
+/** 导出文件顶层的 AI 生成说明 */
+const AI_NOTICE: string = '本文件包含由人工智能生成的内容（AI生成），仅供参考。';
 
 /** JSON 里的 schema 号：以后字段变了就 +1，导入方据此判断 */
 const EXPORT_SCHEMA: number = 1;
@@ -62,6 +72,29 @@ export class TaskExportRow {
   rawJson: string = '';
   urls?: string[];
   linkUrl?: string;
+  /** 显式标识：这条任务是否由 AI 生成 */
+  aiGenerated: boolean = false;
+  /** 显式标识：文字标签（「AI生成」/「手动录入」），CSV 的「生成方式」列直接用它 */
+  aiLabel: string = MANUAL_LABEL;
+}
+
+/**
+ * 隐式标识（AI 生成合成内容的文件元数据，依据《标识办法》第五条）。
+ * 五个要素：生成合成标签、服务提供者名称/编码、内容制作编号、生成方式说明。
+ */
+export class AiMetadata {
+  /** 生成合成标签要素 */
+  aiGenerated: boolean = true;
+  /** 生成合成服务提供者名称 */
+  provider: string = '知了 / Distiller';
+  /** 生成合成服务提供者编码（应用包名） */
+  providerId: string = 'com.xjtu.distiller';
+  /** 内容制作编号：每次导出生成一个唯一批次号 */
+  contentId: string = '';
+  /** 生成方式说明 */
+  generator: string = '服务端大模型解析';
+  /** 依据标准（可选） */
+  labelStandard: string = 'GB 45438-2025 / 标识办法';
 }
 
 /** JSON 导出的外层结构（带元信息，方便对方判断"这是什么时候、哪个版本的导出"） */
@@ -71,6 +104,10 @@ export class TaskExportBundle {
   exportedAt: string = '';
   exportedAtMs: number = 0;
   count: number = 0;
+  /** 显式标识：文件顶层说明 */
+  aiNotice: string = AI_NOTICE;
+  /** 隐式标识：文件元数据 */
+  aiMetadata: AiMetadata = new AiMetadata();
   tasks: TaskExportRow[] = [];
 }
 
@@ -107,12 +144,37 @@ export class TaskExportViewModel {
     bundle.exportedAtMs = now.getTime();
     bundle.exportedAt = TaskExportViewModel.stamp(now.getTime());
     bundle.count = tasks.length;
+    bundle.aiMetadata = TaskExportViewModel.buildMetadata();
     const rows: TaskExportRow[] = [];
     for (let i = 0; i < tasks.length; i++) {
       rows.push(TaskExportViewModel.toRow(tasks[i]));
     }
     bundle.tasks = rows;
     return JSON.stringify(bundle, null, 2);
+  }
+
+  /**
+   * CSV 的隐式标识伴随文件（`xxx.csv.meta.json`）。
+   * CSV 格式本身没有元数据段，所以导出时另存一份同内容的 JSON 元数据。
+   */
+  static buildCsvMeta(): string {
+    return JSON.stringify(TaskExportViewModel.buildMetadata(), null, 2);
+  }
+
+  /** 一次导出 = 一个内容制作编号（UUID），JSON 与伴随文件各自调用一次即可 */
+  private static buildMetadata(): AiMetadata {
+    const meta: AiMetadata = new AiMetadata();
+    meta.contentId = util.generateRandomUUID();
+    return meta;
+  }
+
+  /** 是否 AI 生成内容（有置信度或来源不是手动）；任务卡片、详情页与本导出同一口径 */
+  static isAiGenerated(task: Task): boolean {
+    const certainty: number | undefined = task.certainty;
+    if (certainty !== undefined && certainty > 0) {
+      return true;
+    }
+    return task.source !== undefined && task.source !== TaskSource.MANUAL;
   }
 
   /* ── 内部 ── */
@@ -160,6 +222,8 @@ export class TaskExportViewModel {
     row.linkUrl = task.linkUrl !== undefined ? task.linkUrl : '';
     row.rawText = task.rawText !== undefined ? task.rawText : '';
     row.rawJson = task.rawJson !== undefined ? task.rawJson : '';
+    row.aiGenerated = TaskExportViewModel.isAiGenerated(task);
+    row.aiLabel = row.aiGenerated ? AI_LABEL : MANUAL_LABEL;
     return row;
   }
 
@@ -184,7 +248,8 @@ export class TaskExportViewModel {
       row.missingFields.join(' '),
       TaskExportViewModel.stampOrEmpty(row.createdAt),
       TaskExportViewModel.stampOrEmpty(row.finishedAt),
-      row.note
+      row.note,
+      row.aiLabel
     ];
     const out: string[] = [];
     for (let i = 0; i < cells.length; i++) {

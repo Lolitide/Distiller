@@ -1121,7 +1121,7 @@ export struct AddTaskAttributeChips {
         if (this.showAi) {
           Chip({
             label: {
-              text: this.aiBusy ? '识别中…' : 'AI 预填',
+              text: this.aiBusy ? '识别中…' : 'AI 生成',
               fontColor: this.themeStore.scheme.onSecondaryContainer
             },
             size: ChipSize.SMALL,

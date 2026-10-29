@@ -20,7 +20,7 @@
 // ⚠️ 这里必须显式导入 HDS 的 `TextOptions`：ArkUI 在 `component/text.d.ts` 里也有一个**全局**同名接口，
 // 不导入就会解析到那个，赋给 HdsListItemCard 的 textItem 时报「no properties in common」。
 import { HdsListItemCard, PrefixCustomBuilder, SuffixCustomBuilder } from '@kit.UIDesignKit';
-import { Task, TaskAlarm, TaskPriority, TaskStatus } from '../model';
+import { Task, TaskAlarm, TaskPriority, TaskSource, TaskStatus } from '../model';
 import { TaskStatusIcon } from './TaskStatusIcon';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 import { TaskListViewModel } from '../viewmodel/TaskListViewModel';
@@ -247,6 +247,11 @@ export struct TaskCard {
   /** 卡片第二行：截止信息（`在 HH:mm 截止`）。没有到期时间就为空，不占位 */
   @Computed
   get dueLabel(): string {
+    // 已完成不再显示剩余时间，直接给一句「已完成」（2026-10-29 需求方：
+    // 原来这里返回空串，第二行会留下一段空白）
+    if (this.completed) {
+      return '已完成';
+    }
     return TaskListViewModel.dueLabel(this.task);
   }
 
@@ -300,6 +305,21 @@ export struct TaskCard {
     return TaskListViewModel.isLowCertainty(this.task.certainty);
   }
 
+  /**
+   * 这条任务是不是 AI 生成内容（合规显式标识用）：
+   *  · 有解析置信度 → 一定经过模型；
+   *  · 来源不是「手动」→ 粘贴 / 分享 / 机器人 / 语音都会走解析链路。
+   * 手动记录且没置信度的任务不挂角标。
+   */
+  @Computed
+  get aiGenerated(): boolean {
+    const certainty: number | undefined = this.task.certainty;
+    if (certainty !== undefined && certainty > 0) {
+      return true;
+    }
+    return this.task.source !== undefined && this.task.source !== TaskSource.MANUAL;
+  }
+
   /** 自定义文字区之后，卡片的无障碍文本要自己拼（HDS 不再从 primaryText/description 取） */
   @Computed
   get accessibilityLabel(): string {
@@ -308,7 +328,9 @@ export struct TaskCard {
     const repeatText: string = this.repeatLabel === '' ? '' : `${this.repeatLabel} `;
     // 低可信要读出来：读屏用户看不到那个角标，但它决定这条要不要点进去核对
     const lowText: string = this.lowCertainty ? '置信度偏低 ' : '';
-    return `${priorityText}${this.task.name} ${this.dueLabel} ${repeatText}${lowText}`;
+    // AI 角标同样要读出来（角标只有视觉，读屏用户感知不到内容来源）
+    const aiText: string = this.aiGenerated ? 'AI生成 ' : '';
+    return `${priorityText}${aiText}${this.task.name} ${this.dueLabel} ${repeatText}${lowText}`;
   }
 
   @Builder
@@ -343,6 +365,8 @@ export struct TaskCard {
   @Builder
   textBlock() {
     Column() {
+      // 2026-10-29 需求方：列表卡片标题前**不再放 AI 角标**（详情页的标识条保留）。
+      // 无障碍文案仍会读出「AI生成」，读屏用户不会丢掉内容来源信息。
       Text(this.task.name)
         .fontSize($r('sys.float.ohos_id_text_size_body1'))
         .fontWeight(FontWeight.Bold)
@@ -352,6 +376,11 @@ export struct TaskCard {
         .textOverflow({ overflow: TextOverflow.Ellipsis })
         .width('100%')
         .textAlign(TextAlign.Start)
+        // 已完成：标题加删除线（2026-10-29 需求方）
+        .decoration({
+          type: this.completed ? TextDecorationType.LineThrough : TextDecorationType.None,
+          color: $r('sys.color.ohos_id_color_text_secondary')
+        })
 
       Row({ space: SECOND_LINE_GAP_VP }) {
         // ===== 第二行（2026-10-19 第三次调整）=====
@@ -494,6 +523,9 @@ export struct TaskCard {
     if (this.task.pendingSource === 'image') {
       return '图片转发';
     }
+    if (this.task.pendingSource === 'file') {
+      return '文件转发';
+    }
     if (this.task.pendingSource === 'forward') {
       return '转发给机器人';
     }
@@ -514,6 +546,9 @@ export struct TaskCard {
     }
     if (this.task.pendingSource === 'image') {
       return $r('sys.symbol.picture');
+    }
+    if (this.task.pendingSource === 'file') {
+      return $r('sys.symbol.doc_plaintext');
     }
     return $r('sys.symbol.person_2');
   }
@@ -594,7 +629,9 @@ export struct TaskCard {
       // 卡片高度随「设置 → 视觉个性化 → 卡片密度」变（标准 76 / 紧凑 64）
       cardHeight: this.themeStore.cardHeight,
       prefixItem: new PrefixCustomBuilder((): void => {
-        if (this.pendingMode) {
+        if (this.editing) {
+          this.prefixCircle();
+        } else if (this.pendingMode) {
           this.pendingPrefix();
         } else {
           this.prefixCircle();

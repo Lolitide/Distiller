@@ -154,15 +154,27 @@
     },
     {
       "name": "parse_hint_certainty_low",
-      "value": "AI 预填，置信度 %d，请核对"
+      "value": "AI 生成，置信度 %d，请核对"
     },
     {
       "name": "parse_hint_title_only",
-      "value": "AI 预填，请核对"
+      "value": "AI 生成，请核对"
     },
     {
       "name": "parse_hint_certainty_ok",
-      "value": "AI 预填，置信度 %d"
+      "value": "AI 生成，置信度 %d"
+    },
+    {
+      "name": "ai_badge",
+      "value": "AI生成"
+    },
+    {
+      "name": "ai_notice",
+      "value": "以上内容由 AI 生成，仅供参考，请在核对后再使用"
+    },
+    {
+      "name": "ai_export_hint",
+      "value": "导出文件含「AI生成」标识"
     },
     {
       "name": "parse_hint_missing",

@@ -223,7 +223,7 @@ export struct A_Onboarding {
                   .onClick(() => {
                     this.openPrivacyPolicy();
                   })
-                Span('，同意后才会使用云端同步与 AI 解析；可随时在设置里撤回。')
+                Span('，同意后才会使用云端同步与 AI 解析；AI 生成的待办会标注「AI 生成」，可随时核对修改，也可在设置里撤回。')
                   .fontSize($r('sys.float.ohos_id_text_size_body2'))
                   .fontColor($r('sys.color.ohos_id_color_text_secondary'))
               }
