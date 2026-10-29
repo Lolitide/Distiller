@@ -49,7 +49,6 @@ import { BackendConfig } from '../service/backend/BackendConfig';
 import { RelayApi } from '../service/backend/RelayApi';
 import { apiErrorMessage, GroupItemDto } from '../service/backend/BackendTypes';
 import { SyncService } from '../service/cloud/SyncService';
-import { PushRegistrar } from '../service/cloud/PushRegistrar';
 import { NotificationService } from '../service/system/NotificationService';
 import { PermissionEvents } from '../service/system/PermissionEvents';
 import { TaskRepository } from '../repository/TaskRepository';
@@ -181,8 +180,6 @@ export struct A_Settings {
   @Local bindExpired: boolean = false;
   /** 配对码剩余秒数（每秒减一，界面倒计时） */
   @Local bindLeftSec: number = 0;
-  /** 云端同步开关（关闭即停止轮询） */
-  @Local syncEnabled: boolean = true;
   /**
    * 演示模式开关（设置 → 关于）：打开时往列表里放一组演示任务，关掉即摘掉。
    *
@@ -223,7 +220,6 @@ export struct A_Settings {
     this.loadSettings();
     this.loadBackend();
     this.loadPermissions();
-    this.loadSyncEnabled();
     this.loadDemoMode();
     // 引导页里授权通知/日历后，这里没有重新走生命周期，靠广播刷新
     PermissionEvents.setListener(() => {
@@ -737,34 +733,12 @@ export struct A_Settings {
     this.toast(removed > 0 ? `已移除 ${removed} 条演示任务` : '列表里没有演示任务');
   }
 
-  private async loadSyncEnabled(): Promise<void> {    const ctx: common.Context | undefined = this.hostContext();
-    if (ctx === undefined) {
-      return;
-    }
-    this.syncEnabled = await SettingsRepository.getSyncEnabled(ctx, true);
-  }
-
-  private onSyncToggle(isOn: boolean): void {
-    this.syncEnabled = isOn;
-    const ctx: common.Context | undefined = this.hostContext();
-    if (ctx === undefined) {
-      return;
-    }
-    SettingsRepository.setSyncEnabled(ctx, isOn);
-    SyncService.setEnabled(isOn);
-    if (isOn) {
-      // 刚打开同步：顺手把推送令牌也报一次（FE-76；没服务器/没身份时它自己会降级成「未启用」）
-      PushRegistrar.register();
-    }
-    this.toast(isOn ? '云端同步已开启' : '云端同步已关闭，不再拉取群消息');
-  }
-
   /**
    * 推送通道 / 推送验证说明这两行**已删除**（需求方 2026-10-27：「推送通道删去、推送验证说明删去」）。
    *
    * 连带删掉的成员：`pushStatus` 字段、`pushLine` getter、`retryPush()`、`showPushHelp()`，
    * 以及 `PushStatus` / `PUSH_PHASE_*` 的导入 —— 它们只服务那两行。
-   * 推送本身仍在跑（`PushRegistrar.register()` 在打开云端同步时照常上报），只是不再把
+   * 推送本身仍在跑（`A_Main` 启动/回前台时由 `PushRegistrar.register()` 上报），只是不再把
    * 开发者向的诊断信息摊在设置页上。
    */
 
@@ -1625,42 +1599,13 @@ export struct A_Settings {
         .borderRadius(Theme.RADIUS_CARD)
         .clip(true)
 
-        // ⑤ 云端数据：字段清单 + 同步开关 + 整包删除
+        // ⑤ 云端数据：字段清单 + 整包删除
         Column() {
           this.sectionTitle('云端数据')
         }
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
-          Row({ space: 8 }) {
-            Column({ space: 2 }) {
-              Text('云端同步')
-                .fontSize($r('sys.float.ohos_id_text_size_body1'))
-                .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              Text('关闭后不再拉取群消息候选')
-                .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-            }
-            .layoutWeight(1)
-            .alignItems(HorizontalAlign.Start)
-
-            // ⚠️ 必须用 `M3Switch`，不能写裸 `Toggle`：`Toggle` 的选中轨道默认取
-            // `ohos_id_color_emphasize`（系统蓝），换了主题色也不会变（2026-10-25 作者截图指出）。
-            // 这一行是合并 `feature/mvp-completion` 时带进来的裸 Toggle，已纠正。
-            M3Switch({
-              isOn: this.syncEnabled,
-              onToggle: (isOn: boolean) => {
-                this.onSyncToggle(isOn);
-              }
-            })
-            .id('syncEnabledToggle')
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-
-          this.rowDivider()
           Row({ space: 8 }) {
             Text('会离开手机的字段')
               .fontSize($r('sys.float.ohos_id_text_size_body1'))

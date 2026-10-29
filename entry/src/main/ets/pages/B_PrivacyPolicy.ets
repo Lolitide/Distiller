@@ -141,7 +141,7 @@ export struct B_PrivacyPolicy {
     }
   }
 
-  /** 撤回 / 重新授权：都要落盘 + 联动云同步开关 */
+  /** 撤回 / 重新授权：落盘并联动同步运行态 */
   private async applyConsent(granted: boolean): Promise<void> {
     const context: common.Context | undefined = this.getUIContext().getHostContext();
     if (context === undefined) {
@@ -149,16 +149,15 @@ export struct B_PrivacyPolicy {
     }
     await PrivacyConsent.setGranted(context, granted);
     if (!granted) {
-      // 撤回后立刻停掉云同步：不只是内存里停轮询，**开关也落盘成关闭**，
-      // 否则设置页那颗「云端同步」还会显示为开、与实际情况对不上。
+      // 撤回后立刻停掉同步；SyncService 自己也有一层 consent 门禁，这里是双保险。
       SyncService.setEnabled(false);
       await SettingsRepository.setSyncEnabled(context, false);
       this.toast('已撤回授权：AI 与云端功能已停用，本机基础功能仍可用');
       return;
     }
-    // 重新授权**不擅自打开**云同步（用户可能本来就想让它在关着的状态）；
-    // AI 能力立刻恢复 —— 服务层门禁只看同意状态，不需要额外开关。
-    this.toast('已重新授权，AI 解析已恢复；云端同步可在「云端数据」里打开');
+    // 重新授权后 SyncService 会按 consent 恢复；设置页已没有「云端同步」开关。
+    SyncService.setEnabled(true);
+    this.toast('已重新授权，AI 解析与云端同步已恢复');
   }
 
   /** 撤回前二次确认（撤回是"立即生效 + 影响功能"的动作，必须确认） */
