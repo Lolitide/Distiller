@@ -520,19 +520,18 @@ export struct A_Settings {
     return true;
   }
 
-  /** 打开 QQ 官方「创建机器人」页面（用户自建 Bot 的入口） */
-  private openBotCreatePage(): void {
-    const ctx: common.Context | undefined = this.hostContext();
-    if (ctx === undefined) {
-      return;
+  /** 复制 QQ 官方「创建机器人」链接（浏览器直接打开会跳转失败，需在 QQ 内打开） */
+  private async copyBotCreateLink(): Promise<void> {
+    try {
+      const data: pasteboard.PasteData =
+        pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, BOT_CREATE_URL);
+      await pasteboard.getSystemPasteboard().setData(data);
+      this.toast('链接已复制，请到 QQ 里粘贴打开');
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.warn(DOMAIN, TAG, 'copy bot create link failed: %{public}s', err.message);
+      this.toast('复制失败：' + err.message);
     }
-    const ability: common.UIAbilityContext = ctx as common.UIAbilityContext;
-    ability.startAbility({
-      action: 'ohos.want.action.viewData',
-      uri: BOT_CREATE_URL
-    }).catch((error: BusinessError) => {
-      this.toast('打不开 QQ 创建页面：' + error.message);
-    });
   }
 
   private showByob(): void {
@@ -1660,13 +1659,13 @@ export struct A_Settings {
                 .fontSize($r('sys.float.ohos_id_text_size_body1'))
                 .fontColor($r('sys.color.ohos_id_color_text_primary'))
                 .width('100%')
-              Text('点下面打开 QQ 创建页面，按提示创建；创建后到机器人管理端复制 AppID 和 AppSecret。')
+              Text('点下面复制创建链接，然后到 QQ 里粘贴打开（浏览器直接打开会跳转失败）。')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
                 .fontColor($r('sys.color.ohos_id_color_text_secondary'))
                 .width('100%')
 
               Button({ type: ButtonType.Capsule, stateEffect: true }) {
-                Text('打开 QQ 创建机器人')
+                Text('复制创建链接')
                   .fontSize($r('sys.float.ohos_id_text_size_body2'))
                   .fontColor(this.themeStore.scheme.primary)
               }
@@ -1676,8 +1675,14 @@ export struct A_Settings {
               .border({ width: 1, color: this.themeStore.scheme.outline })
               .borderRadius(18)
               .onClick(() => {
-                this.openBotCreatePage();
+                this.copyBotCreateLink();
               })
+
+              Text(BOT_CREATE_URL)
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor(this.themeStore.scheme.primary)
+                .copyOption(CopyOptions.LocalDevice)
+                .width('100%')
 
               Text('2. 填入机器人凭据')
                 .fontSize($r('sys.float.ohos_id_text_size_body1'))
