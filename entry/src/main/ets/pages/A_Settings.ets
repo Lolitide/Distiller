@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 设置页（一级页，底部页签第二个）。
  *
  * ## 2026-10-19 第二版重做（作者反馈）
@@ -162,15 +162,11 @@ export struct A_Settings {
 
   @Local remindLead: number = DEFAULT_REMIND_LEAD;
 
-  /* ── 后端连接（2026-10-21 对接 qqbot-backend）── */
-  /** 连接状态文案（已连接 / 失败原因） */
-  @Local backendState: string = '未连接';
-  @Local backendBusy: boolean = false;
   /*
    * 2026-10-27：原来这里有个 `@Local exportMenuShown`（导出格式 `bindPopup` 小浮窗的显隐），
    * 导出现在改成 `showDialog` 三选项对话框，不再需要这个状态。
    */
-  /** 绑定状态与配对码 */
+  /** 绑定状态 */
   @Local bound: boolean = false;
   /** BYOB：用户自建 Bot 的 AppID / AppSecret（Secret 只提交给后端，不落本机） */
   @Local showByobForm: boolean = false;
@@ -211,8 +207,6 @@ export struct A_Settings {
   /** 群列表（选择性订阅用；只列机器人真正在的群） */
   @Local groupList: GroupItemDto[] = [];
   @Local groupsLoading: boolean = false;
-  /** 不订阅自己发的消息（服务端默认 true） */
-  @Local skipSelf: boolean = true;
 
   /** 当前打开的选择器 */
   @Local sheetKind: number = SHEET_NONE;
@@ -339,28 +333,6 @@ export struct A_Settings {
     }
   }
 
-  /** 读设备偏好（目前只有「不订阅自己的消息」，默认 true） */
-  private async loadPrefs(): Promise<void> {
-    if (!SyncService.hasIdentity()) {
-      this.skipSelf = true;
-      return;
-    }
-    const res = await RelayApi.myData();
-    if (res.ok && res.data !== undefined && res.data.skip_self !== undefined) {
-      this.skipSelf = res.data.skip_self;
-    }
-  }
-
-  /** 开关「不订阅自己的消息」：先乐观更新，失败再回滚 */
-  private async setSkipSelf(on: boolean): Promise<void> {
-    this.skipSelf = on;
-    const res = await RelayApi.setPrefs(on);
-    if (!res.ok) {
-      this.skipSelf = !on;
-      this.toast('保存失败：' + apiErrorMessage(res));
-    }
-  }
-
   /** 打开「选择订阅的群」：拉 `/groups`，只列机器人真正在的群 */
   private async openGroupSheet(): Promise<void> {
     if (!this.bound) {
@@ -464,7 +436,7 @@ export struct A_Settings {
     this.toast(added > 0 ? '已订阅 ' + added + ' 个群' : '订阅已是最新');
   }
 
-  /** 读服务器地址 + 探测连接 + 查绑定状态 */
+  /** 读本地缓存 + 刷新绑定状态（不再展示连接状态） */
   private async loadBackend(): Promise<void> {
     const context: common.Context | undefined = this.hostContext();
     if (context === undefined) {
@@ -474,39 +446,15 @@ export struct A_Settings {
     // 服务器地址固定写在 `BackendConfig.DEFAULT_BASE_URL`，设置页不再暴露输入框。
     // 先用本地缓存，网络回来后再以接口为准 —— 避免"切出去切回来就显示未绑定"
     this.bound = BackendConfig.bound;
-    await this.refreshConnection(false);
-    await this.loadPrefs();
+    await this.refreshBinding();
   }
 
-  /**
-   * 探测连接并刷新绑定状态。
-   * @param showBusy 是否显示"连接中"（点按钮时 true，进页面时 false）
-   */
-  private async refreshConnection(showBusy: boolean): Promise<boolean> {
+  /** 只刷新绑定状态；失败时保持本地缓存值（网络抖动不等于解绑） */
+  private async refreshBinding(): Promise<void> {
     const context: common.Context | undefined = this.hostContext();
     if (context === undefined) {
-      return false;
+      return;
     }
-    if (showBusy) {
-      this.backendBusy = true;
-      this.backendState = '正在连接…';
-    }
-    if (BackendConfig.baseUrl.length === 0) {
-      this.backendState = '未配置服务器地址';
-      this.backendBusy = false;
-      return false;
-    }
-    const health = await RelayApi.health();
-    if (!health.ok || health.data === undefined) {
-      this.backendState = '未连接：' + apiErrorMessage(health);
-      this.backendBusy = false;
-      return false;
-    }
-    const hd = health.data;
-    this.backendState = '已连接 · ' + hd.version
-      + (hd.api_version !== undefined ? ' · v' + hd.api_version : '');
-
-    // 有设备身份才能查绑定；没有就顺手注册一个
     await SyncService.ensureDevice();
     const status = await RelayApi.bindStatus();
     if (status.ok && status.data !== undefined) {
@@ -514,10 +462,6 @@ export struct A_Settings {
       this.boundAppId = status.data.bot_app_id !== undefined ? status.data.bot_app_id : '';
       BackendConfig.setBound(context, this.bound);
     }
-    // status 失败时保持本地缓存值（网络抖动不等于解绑）
-
-    this.backendBusy = false;
-    return true;
   }
 
   /** 复制 QQ 官方「创建机器人」链接（浏览器直接打开会跳转失败，需在 QQ 内打开） */
@@ -873,7 +817,6 @@ export struct A_Settings {
       SyncService.stop();
       this.store.init(context);
       this.bound = false;
-      this.backendState = '已清空，可重新绑定';
       this.toast('已删除');
     });
   }
@@ -1563,68 +1506,6 @@ export struct A_Settings {
           .alignItems(VerticalAlign.Center)
 
           this.rowDivider()
-
-          // 「不订阅自己的消息」：服务端在**入窗之前**丢掉本人消息，默认开
-          Row({ space: 8 }) {
-            Column({ space: 2 }) {
-              Text('不订阅自己的消息')
-                .fontSize($r('sys.float.ohos_id_text_size_body1'))
-                .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              Text('屏蔽用户自己在群中发送的信息')
-                .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-                .maxLines(2)
-            }
-            .layoutWeight(1)
-            .alignItems(HorizontalAlign.Start)
-
-            M3Switch({
-              isOn: this.skipSelf,
-              onToggle: (isOn: boolean) => {
-                this.setSkipSelf(isOn);
-              }
-            })
-          }
-          .width('100%')
-          .height(64)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-        }
-        .width('100%')
-        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
-        .borderRadius(Theme.RADIUS_CARD)
-        .clip(true)
-
-        // ④ 后端连接（qqbot-backend）
-        Column() {
-          this.sectionTitle('后端连接')
-        }
-        .margin({ top: SECTION_GAP_VP })
-
-        Column() {
-          // ⚠️ 这里不能复用 `infoRow(...)`：`@Builder` 的值参数不参与刷新，
-          // 状态变化后仍显示初始的「未连接」。必须直接读 `@Local` 字段。
-          Row() {
-            Text('连接状态')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              .layoutWeight(1)
-              .maxLines(1)
-              .textAlign(TextAlign.Start)
-            Text(this.backendState)
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor(this.backendState.startsWith('已连接')
-                ? this.themeStore.scheme.primary
-                : $r('sys.color.ohos_id_color_text_secondary'))
-              .maxLines(1)
-              .textAlign(TextAlign.End)
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-
-          this.rowDivider()
           Row({ space: 8 }) {
             Text('绑定 QQ')
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
@@ -1659,7 +1540,7 @@ export struct A_Settings {
                 .fontSize($r('sys.float.ohos_id_text_size_body1'))
                 .fontColor($r('sys.color.ohos_id_color_text_primary'))
                 .width('100%')
-              Text('点下面复制创建链接，然后到 QQ 里粘贴打开')
+              Text('点按钮复制创建链接，然后到 QQ 里粘贴打开')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
                 .fontColor($r('sys.color.ohos_id_color_text_secondary'))
                 .width('100%')
@@ -1754,7 +1635,7 @@ export struct A_Settings {
               }
               .width('100%')
 
-              Text('绑定成功后，在 QQ 里找到刚创建的机器人，把要添加的消息直接发给它；回到 App 会自动进入「待确认」。')
+              Text('绑定后，把要添加的消息转发给它，就能自动收集到 APP 里啦')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
                 .fontColor($r('sys.color.ohos_id_color_text_secondary'))
                 .width('100%')
