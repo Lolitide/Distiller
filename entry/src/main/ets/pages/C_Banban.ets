@@ -10,6 +10,7 @@
  * 为什么用 Canvas：轨道的坐标要按时间比例算，用组件堆 `position` 既难对齐也难画刻度。
  */
 import { common } from '@kit.AbilityKit';
+import { i18n } from '@kit.LocalizationKit';
 import { display, LengthMetrics } from '@kit.ArkUI';
 import { Theme, ThemeStore } from '../utils/Theme';
 import { WindowInsets } from '../utils/WindowInsets';
@@ -22,6 +23,9 @@ import { showDeleteConfirmDialog } from '../utils/DeleteConfirmDialog';
 
 /** 甘特图左侧轨道名列宽（vp） */
 const GANTT_LABEL_W_VP: number = 64;
+/** 副标题相对标题栏的上提量（vp）：收掉标题栏底部自带的留白 */
+const SUBTITLE_PULL_UP_VP: number = 10;
+
 /** 顶部时间刻度区默认高度（vp），可拖动顶部拉条调整 */
 const GANTT_AXIS_H_VP: number = 28;
 /** 表头顶部「拉长条」高度（vp） */
@@ -50,15 +54,10 @@ const LANE_COLORS: string[] = ['#5B8FF9', '#61DDAA', '#F6BD16', '#7262FD', '#78D
 const COMPLETED_CHECK_COLOR: string = '#2E7D32';
 /** 已完成对钩图标尺寸（vp） */
 const COMPLETED_CHECK_SIZE: number = 22;
-/** 左滑操作按钮：删除的警示红、按钮宽度（vp） */
+/** 左滑操作按钮：删除的警示红 */
 const SWIPE_DELETE_COLOR: string = '#D32F2F';
 /** 已完成任务的「撤销」按钮：黑底白标 */
 const SWIPE_UNDO_COLOR: string = '#1F1F1F';
-const SWIPE_ACTION_WIDTH_VP: number = 56;
-/** 按钮区左侧留白（vp）：露出的总宽度 = 56 + 8 */
-const SWIPE_ACTION_PADDING_VP: number = 8;
-/** 左滑展开宽度（vp） */
-const SWIPE_REVEAL_VP: number = SWIPE_ACTION_WIDTH_VP + SWIPE_ACTION_PADDING_VP;
 
 /**
  * 甘特条命中矩形（像素坐标）：用来判断**同一轨道内**哪些时间段有多条任务重叠。
@@ -128,6 +127,16 @@ export struct C_Banban {
   /** 状态栏高度（vp）：本页隐藏了 HDS 标题栏，自己画标题行，需要让开系统栏 */
   @Local statusBarVp: number = 0;
 
+  /**
+   * 标题下方那行「现在是 10月30日 星期五 上午 12:15」（2026-10-27 需求方：「把副标题加回去啊」）。
+   *
+   * ⚠️ 为什么**不**再交给 HDS 的 `subTitle`：MINI 标题栏把主标题 + 副标题上下排在同一档高度里，
+   * 一有副标题就把主标题顶高 ~9vp（实测三页标题框 y：任务列表/设置=180，板板带副标题时=148），
+   * 而需求方刚要求「板板 mainTitle 和其他两页一致」。两件事要同时成立，只能把副标题**画在标题栏下方**
+   * 的第一行位置 —— 视觉上仍是"标题 + 副标题"，但不参与标题栏的排版。
+   */
+  @Local nowLabel: string = '';
+
   aboutToAppear(): void {
     const ctx: common.Context | undefined = this.getUIContext().getHostContext();
     if (ctx !== undefined) {
@@ -135,9 +144,13 @@ export struct C_Banban {
         this.statusBarVp = px > 0 ? this.getUIContext().px2vp(px) : 0;
       });
     }
-    // 同步会持续往 store 里 upsert，甘特图每 5 秒重画一次即可（不做高频动画）
+    // 副标题先算一次，别等第一次定时器
+    this.refreshNowLabel();
+    // 同步会持续往 store 里 upsert，甘特图每 5 秒重画一次即可（不做高频动画）；
+    // 副标题（分钟精度）搭同一趟车刷新，不另开一个时钟定时器
     this.redrawTimer = setInterval(() => {
       this.drawGantt();
+      this.refreshNowLabel();
     }, 5000);
   }
 
@@ -146,6 +159,35 @@ export struct C_Banban {
       clearInterval(this.redrawTimer);
       this.redrawTimer = -1;
     }
+  }
+
+  /**
+   * 副标题文案：**跟随系统是 12 还是 24 小时制**（2026-10-27 需求方：
+   * 「这个时间能不能根据系统是 24 小时制还是 12 小时制显示」）。
+   *
+   *  · 24 小时制：`现在是  10月30日  星期五  22:25`
+   *  · 12 小时制：`现在是  10月30日  星期五  晚上 10:25`（带"凌晨/上午/下午/晚上"时段）
+   *
+   * 判定用官方 `i18n.System.is24HourClock()`（@ohos.i18n，API 9 起）。
+   * 每次刷新都重新读一次 —— 用户在系统设置里改了格式，几秒内就会跟着变，不用重进页面。
+   */
+  private refreshNowLabel(): void {
+    const d: Date = new Date();
+    const datePart: string = `现在是  ${TaskListViewModel.pad2(d.getMonth() + 1)}月`
+      + `${TaskListViewModel.pad2(d.getDate())}日  `
+      + `${TaskListViewModel.weekdayCn(d.getDay())}`;
+    const minute: string = TaskListViewModel.pad2(d.getMinutes());
+    let use24: boolean = true;
+    try {
+      use24 = i18n.System.is24HourClock();
+    } catch (error) {
+      // 查询失败就按 24 小时制显示（本工程默认口径），不能因为一个格式查询把副标题弄没
+      use24 = true;
+    }
+    const clock: string = use24
+      ? `${TaskListViewModel.pad2(d.getHours())}:${minute}`
+      : `${TaskListViewModel.periodLabel(d.getHours())} ${TaskListViewModel.hour12(d.getHours())}:${minute}`;
+    this.nowLabel = `${datePart}  ${clock}`;
   }
 
   /**
@@ -158,9 +200,17 @@ export struct C_Banban {
   private dueTasks(): Task[] {
     const out: Task[] = [];
     const all: Task[] = this.store.allTasks();
+    const now: number = Date.now();
     for (let i = 0; i < all.length; i++) {
       const t: Task = all[i];
       if (t.status === TaskStatus.PENDING_CONFIRM) {
+        continue;
+      }
+      // 已过期的待办不上板板页：EXPIRED，或未完成但 DDL 已过（状态还没被对账器刷成 EXPIRED）
+      if (t.status === TaskStatus.EXPIRED) {
+        continue;
+      }
+      if (t.dueAt !== undefined && t.dueAt > 0 && t.status !== TaskStatus.COMPLETED && t.dueAt <= now) {
         continue;
       }
       if (t.dueAt !== undefined && t.dueAt > 0) {
@@ -435,8 +485,9 @@ export struct C_Banban {
         datePart = `${d.getFullYear()}.${mo}.${day}`;
       }
     }
-    return `${datePart} ${TaskListViewModel.periodLabel(d.getHours())} `
-      + `${TaskListViewModel.hour12(d.getHours())}:${TaskListViewModel.pad2(d.getMinutes())}`;
+    // DDL 时间跟随系统 12/24 小时制（2026-10-27 需求方：「板板的这些卡片的时间也改成
+    // 和用户系统的时间制一样显示」）—— 与标题副标题共用 `clockText`，不各写一份
+    return `${datePart} ${TaskListViewModel.clockText(d.getHours(), d.getMinutes())}`;
   }
 
   /** 本周 / 下周判断用：把某天的 0 点归到所在周（周一）的 0 点 */
@@ -904,10 +955,10 @@ export struct C_Banban {
 
   @Builder
   summaryBody(task: Task) {
-    Column({ space: 10 }) {
+    Column({ space: this.themeStore.boardCardGap }) {
       Row({ space: 8 }) {
         Text(task.name)
-          .fontSize(22)
+          .fontSize(this.themeStore.boardTitleSize)
           .fontWeight(FontWeight.Bold)
           .fontColor($r('sys.color.ohos_id_color_text_primary'))
           .layoutWeight(1)
@@ -927,7 +978,7 @@ export struct C_Banban {
 
       // 2026-10-29 需求方：摘要区不再显示「AI 生成」chip（详情页标识条保留）。
       // 类型 tag 放最前，并用甘特条同色，方便和下方图表对照；
-      // 后面依次是 重要性 / 难易 / 重复 / 来源 / 附件
+      // 后面依次是 重要性 / 难易 / 重复 / 附件（不再显示「来自 xxx」来源链接）
       Flex({ wrap: FlexWrap.Wrap, space: { main: LengthMetrics.vp(6), cross: LengthMetrics.vp(6) } }) {
         if (task.category !== undefined && task.category.length > 0) {
           this.summaryTypeChip(task)
@@ -938,9 +989,6 @@ export struct C_Banban {
           this.summaryChip(task.repeatText, this.themeStore.scheme.primary)
         } else if (task.repeat !== undefined && task.repeat.length > 0) {
           this.summaryChip('重复', this.themeStore.scheme.primary)
-        }
-        if (task.originDetail !== undefined && task.originDetail.length > 0) {
-          this.summaryChip('来自 ' + task.originDetail, this.themeStore.scheme.primary)
         }
         if (task.urls !== undefined && task.urls.length > 0) {
           this.summaryChip('附件 ' + task.urls.length, this.themeStore.scheme.primary)
@@ -966,7 +1014,7 @@ export struct C_Banban {
 
       // 步骤
       if (task.steps !== undefined && task.steps.length > 0) {
-        Column({ space: 6 }) {
+        Column({ space: this.themeStore.boardStepGap }) {
           ForEach(task.steps, (step: TaskStep, index: number) => {
             Row({ space: 8 }) {
               Text('' + (index + 1) + '.')
@@ -992,8 +1040,8 @@ export struct C_Banban {
             ForEach(task.urls, (uri: string) => {
               if (this.isImage(uri)) {
                 Image(uri)
-                  .width(56)
-                  .height(56)
+                  .width(this.themeStore.boardThumbSize)
+                  .height(this.themeStore.boardThumbSize)
                   .borderRadius(8)
                   .objectFit(ImageFit.Cover)
               }
@@ -1006,7 +1054,7 @@ export struct C_Banban {
       }
     }
     .width('100%')
-    .padding(16)
+    .padding(this.themeStore.boardCardPadding)
     .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
     .borderRadius(Theme.RADIUS_CARD)
     .alignItems(HorizontalAlign.Start)
@@ -1050,7 +1098,7 @@ export struct C_Banban {
    */
   @Builder
   taskSwipeActions(task: Task) {
-    Column({ space: 8 }) {
+    Column({ space: this.themeStore.swipeActionGap }) {
       Button({ type: ButtonType.Normal, stateEffect: false }) {
         SymbolGlyph(task.status === TaskStatus.COMPLETED
           ? $r('sys.symbol.undo')
@@ -1058,8 +1106,9 @@ export struct C_Banban {
           .fontSize(20)
           .fontColor([Color.White])
       }
-      .width('100%')
-      .layoutWeight(1)
+      // 正方形按钮：宽高同值，紧凑档按比例缩小
+      .width(this.themeStore.swipeActionSize)
+      .height(this.themeStore.swipeActionSize)
       .backgroundColor(task.status === TaskStatus.COMPLETED
         ? SWIPE_UNDO_COLOR
         : COMPLETED_CHECK_COLOR)
@@ -1084,8 +1133,8 @@ export struct C_Banban {
           .fontSize(20)
           .fontColor([Color.White])
       }
-      .width('100%')
-      .layoutWeight(1)
+      .width(this.themeStore.swipeActionSize)
+      .height(this.themeStore.swipeActionSize)
       .backgroundColor(SWIPE_DELETE_COLOR)
       .borderRadius(12)
       // 阴影与大卡片同一套（radius 8 / offsetY 3）
@@ -1103,10 +1152,12 @@ export struct C_Banban {
         this.confirmDeleteFromSwipe(task);
       })
     }
-    .width(SWIPE_REVEAL_VP)
-    // 原生 swipeAction 会把这里按 ListItem 的高度测量，所以 100% 是卡片高度（不会变成视口高度）
+    .width(this.themeStore.swipeActionSize + this.themeStore.swipeActionPadding)
+    // 原生 swipeAction 会把这里按 ListItem 的高度测量，所以 100% 是卡片高度（不会变成视口高度）；
+    // 两个正方形按钮在卡片高度内垂直居中。
     .height('100%')
-    .padding({ left: SWIPE_ACTION_PADDING_VP })
+    .justifyContent(FlexAlign.Center)
+    .padding({ left: this.themeStore.swipeActionPadding })
   }
 
   private actionKey(task: Task, kind: string): string {
@@ -1205,24 +1256,43 @@ export struct C_Banban {
       // 内容 + 底部遮罩单独一层：遮罩只占底部 140vp，不再用整屏覆盖层挡手势。
       Stack({ alignContent: Alignment.Bottom }) {
         Column() {
+          // 副标题（旧版是 HDS 标题栏的 subTitle，为了让主标题与另两页同高，改成标题下方的一行）
+          // 2026-10-27 第二轮：「减小一下这个间距，再把副标题字号大一号」——
+          //  · 字号 caption(12) → body(14)；
+          //  · 标题栏自己会在标题下方留一截（实测标题框底 → 副标题框顶 73px ≈ 21vp），
+          //    用负 margin 收 10vp，实际间距 ≈ 11vp（与详情页「标题→正文」的节奏一致）。
+          Text(this.nowLabel)
+            .fontSize(Theme.FONT_BODY)
+            .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .width('100%')
+            .textAlign(TextAlign.Start)
+            .padding({ left: 16, right: 16, bottom: 4 })
+            .margin({ top: -SUBTITLE_PULL_UP_VP })
+
           // ── 上 70%：简要详情 ──
         Column() {
           if (this.dueTasks().length === 0) {
             // 空态提示统一由下面的覆盖层负责
             Column()
           } else {
-          // 用 List + ListItem 承接卡片：只有 ListItem 才有 `.swipeAction()`，
-          // 左滑露出的操作按钮才能跟着卡片一起走（2026-10-29 需求方）。
-          List({ scroller: this.summaryScroller, space: 12 }) {
-            // 时间轴穿过几条甘特条，这里就显示几条事件
-            if (this.detailTasks().length === 0) {
-              ListItem() {
-                Text('时间轴没有经过任何事件（拖动下方蓝线试试）')
-                  .fontSize($r('sys.float.ohos_id_text_size_body1'))
-                  .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-                  .padding({ top: 24 })
-              }
-            } else {
+          if (this.detailTasks().length === 0) {
+            // 时间轴没穿过任何事件：灰字提示在整个区域居中（横 + 纵）
+            Column() {
+              Text('时间轴没有经过任何事件，拖动试试')
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+                .textAlign(TextAlign.Center)
+            }
+            .width('100%')
+            .layoutWeight(1)
+            .justifyContent(FlexAlign.Center)
+            .alignItems(HorizontalAlign.Center)
+          } else {
+            // 用 List + ListItem 承接卡片：只有 ListItem 才有 `.swipeAction()`，
+            // 左滑露出的操作按钮才能跟着卡片一起走（2026-10-29 需求方）。
+            List({ scroller: this.summaryScroller, space: 12 }) {
               ForEach(this.detailTasks(), (t: Task) => {
                 ListItem() {
                   this.summary(t)
@@ -1248,13 +1318,14 @@ export struct C_Banban {
                 })
               }, (t: Task) => t.id + '-' + (this.swipeTokens[String(t.id)] ?? 0))
             }
+            .width('100%')
+            // 紧凑模式：左右留白加大，让摘要大卡片整体变窄；左滑按钮随 ListItem 边缘一起内收
+            .padding({ left: 16, right: 16, top: 8, bottom: 12 })
+            .scrollBar(BarState.Off)
+            .edgeEffect(EdgeEffect.Spring)
+            // 让上面的内容撑满 70%（否则列表按内容高度收缩，下面会空出一大块）
+            .layoutWeight(1)
           }
-          .width('100%')
-          .padding({ left: 16, right: 16, top: 8, bottom: 12 })
-          .scrollBar(BarState.Off)
-          .edgeEffect(EdgeEffect.Spring)
-          // 让上面的内容撑满 70%（否则列表按内容高度收缩，下面会空出一大块）
-          .layoutWeight(1)
         }
       }
       .layoutWeight(1)

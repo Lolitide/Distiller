@@ -160,6 +160,11 @@ export class Task {
   @Trace reminderAt?: number;
   /** 18.1 系统日历事件句柄（Calendar Kit 写入后回填；删除/完成时撤销） */
   @Trace calendarEventId?: number;
+  /**
+   * 18.1.1 写入日历时的内容快照（名称|到期时间|备注|提前量）。
+   * 对账时和当前值比较，变了就更新同一条日程，而不是留下旧标题/旧时间。
+   */
+  @Trace calendarSignature?: string;
   /** 18.2 用户是否改过内容字段：为 true 时 5 秒轮询不再覆盖 name/note/dueAt/place/priority（FE-79） */
   @Trace userEdited?: boolean;
   /**

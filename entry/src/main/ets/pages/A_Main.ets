@@ -57,9 +57,6 @@ struct A_Main {
    */
   private store: TaskListStore = TaskListStore.instance();
   @Local currentIndex: number = 0;
-  /** 板板页标题右侧的「现在是 XX月XX日 XX:XX」 */
-  @Local banbanNowLabel: string = '';
-  private clockTimer: number = -1;
   /**
    * 「添加任务」半模态（`bindSheet`）的显隐（需求方 2026-10-17：「点击底部页签的添加按钮后
    * 显示一个 bindSheet 先完成这个功能」）。
@@ -80,6 +77,18 @@ struct A_Main {
   @Local shareParseKey: number = 0;
   /** 首次启动引导 */
   @Local showOnboarding: boolean = false;
+  /**
+   * 首次引导前的启动预热：显示蓝色 logo 背景，等 4 段教程视频都准备好的再切引导页。
+   * 只在「确实要显示引导」时才为 true，老用户不会看到这个中间层。
+   */
+  @Local onboardingLoading: boolean = false;
+  private preloadReadyCount: number = 0;
+  private preloadDone: boolean = false;
+  private preloadTimer: number = -1;
+  private prePush: VideoController = new VideoController();
+  private preCalendar: VideoController = new VideoController();
+  private preQq1: VideoController = new VideoController();
+  private preQq2: VideoController = new VideoController();
 
   /** 视觉个性化：M3 色系（页面底色取 surface） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
@@ -108,23 +117,6 @@ struct A_Main {
     this.forwardTimer = setInterval(() => {
       this.pullForwarded();
     }, 15000);
-    this.refreshBanbanNowLabel();
-    this.clockTimer = setInterval(() => {
-      this.refreshBanbanNowLabel();
-    }, 30000);
-  }
-
-  /**
-   * 板板标题右侧的实时时间（分钟精度；30 秒刷新一次，跨分钟不会迟太久）。
-   * 2026-10-29 需求方：`现在是 mm月dd日 星期x 时段 hh:mm`，时间用 12 小时制。
-   */
-  private refreshBanbanNowLabel(): void {
-    const d: Date = new Date();
-    this.banbanNowLabel = `现在是  ${TaskListViewModel.pad2(d.getMonth() + 1)}月`
-      + `${TaskListViewModel.pad2(d.getDate())}日  `
-      + `${TaskListViewModel.weekdayCn(d.getDay())}  `
-      + `${TaskListViewModel.periodLabel(d.getHours())} `
-      + `${TaskListViewModel.hour12(d.getHours())}:${TaskListViewModel.pad2(d.getMinutes())}`;
   }
 
   /** 首次启动：没看过引导就全屏覆盖；不阻塞列表初始化 */
@@ -139,9 +131,41 @@ struct A_Main {
     }
     SettingsRepository.getFirstLaunchDone(context).then((done: boolean) => {
       if (!done && this.shareParseKey === 0) {
-        this.showOnboarding = true;
+        // 先挂预加载层（蓝色 logo 背景），视频都 prepared 后再显示引导页
+        this.onboardingLoading = true;
+        this.preloadReadyCount = 0;
+        this.preloadDone = false;
+        // 兜底：视频异常/过慢时最多等 8 秒，避免卡在启动页
+        this.preloadTimer = setTimeout(() => {
+          this.finishOnboardingPreload();
+        }, 8000);
       }
     });
+  }
+
+  /** 单段视频准备完成 */
+  private onPreloadReady(): void {
+    if (this.preloadDone) {
+      return;
+    }
+    this.preloadReadyCount = this.preloadReadyCount + 1;
+    if (this.preloadReadyCount >= 4) {
+      this.finishOnboardingPreload();
+    }
+  }
+
+  /** 预热完成：收起蓝色启动层，显示引导页 */
+  private finishOnboardingPreload(): void {
+    if (this.preloadDone) {
+      return;
+    }
+    this.preloadDone = true;
+    if (this.preloadTimer >= 0) {
+      clearTimeout(this.preloadTimer);
+      this.preloadTimer = -1;
+    }
+    this.onboardingLoading = false;
+    this.showOnboarding = true;
   }
 
   /** 从 QQ/其他 App 回到前台：取走「转发给机器人」的文本 */
@@ -387,6 +411,9 @@ struct A_Main {
     }
     // 引导期间可能已经有转发消息入队；关掉覆盖层后立刻补拉一次
     this.pullForwarded();
+    // 引导页里可能刚开了通知/日历权限：立刻对账一次，
+    // 把已有 DDL 的待办补写进日历、补发代理提醒，不用等下一次冷启动。
+    this.store.reconcileReminders();
   }
 
   /** 分享接收：热启动走监听，冷启动先取暂存；同一次分享只消费一次 */
@@ -491,10 +518,6 @@ struct A_Main {
       clearInterval(this.reminderTimer);
       this.reminderTimer = -1;
     }
-    if (this.clockTimer >= 0) {
-      clearInterval(this.clockTimer);
-      this.clockTimer = -1;
-    }
   }
 
   /**
@@ -562,14 +585,18 @@ struct A_Main {
   }
 
   /**
-   * 标题栏内容：板板页在主标题右/下补一行实时时间（「现在是 MM月DD日 HH:MM」），
-   * 其他页签不显示副标题。
+   * 标题栏内容：**三页完全一致，只有一个 mainTitle**。
+   *
+   * 2026-10-27 需求方：「板板页面的导航栏的 mainTitle 好像比其他两个页面的要高，改成和其他两个一致」——
+   * 原因就是原先板板页多传了一个 `subTitle`（「现在是 10月27日 星期二 凌晨 1:30」）：
+   * HDS 的 MINI 标题栏把主标题 + 副标题**上下排在同一档高度里**，于是主标题被顶高约 9vp
+   * （实测三页标题框 y：任务列表/设置 = 180，板板 = 148，差 32px ≈ 9.1vp）。
+   *
+   * 板板页正文里本来就有一行「时间刻：…」的实时时间，标题栏这份是重复信息，直接去掉，
+   * 连带 `banbanNowLabel` / `refreshBanbanNowLabel()` / 30 秒轮询的 `clockTimer` 一并删掉。
    */
   @Computed
   get navTitleContent(): HdsNavigationTitle {
-    if (this.currentIndex === 1) {
-      return { mainTitle: this.navTitle, subTitle: this.banbanNowLabel };
-    }
     return { mainTitle: this.navTitle };
   }
 
@@ -794,6 +821,67 @@ struct A_Main {
             this.finishOnboarding();
           }
         })
+      }
+
+      // 首次启动预热：沿用系统启动页的蓝底 + logo，等 4 段教程视频都 prepared 再切引导
+      if (this.onboardingLoading) {
+        Stack({ alignContent: Alignment.Center }) {
+          Column()
+            .width('100%')
+            .height('100%')
+            .backgroundColor('#2176F0')
+
+          Image($r('app.media.startIcon'))
+            .width(120)
+            .height(120)
+            .objectFit(ImageFit.Contain)
+
+          // 透明小窗只负责预加载，不播放
+          Column() {
+            Video({ src: $r('app.media.push'), controller: this.prePush })
+              .width(16)
+              .height(16)
+              .autoPlay(false)
+              .controls(false)
+              .muted(true)
+              .onPrepared(() => {
+                this.onPreloadReady();
+              })
+            Video({ src: $r('app.media.calendar'), controller: this.preCalendar })
+              .width(16)
+              .height(16)
+              .autoPlay(false)
+              .controls(false)
+              .muted(true)
+              .onPrepared(() => {
+                this.onPreloadReady();
+              })
+            Video({ src: $r('app.media.qqbot1'), controller: this.preQq1 })
+              .width(16)
+              .height(16)
+              .autoPlay(false)
+              .controls(false)
+              .muted(true)
+              .onPrepared(() => {
+                this.onPreloadReady();
+              })
+            Video({ src: $r('app.media.qqbot2'), controller: this.preQq2 })
+              .width(16)
+              .height(16)
+              .autoPlay(false)
+              .controls(false)
+              .muted(true)
+              .onPrepared(() => {
+                this.onPreloadReady();
+              })
+          }
+          .width(16)
+          .height(64)
+          .opacity(0)
+          .align(Alignment.BottomStart)
+        }
+        .width('100%')
+        .height('100%')
       }
     }
     .width('100%')

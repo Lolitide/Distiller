@@ -7,6 +7,7 @@
  *  · 单应用有效提醒有上限（约 30 条），超额会报 1700002，调用方要给出可执行提示。
  */
 import { reminderAgentManager } from '@kit.BackgroundTasksKit';
+import { notificationManager } from '@kit.NotificationKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { Task } from '../../model';
@@ -36,6 +37,9 @@ export class ReminderService {
       title: task.name,
       content: task.note !== undefined && task.note.length > 0 ? task.note : '任务要开始啦',
       notificationId: task.id,
+      // 关键：不指定 slot 时默认是低级别，只会静默进通知中心，不会弹横幅。
+      // SERVICE_INFORMATION 对应 LEVEL_HIGH（状态栏图标 + 横幅 + 声音），语义上也更适合任务提醒。
+      slotType: notificationManager.SlotType.SERVICE_INFORMATION,
       wantAgent: {
         pkgName: bundleName,
         abilityName: ABILITY_NAME

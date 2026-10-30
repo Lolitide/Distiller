@@ -69,10 +69,14 @@ export struct TaskGroupHeader {
     return this.weekdayTitle(this.group.weekdayIndex);
   }
 
-  /** 副标题：未完成 x 项 / 共 y 项（两个数由页面按当前筛选算好传进来） */
+  /**
+   * 副标题：已完成 (total - pending) 项 / 共 total 项。
+   * 页面仍按当前筛选传「未完成数」，这里换算成已完成，避免每个调用点各算一遍。
+   */
   @Computed
   get subtitleLabel(): Resource {
-    return $r('app.string.group_progress', this.pendingCount, this.totalCount);
+    const completed: number = Math.max(0, this.totalCount - this.pendingCount);
+    return $r('app.string.group_progress', completed, this.totalCount);
   }
 
   /** 右：展开 / 收起两个图标。展开态朝上，收起态朝下 */

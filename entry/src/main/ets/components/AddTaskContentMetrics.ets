@@ -15,4 +15,4 @@
  * 换算到 360vp 屏约 47vp —— 但单行 47 放不下"两三行原文"，所以按约 4~5 行给 120vp
  * （录入录音按钮 48vp + 计时行也在 120 里头放得下，见 `AddTaskRecorder`）。
  */
-export const ADD_TASK_CONTENT_HEIGHT_VP: number = 120;
+export const ADD_TASK_CONTENT_HEIGHT_VP: number = 96;

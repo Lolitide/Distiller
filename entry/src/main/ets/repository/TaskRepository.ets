@@ -71,6 +71,7 @@ interface TaskPlain {
   reminderId?: number;
   reminderAt?: number;
   calendarEventId?: number;
+  calendarSignature?: string;
   userEdited?: boolean;
   aiLabelHidden?: boolean;
   repeat?: RepeatRule[];
@@ -284,6 +285,9 @@ export class TaskRepository {
     if (task.calendarEventId !== undefined) {
       plain.calendarEventId = task.calendarEventId;
     }
+    if (task.calendarSignature !== undefined) {
+      plain.calendarSignature = task.calendarSignature;
+    }
     if (task.userEdited !== undefined) {
       plain.userEdited = task.userEdited;
     }
@@ -395,6 +399,7 @@ export class TaskRepository {
     task.reminderId = raw.reminderId;
     task.reminderAt = raw.reminderAt;
     task.calendarEventId = raw.calendarEventId;
+    task.calendarSignature = raw.calendarSignature;
     task.userEdited = raw.userEdited;
     task.aiLabelHidden = raw.aiLabelHidden;
     task.repeatText = raw.repeatText;

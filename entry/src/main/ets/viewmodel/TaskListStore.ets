@@ -606,6 +606,11 @@ export class TaskListStore {
     }
     found.trashKind = 'deleted';
     found.alarm = TaskAlarm.OFF;
+    // 单条删除也必须撤销系统句柄：对账器只看得到活跃任务，删掉后它就「看不见」这条了
+    const ctx: common.Context | undefined = this.dataContext;
+    if (ctx !== undefined) {
+      ReminderCoordinator.cancelNow(found, ctx);
+    }
     this.trashList = [found].concat(this.trashList.filter((task: Task) => task.id !== taskId));
     const kept: Task[] = all.filter((task: Task) => task.id !== taskId);
     this.rebuildGroups(kept);

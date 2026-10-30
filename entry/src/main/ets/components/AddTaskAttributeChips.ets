@@ -45,8 +45,8 @@ import { TagInputBody } from './TagInputBody';
 const DOMAIN: number = 0x0000;
 const TAG: string = 'AddTaskAttributeChips';
 
-/** chip 间距（vp）：主/交叉轴各 8vp，＝官方 `sys.float.padding_level4` */
-const CHIP_GAP_VP: number = 8;
+/** chip 间距（vp）：主/交叉轴各 4vp，尽量让芯片挤在更少的行里（放不下才换行） */
+const CHIP_GAP_VP: number = 4;
 
 /** 自绘 chip 里「图标 ↔ 文字」的间距（vp）：＝官方 `chip_small_text_margin`(4vp)，`Row({space})` 只吃 number */
 const CHIP_TEXT_MARGIN_VP: number = 4;
@@ -1090,7 +1090,7 @@ export struct AddTaskAttributeChips {
       // ⑥ 已添加的标签（每个一颗 chip，点 × 删掉）
       this.tagChips()
 
-      // ⑦「＋ 添加标签」＋ ⑧「AI 预填」：包成一个 Row，保证两者并排、不会被拆开
+      // ⑦「＋ 添加标签」＋ ⑧「AI 预填」：与其它 chip 同层排布，只按剩余宽度决定是否换行
       //
       // ⚠️ 取色口径（2026-10-25，作者：「这两个 chips 的颜色改成任务列表 chipGroup 里面
       // 选中 chip 的取色，不要用这个亮色」）：
@@ -1100,42 +1100,41 @@ export struct AddTaskAttributeChips {
       // `itemStyle.selectedBackgroundColor / selectedFontColor`），两处从此不会漂移。
       // 语义上也更对：这两颗是**动作**（添加标签 / 让 AI 预填），不是被选中的选项，
       // 用「安静一档的容器色 + 主题色可读文字」比亮块更合适。
-      Row({ space: CHIP_GAP_VP }) {
+      // ⚠️ 这两颗不再包 `Row`：成对绑定会一起换行，前面留出的空档反而多占一行。
+      // 直接交给外层 `Flex(wrap)` 排，哪颗放得下就放哪颗。
+      Chip({
+        label: {
+          text: this.labelText($r('app.string.chip_add_tag')),
+          fontColor: this.themeStore.scheme.onSecondaryContainer
+        },
+        prefixSymbol: {
+          normal: new SymbolGlyphModifier($r('sys.symbol.plus'))
+            .fontColor([this.themeStore.scheme.onSecondaryContainer])
+        },
+        size: ChipSize.SMALL,
+        allowClose: false,
+        backgroundColor: this.themeStore.scheme.secondaryContainer,
+        onClicked: () => {
+          this.openTagPicker();
+        }
+      })
+
+      if (this.showAi) {
         Chip({
           label: {
-            text: this.labelText($r('app.string.chip_add_tag')),
+            text: this.aiBusy ? '识别中…' : 'AI 总结',
             fontColor: this.themeStore.scheme.onSecondaryContainer
-          },
-          prefixSymbol: {
-            normal: new SymbolGlyphModifier($r('sys.symbol.plus'))
-              .fontColor([this.themeStore.scheme.onSecondaryContainer])
           },
           size: ChipSize.SMALL,
           allowClose: false,
           backgroundColor: this.themeStore.scheme.secondaryContainer,
           onClicked: () => {
-            this.openTagPicker();
+            if (!this.aiBusy) {
+              this.onAiFill();
+            }
           }
         })
-
-        if (this.showAi) {
-          Chip({
-            label: {
-              text: this.aiBusy ? '识别中…' : 'AI 生成',
-              fontColor: this.themeStore.scheme.onSecondaryContainer
-            },
-            size: ChipSize.SMALL,
-            allowClose: false,
-            backgroundColor: this.themeStore.scheme.secondaryContainer,
-            onClicked: () => {
-              if (!this.aiBusy) {
-                this.onAiFill();
-              }
-            }
-          })
-        }
       }
-      .alignItems(VerticalAlign.Center)
     }
     .width('100%')
   }

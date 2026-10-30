@@ -24,6 +24,7 @@ import {
   TaskPriority,
   TaskStatus
 } from '../model';
+import { i18n } from '@kit.LocalizationKit';
 
 const DAY_MS: number = 24 * 60 * 60 * 1000;
 const HOUR_MS: number = 60 * 60 * 1000;
@@ -290,6 +291,37 @@ export class TaskListViewModel {
       return DUE_DAY_AFTER;
     }
     return `${offset}${DUE_IN_DAYS_SUFFIX}`;
+  }
+
+  /**
+   * 系统是否 **24 小时制**（官方 `i18n.System.is24HourClock()`）。
+   *
+   * 2026-10-27 需求方：「板板页的卡片时间也改成和用户系统的时间制一样显示」——
+   * 原来本工程的时间一律按 12 小时制 + 时段（「凌晨 1:30」）显示，系统设为 24 小时制的用户
+   * 会看到和系统其它地方不一致的写法。判定集中在这里，页面不要再各读一次。
+   * 查询失败按**24 小时制**回落（国内大多数设备是 24h，且 24h 无歧义）。
+   */
+  static is24Hour(): boolean {
+    try {
+      return i18n.System.is24HourClock();
+    } catch (error) {
+      return true;
+    }
+  }
+
+  /**
+   * 时间片段，**跟随系统制式**：
+   *  · 24 小时制 → `01:30`
+   *  · 12 小时制 → `凌晨 1:30`
+   *
+   * 板板页标题栏副标题与卡片里的 DDL 都走这一个出口，不要各写一份格式化。
+   */
+  static clockText(hour: number, minute: number): string {
+    const mm: string = TaskListViewModel.pad2(minute);
+    if (TaskListViewModel.is24Hour()) {
+      return `${TaskListViewModel.pad2(hour)}:${mm}`;
+    }
+    return `${TaskListViewModel.periodLabel(hour)} ${TaskListViewModel.hour12(hour)}:${mm}`;
   }
 
   /**
