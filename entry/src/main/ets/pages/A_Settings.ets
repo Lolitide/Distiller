@@ -191,6 +191,8 @@ export struct A_Settings {
 
   /* ── 权限管理（通知 / 日历 / 绑定 QQ）── */
   @Local notifyAllowed: boolean = false;
+  /** 系统横幅是否开启；旧系统读不到时按通知权限兜底 */
+  @Local notifyBannerAllowed: boolean = false;
   @Local calendarAllowed: boolean = false;
   /** 已订阅的群数；-1 表示还没查 */
   @Local subscribedCount: number = -1;
@@ -229,6 +231,12 @@ export struct A_Settings {
 
   aboutToDisappear(): void {
     PermissionEvents.clearListener();
+  }
+
+  /** 通知权限与系统横幅都开启，才显示「已开启」 */
+  @Computed
+  get notifyReady(): boolean {
+    return this.notifyAllowed && this.notifyBannerAllowed;
   }
 
   /* ── 权限管理 ── */
@@ -1712,6 +1720,7 @@ export struct A_Settings {
             Text('查看')
               .fontSize($r('sys.float.ohos_id_text_size_body2'))
               .fontColor(this.themeStore.scheme.primary)
+              .margin({ left: 8 })
           }
           .width('100%')
           .height(ROW_HEIGHT_VP)
