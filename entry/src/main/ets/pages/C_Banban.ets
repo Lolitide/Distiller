@@ -10,6 +10,7 @@
  * 为什么用 Canvas：轨道的坐标要按时间比例算，用组件堆 `position` 既难对齐也难画刻度。
  */
 import { common } from '@kit.AbilityKit';
+import { i18n } from '@kit.LocalizationKit';
 import { display, LengthMetrics } from '@kit.ArkUI';
 import { Theme, ThemeStore } from '../utils/Theme';
 import { WindowInsets } from '../utils/WindowInsets';
@@ -22,6 +23,9 @@ import { showDeleteConfirmDialog } from '../utils/DeleteConfirmDialog';
 
 /** 甘特图左侧轨道名列宽（vp） */
 const GANTT_LABEL_W_VP: number = 64;
+/** 副标题相对标题栏的上提量（vp）：收掉标题栏底部自带的留白 */
+const SUBTITLE_PULL_UP_VP: number = 10;
+
 /** 顶部时间刻度区默认高度（vp），可拖动顶部拉条调整 */
 const GANTT_AXIS_H_VP: number = 28;
 /** 表头顶部「拉长条」高度（vp） */
@@ -128,6 +132,16 @@ export struct C_Banban {
   /** 状态栏高度（vp）：本页隐藏了 HDS 标题栏，自己画标题行，需要让开系统栏 */
   @Local statusBarVp: number = 0;
 
+  /**
+   * 标题下方那行「现在是 10月30日 星期五 上午 12:15」（2026-10-27 需求方：「把副标题加回去啊」）。
+   *
+   * ⚠️ 为什么**不**再交给 HDS 的 `subTitle`：MINI 标题栏把主标题 + 副标题上下排在同一档高度里，
+   * 一有副标题就把主标题顶高 ~9vp（实测三页标题框 y：任务列表/设置=180，板板带副标题时=148），
+   * 而需求方刚要求「板板 mainTitle 和其他两页一致」。两件事要同时成立，只能把副标题**画在标题栏下方**
+   * 的第一行位置 —— 视觉上仍是"标题 + 副标题"，但不参与标题栏的排版。
+   */
+  @Local nowLabel: string = '';
+
   aboutToAppear(): void {
     const ctx: common.Context | undefined = this.getUIContext().getHostContext();
     if (ctx !== undefined) {
@@ -135,9 +149,13 @@ export struct C_Banban {
         this.statusBarVp = px > 0 ? this.getUIContext().px2vp(px) : 0;
       });
     }
-    // 同步会持续往 store 里 upsert，甘特图每 5 秒重画一次即可（不做高频动画）
+    // 副标题先算一次，别等第一次定时器
+    this.refreshNowLabel();
+    // 同步会持续往 store 里 upsert，甘特图每 5 秒重画一次即可（不做高频动画）；
+    // 副标题（分钟精度）搭同一趟车刷新，不另开一个时钟定时器
     this.redrawTimer = setInterval(() => {
       this.drawGantt();
+      this.refreshNowLabel();
     }, 5000);
   }
 
@@ -146,6 +164,37 @@ export struct C_Banban {
       clearInterval(this.redrawTimer);
       this.redrawTimer = -1;
     }
+  }
+
+  /**
+   * 副标题文案：**跟随系统是 12 还是 24 小时制**（2026-10-27 需求方：
+   * 「这个时间能不能根据系统是 24 小时制还是 12 小时制显示」）。
+   *
+   *  · 24 小时制：`现在是  10月30日  星期五  22:25`
+   *  · 12 小时制：`现在是  10月30日  星期五  晚上 10:25`（带"凌晨/上午/下午/晚上"时段）
+   *
+   * 判定用官方 `i18n.System.is24HourClock()`（@ohos.i18n，API 9 起）。
+   * 每次刷新都重新读一次 —— 用户在系统设置里改了格式，几秒内就会跟着变，不用重进页面。
+   */
+  private refreshNowLabel(): void {
+    const d: Date = new Date();
+    const datePart: string = `现在是  ${TaskListViewModel.pad2(d.getMonth() + 1)}月`
+      + `${TaskListViewModel.pad2(d.getDate())}日  `
+      + `${TaskListViewModel.weekdayCn(d.getDay())}`;
+    const minute: string = TaskListViewModel.pad2(d.getMinutes());
+    let use24: boolean = true;
+    try {
+      use24 = i18n.System.is24HourClock();
+    } catch (error) {
+      // 查询失败就按 24 小时制显示（本工程默认口径），不能因为一个格式查询把副标题弄没
+      use24 = true;
+    }
+    if (use24) {
+      this.nowLabel = `${datePart}  ${TaskListViewModel.pad2(d.getHours())}:${minute}`;
+      return;
+    }
+    this.nowLabel = `${datePart}  ${TaskListViewModel.periodLabel(d.getHours())} `
+      + `${TaskListViewModel.hour12(d.getHours())}:${minute}`;
   }
 
   /**
@@ -1205,6 +1254,21 @@ export struct C_Banban {
       // 内容 + 底部遮罩单独一层：遮罩只占底部 140vp，不再用整屏覆盖层挡手势。
       Stack({ alignContent: Alignment.Bottom }) {
         Column() {
+          // 副标题（旧版是 HDS 标题栏的 subTitle，为了让主标题与另两页同高，改成标题下方的一行）
+          // 2026-10-27 第二轮：「减小一下这个间距，再把副标题字号大一号」——
+          //  · 字号 caption(12) → body(14)；
+          //  · 标题栏自己会在标题下方留一截（实测标题框底 → 副标题框顶 73px ≈ 21vp），
+          //    用负 margin 收 10vp，实际间距 ≈ 11vp（与详情页「标题→正文」的节奏一致）。
+          Text(this.nowLabel)
+            .fontSize(Theme.FONT_BODY)
+            .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+            .width('100%')
+            .textAlign(TextAlign.Start)
+            .padding({ left: 16, right: 16, bottom: 4 })
+            .margin({ top: -SUBTITLE_PULL_UP_VP })
+
           // ── 上 70%：简要详情 ──
         Column() {
           if (this.dueTasks().length === 0) {

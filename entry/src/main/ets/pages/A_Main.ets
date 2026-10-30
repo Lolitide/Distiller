@@ -57,9 +57,6 @@ struct A_Main {
    */
   private store: TaskListStore = TaskListStore.instance();
   @Local currentIndex: number = 0;
-  /** 板板页标题右侧的「现在是 XX月XX日 XX:XX」 */
-  @Local banbanNowLabel: string = '';
-  private clockTimer: number = -1;
   /**
    * 「添加任务」半模态（`bindSheet`）的显隐（需求方 2026-10-17：「点击底部页签的添加按钮后
    * 显示一个 bindSheet 先完成这个功能」）。
@@ -108,23 +105,6 @@ struct A_Main {
     this.forwardTimer = setInterval(() => {
       this.pullForwarded();
     }, 15000);
-    this.refreshBanbanNowLabel();
-    this.clockTimer = setInterval(() => {
-      this.refreshBanbanNowLabel();
-    }, 30000);
-  }
-
-  /**
-   * 板板标题右侧的实时时间（分钟精度；30 秒刷新一次，跨分钟不会迟太久）。
-   * 2026-10-29 需求方：`现在是 mm月dd日 星期x 时段 hh:mm`，时间用 12 小时制。
-   */
-  private refreshBanbanNowLabel(): void {
-    const d: Date = new Date();
-    this.banbanNowLabel = `现在是  ${TaskListViewModel.pad2(d.getMonth() + 1)}月`
-      + `${TaskListViewModel.pad2(d.getDate())}日  `
-      + `${TaskListViewModel.weekdayCn(d.getDay())}  `
-      + `${TaskListViewModel.periodLabel(d.getHours())} `
-      + `${TaskListViewModel.hour12(d.getHours())}:${TaskListViewModel.pad2(d.getMinutes())}`;
   }
 
   /** 首次启动：没看过引导就全屏覆盖；不阻塞列表初始化 */
@@ -491,10 +471,6 @@ struct A_Main {
       clearInterval(this.reminderTimer);
       this.reminderTimer = -1;
     }
-    if (this.clockTimer >= 0) {
-      clearInterval(this.clockTimer);
-      this.clockTimer = -1;
-    }
   }
 
   /**
@@ -562,14 +538,18 @@ struct A_Main {
   }
 
   /**
-   * 标题栏内容：板板页在主标题右/下补一行实时时间（「现在是 MM月DD日 HH:MM」），
-   * 其他页签不显示副标题。
+   * 标题栏内容：**三页完全一致，只有一个 mainTitle**。
+   *
+   * 2026-10-27 需求方：「板板页面的导航栏的 mainTitle 好像比其他两个页面的要高，改成和其他两个一致」——
+   * 原因就是原先板板页多传了一个 `subTitle`（「现在是 10月27日 星期二 凌晨 1:30」）：
+   * HDS 的 MINI 标题栏把主标题 + 副标题**上下排在同一档高度里**，于是主标题被顶高约 9vp
+   * （实测三页标题框 y：任务列表/设置 = 180，板板 = 148，差 32px ≈ 9.1vp）。
+   *
+   * 板板页正文里本来就有一行「时间刻：…」的实时时间，标题栏这份是重复信息，直接去掉，
+   * 连带 `banbanNowLabel` / `refreshBanbanNowLabel()` / 30 秒轮询的 `clockTimer` 一并删掉。
    */
   @Computed
   get navTitleContent(): HdsNavigationTitle {
-    if (this.currentIndex === 1) {
-      return { mainTitle: this.navTitle, subTitle: this.banbanNowLabel };
-    }
     return { mainTitle: this.navTitle };
   }
 
