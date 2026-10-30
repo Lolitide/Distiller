@@ -189,12 +189,10 @@ export struct C_Banban {
       // 查询失败就按 24 小时制显示（本工程默认口径），不能因为一个格式查询把副标题弄没
       use24 = true;
     }
-    if (use24) {
-      this.nowLabel = `${datePart}  ${TaskListViewModel.pad2(d.getHours())}:${minute}`;
-      return;
-    }
-    this.nowLabel = `${datePart}  ${TaskListViewModel.periodLabel(d.getHours())} `
-      + `${TaskListViewModel.hour12(d.getHours())}:${minute}`;
+    const clock: string = use24
+      ? `${TaskListViewModel.pad2(d.getHours())}:${minute}`
+      : `${TaskListViewModel.periodLabel(d.getHours())} ${TaskListViewModel.hour12(d.getHours())}:${minute}`;
+    this.nowLabel = `${datePart}  ${clock}`;
   }
 
   /**
@@ -484,8 +482,9 @@ export struct C_Banban {
         datePart = `${d.getFullYear()}.${mo}.${day}`;
       }
     }
-    return `${datePart} ${TaskListViewModel.periodLabel(d.getHours())} `
-      + `${TaskListViewModel.hour12(d.getHours())}:${TaskListViewModel.pad2(d.getMinutes())}`;
+    // DDL 时间跟随系统 12/24 小时制（2026-10-27 需求方：「板板的这些卡片的时间也改成
+    // 和用户系统的时间制一样显示」）—— 与标题副标题共用 `clockText`，不各写一份
+    return `${datePart} ${TaskListViewModel.clockText(d.getHours(), d.getMinutes())}`;
   }
 
   /** 本周 / 下周判断用：把某天的 0 点归到所在周（周一）的 0 点 */
