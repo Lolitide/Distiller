@@ -77,6 +77,18 @@ struct A_Main {
   @Local shareParseKey: number = 0;
   /** 首次启动引导 */
   @Local showOnboarding: boolean = false;
+  /**
+   * 首次引导前的启动预热：显示蓝色 logo 背景，等 4 段教程视频都准备好的再切引导页。
+   * 只在「确实要显示引导」时才为 true，老用户不会看到这个中间层。
+   */
+  @Local onboardingLoading: boolean = false;
+  private preloadReadyCount: number = 0;
+  private preloadDone: boolean = false;
+  private preloadTimer: number = -1;
+  private prePush: VideoController = new VideoController();
+  private preCalendar: VideoController = new VideoController();
+  private preQq1: VideoController = new VideoController();
+  private preQq2: VideoController = new VideoController();
 
   /** 视觉个性化：M3 色系（页面底色取 surface） */
   @Local themeStore: ThemeStore = ThemeStore.instance();
@@ -119,9 +131,41 @@ struct A_Main {
     }
     SettingsRepository.getFirstLaunchDone(context).then((done: boolean) => {
       if (!done && this.shareParseKey === 0) {
-        this.showOnboarding = true;
+        // 先挂预加载层（蓝色 logo 背景），视频都 prepared 后再显示引导页
+        this.onboardingLoading = true;
+        this.preloadReadyCount = 0;
+        this.preloadDone = false;
+        // 兜底：视频异常/过慢时最多等 8 秒，避免卡在启动页
+        this.preloadTimer = setTimeout(() => {
+          this.finishOnboardingPreload();
+        }, 8000);
       }
     });
+  }
+
+  /** 单段视频准备完成 */
+  private onPreloadReady(): void {
+    if (this.preloadDone) {
+      return;
+    }
+    this.preloadReadyCount = this.preloadReadyCount + 1;
+    if (this.preloadReadyCount >= 4) {
+      this.finishOnboardingPreload();
+    }
+  }
+
+  /** 预热完成：收起蓝色启动层，显示引导页 */
+  private finishOnboardingPreload(): void {
+    if (this.preloadDone) {
+      return;
+    }
+    this.preloadDone = true;
+    if (this.preloadTimer >= 0) {
+      clearTimeout(this.preloadTimer);
+      this.preloadTimer = -1;
+    }
+    this.onboardingLoading = false;
+    this.showOnboarding = true;
   }
 
   /** 从 QQ/其他 App 回到前台：取走「转发给机器人」的文本 */
@@ -367,6 +411,9 @@ struct A_Main {
     }
     // 引导期间可能已经有转发消息入队；关掉覆盖层后立刻补拉一次
     this.pullForwarded();
+    // 引导页里可能刚开了通知/日历权限：立刻对账一次，
+    // 把已有 DDL 的待办补写进日历、补发代理提醒，不用等下一次冷启动。
+    this.store.reconcileReminders();
   }
 
   /** 分享接收：热启动走监听，冷启动先取暂存；同一次分享只消费一次 */
@@ -774,6 +821,67 @@ struct A_Main {
             this.finishOnboarding();
           }
         })
+      }
+
+      // 首次启动预热：沿用系统启动页的蓝底 + logo，等 4 段教程视频都 prepared 再切引导
+      if (this.onboardingLoading) {
+        Stack({ alignContent: Alignment.Center }) {
+          Column()
+            .width('100%')
+            .height('100%')
+            .backgroundColor('#2176F0')
+
+          Image($r('app.media.startIcon'))
+            .width(120)
+            .height(120)
+            .objectFit(ImageFit.Contain)
+
+          // 透明小窗只负责预加载，不播放
+          Column() {
+            Video({ src: $r('app.media.push'), controller: this.prePush })
+              .width(16)
+              .height(16)
+              .autoPlay(false)
+              .controls(false)
+              .muted(true)
+              .onPrepared(() => {
+                this.onPreloadReady();
+              })
+            Video({ src: $r('app.media.calendar'), controller: this.preCalendar })
+              .width(16)
+              .height(16)
+              .autoPlay(false)
+              .controls(false)
+              .muted(true)
+              .onPrepared(() => {
+                this.onPreloadReady();
+              })
+            Video({ src: $r('app.media.qqbot1'), controller: this.preQq1 })
+              .width(16)
+              .height(16)
+              .autoPlay(false)
+              .controls(false)
+              .muted(true)
+              .onPrepared(() => {
+                this.onPreloadReady();
+              })
+            Video({ src: $r('app.media.qqbot2'), controller: this.preQq2 })
+              .width(16)
+              .height(16)
+              .autoPlay(false)
+              .controls(false)
+              .muted(true)
+              .onPrepared(() => {
+                this.onPreloadReady();
+              })
+          }
+          .width(16)
+          .height(64)
+          .opacity(0)
+          .align(Alignment.BottomStart)
+        }
+        .width('100%')
+        .height('100%')
       }
     }
     .width('100%')

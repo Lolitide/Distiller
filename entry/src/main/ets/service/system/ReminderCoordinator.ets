@@ -84,20 +84,36 @@ export class ReminderCoordinator {
         changed = true;
       }
 
-      // 日历：有明确到期时间就写一条；完成/删除/过期的清掉
+      // 日历：有明确到期时间就写一条；改名/改期/改提醒/改备注要更新同一条；
+      // 完成 / 删除 / 过期则清掉，避免日历里留下「幽灵日程」。
       const wantCalendar: boolean = ReminderCoordinator.shouldCalendar(task);
-      if (wantCalendar && task.calendarEventId === undefined) {
-        try {
-          task.calendarEventId = await CalendarService.addEvent(context, task);
-          changed = true;
-        } catch (error) {
-          const err = error as BusinessError;
-          hilog.warn(DOMAIN, TAG, 'calendar add failed for task %{public}d: %{public}d',
-            task.id, err.code);
+      const calendarSignature: string = ReminderCoordinator.calendarSignature(task);
+      if (wantCalendar) {
+        if (task.calendarEventId === undefined) {
+          try {
+            task.calendarEventId = await CalendarService.addEvent(context, task);
+            task.calendarSignature = calendarSignature;
+            changed = true;
+          } catch (error) {
+            const err = error as BusinessError;
+            hilog.warn(DOMAIN, TAG, 'calendar add failed for task %{public}d: %{public}d',
+              task.id, err.code);
+          }
+        } else if (task.calendarSignature !== calendarSignature) {
+          try {
+            await CalendarService.updateEvent(context, task, task.calendarEventId);
+            task.calendarSignature = calendarSignature;
+            changed = true;
+          } catch (error) {
+            const err = error as BusinessError;
+            hilog.warn(DOMAIN, TAG, 'calendar update failed for task %{public}d: %{public}d',
+              task.id, err.code);
+          }
         }
-      } else if (!wantCalendar && task.calendarEventId !== undefined) {
+      } else if (task.calendarEventId !== undefined) {
         await CalendarService.deleteEvent(context, task.calendarEventId);
         task.calendarEventId = undefined;
+        task.calendarSignature = undefined;
         changed = true;
       }
     }
@@ -115,7 +131,15 @@ export class ReminderCoordinator {
     if (task.calendarEventId !== undefined) {
       await CalendarService.deleteEvent(context, task.calendarEventId);
       task.calendarEventId = undefined;
+      task.calendarSignature = undefined;
     }
+  }
+
+  /** 日历内容快照：名称 / 到期 / 备注，任一变化就要更新日程（提醒提前量由写入时刻自动算，不属于内容签名） */
+  private static calendarSignature(task: Task): string {
+    const due: number = task.dueAt !== undefined ? task.dueAt : 0;
+    const note: string = task.note !== undefined ? task.note : '';
+    return `${task.name}|${due}|${note}`;
   }
 
   /** 需要响铃：开关开着、状态还在进行、且触发时刻还没过去 */

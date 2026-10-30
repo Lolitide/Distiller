@@ -575,12 +575,15 @@ export struct AddTaskSheet {
           }
 
           // FE-77：解析出的子任务（原样保留，可逐条删）—— 以前只在保存后详情页才看得到
-          AddTaskStepsPreview({ draft: this.draft })
-            .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
+          // 没有子任务时整块不挂载，避免空组件的外边距在内容区与名称框之间留下多余空白。
+          if (this.draft.steps.length > 0) {
+            AddTaskStepsPreview({ draft: this.draft })
+              .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
+          }
 
           // —— 任务名称输入框：三种来源共用（名称与来源无关），紧跟在内容区下面 ——
           AddTaskNameInput({ draft: this.draft })
-            .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
+            .margin({ top: LengthMetrics.resource($r('sys.float.padding_level4')) })
 
           // —— 属性芯片行：截止日期 / 提醒我 / 重复 / 重要程度 / 来源 / ＋添加标签 / AI 预填 ——
           // AI 预填与「＋ 添加标签」同一行、同一种动作芯片（不再单独占一行）。
@@ -606,17 +609,20 @@ export struct AddTaskSheet {
           }
         }
         .width('100%')
-        // 滚动内容的留白：左右/下 `padding_level8`(16vp)，上 8vp（标题行自己带了下留白）。
+        // 滚动内容的留白：左右 `padding_level8`(16vp)，上 8vp（标题行自己带了下留白）。
+        // 底部留 40vp：内容贴底会显得局促，但不能再多（自适应高度会把多余空白也算进去）。
         // ⚠️ 带 `start`/`end` 的重载吃 `LocalizedPadding`（字段是 `LengthMetrics`），所以要走 `LengthMetrics.resource`。
         .padding({
           top: LengthMetrics.resource($r('sys.float.padding_level4')),
-          bottom: LengthMetrics.resource($r('sys.float.padding_level8')),
+          bottom: LengthMetrics.vp(40),
           start: LengthMetrics.resource($r('sys.float.padding_level8')),
           end: LengthMetrics.resource($r('sys.float.padding_level8'))
         })
       }
       .width('100%')
-      .layoutWeight(1)
+      // 内容最多撑到 520vp 再滚：FIT_CONTENT 下父容器高度由内容决定，必须给 Scroll 一个明确上限，
+      // 否则内容超屏时 Scroll 会按内容高度撑开、失去滚动能力。
+      .constraintSize({ maxHeight: 520 })
       .align(Alignment.Top)
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring)
@@ -627,7 +633,7 @@ export struct AddTaskSheet {
       })
     }
     .width('100%')
-    .height('100%')
+    // 不写 `height('100%')`：高度交给 FIT_CONTENT 按内容撑，避免内容变短后底部留一大片空白。
     // 2026-10-25（作者：「添加任务 bindSheet 背景没有 md 取色」）：
     // 面板底色**只能由内容自己铺** —— `SheetOptions` 里没有 `backgroundColor` 字段
     // （见文件末尾 `addTaskSheetOptions` 的注释，已核对 SDK `common.d.ts` 的接口全字段）。
@@ -640,7 +646,8 @@ export struct AddTaskSheet {
  * 半模态的选项 —— 跟内容组件放同一个文件（组件化约定：弹层的"内容 + 选项"是一件事）。
  *
  * 取值理由：
- *  · `height: SheetSize.MEDIUM` —— 官方「半屏」挡位；表单已经排满，暂时不需要多挡位跟手；
+ *  · `height: SheetSize.FIT_CONTENT` —— 按内容自适应高度（内容多少就多高），
+ *    避免固定 `MEDIUM` 挡位在内容变短后底部留一大片空白；内容超出屏幕时由内部 Scroll 滚动；
  *  · `preferType: SheetType.BOTTOM` —— 这是默认值，显式写出来把语义钉住
  *    （`SIDE` / `CONTENT_COVER` 是 API 20+ 的其它形态，用不上也不必用）；
  *  · `dragBar: true` —— 保留官方拖拽条（关掉半模态的一种手势）；
@@ -658,7 +665,7 @@ export struct AddTaskSheet {
  */
 export function addTaskSheetOptions(onDismiss?: () => void): SheetOptions {
   return {
-    height: SheetSize.MEDIUM,
+    height: SheetSize.FIT_CONTENT,
     preferType: SheetType.BOTTOM,
     dragBar: true,
     showClose: false,

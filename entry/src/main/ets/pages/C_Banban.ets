@@ -54,15 +54,10 @@ const LANE_COLORS: string[] = ['#5B8FF9', '#61DDAA', '#F6BD16', '#7262FD', '#78D
 const COMPLETED_CHECK_COLOR: string = '#2E7D32';
 /** 已完成对钩图标尺寸（vp） */
 const COMPLETED_CHECK_SIZE: number = 22;
-/** 左滑操作按钮：删除的警示红、按钮宽度（vp） */
+/** 左滑操作按钮：删除的警示红 */
 const SWIPE_DELETE_COLOR: string = '#D32F2F';
 /** 已完成任务的「撤销」按钮：黑底白标 */
 const SWIPE_UNDO_COLOR: string = '#1F1F1F';
-const SWIPE_ACTION_WIDTH_VP: number = 56;
-/** 按钮区左侧留白（vp）：露出的总宽度 = 56 + 8 */
-const SWIPE_ACTION_PADDING_VP: number = 8;
-/** 左滑展开宽度（vp） */
-const SWIPE_REVEAL_VP: number = SWIPE_ACTION_WIDTH_VP + SWIPE_ACTION_PADDING_VP;
 
 /**
  * 甘特条命中矩形（像素坐标）：用来判断**同一轨道内**哪些时间段有多条任务重叠。
@@ -205,9 +200,17 @@ export struct C_Banban {
   private dueTasks(): Task[] {
     const out: Task[] = [];
     const all: Task[] = this.store.allTasks();
+    const now: number = Date.now();
     for (let i = 0; i < all.length; i++) {
       const t: Task = all[i];
       if (t.status === TaskStatus.PENDING_CONFIRM) {
+        continue;
+      }
+      // 已过期的待办不上板板页：EXPIRED，或未完成但 DDL 已过（状态还没被对账器刷成 EXPIRED）
+      if (t.status === TaskStatus.EXPIRED) {
+        continue;
+      }
+      if (t.dueAt !== undefined && t.dueAt > 0 && t.status !== TaskStatus.COMPLETED && t.dueAt <= now) {
         continue;
       }
       if (t.dueAt !== undefined && t.dueAt > 0) {
@@ -952,10 +955,10 @@ export struct C_Banban {
 
   @Builder
   summaryBody(task: Task) {
-    Column({ space: 10 }) {
+    Column({ space: this.themeStore.boardCardGap }) {
       Row({ space: 8 }) {
         Text(task.name)
-          .fontSize(22)
+          .fontSize(this.themeStore.boardTitleSize)
           .fontWeight(FontWeight.Bold)
           .fontColor($r('sys.color.ohos_id_color_text_primary'))
           .layoutWeight(1)
@@ -975,7 +978,7 @@ export struct C_Banban {
 
       // 2026-10-29 需求方：摘要区不再显示「AI 生成」chip（详情页标识条保留）。
       // 类型 tag 放最前，并用甘特条同色，方便和下方图表对照；
-      // 后面依次是 重要性 / 难易 / 重复 / 来源 / 附件
+      // 后面依次是 重要性 / 难易 / 重复 / 附件（不再显示「来自 xxx」来源链接）
       Flex({ wrap: FlexWrap.Wrap, space: { main: LengthMetrics.vp(6), cross: LengthMetrics.vp(6) } }) {
         if (task.category !== undefined && task.category.length > 0) {
           this.summaryTypeChip(task)
@@ -986,9 +989,6 @@ export struct C_Banban {
           this.summaryChip(task.repeatText, this.themeStore.scheme.primary)
         } else if (task.repeat !== undefined && task.repeat.length > 0) {
           this.summaryChip('重复', this.themeStore.scheme.primary)
-        }
-        if (task.originDetail !== undefined && task.originDetail.length > 0) {
-          this.summaryChip('来自 ' + task.originDetail, this.themeStore.scheme.primary)
         }
         if (task.urls !== undefined && task.urls.length > 0) {
           this.summaryChip('附件 ' + task.urls.length, this.themeStore.scheme.primary)
@@ -1014,7 +1014,7 @@ export struct C_Banban {
 
       // 步骤
       if (task.steps !== undefined && task.steps.length > 0) {
-        Column({ space: 6 }) {
+        Column({ space: this.themeStore.boardStepGap }) {
           ForEach(task.steps, (step: TaskStep, index: number) => {
             Row({ space: 8 }) {
               Text('' + (index + 1) + '.')
@@ -1040,8 +1040,8 @@ export struct C_Banban {
             ForEach(task.urls, (uri: string) => {
               if (this.isImage(uri)) {
                 Image(uri)
-                  .width(56)
-                  .height(56)
+                  .width(this.themeStore.boardThumbSize)
+                  .height(this.themeStore.boardThumbSize)
                   .borderRadius(8)
                   .objectFit(ImageFit.Cover)
               }
@@ -1054,7 +1054,7 @@ export struct C_Banban {
       }
     }
     .width('100%')
-    .padding(16)
+    .padding(this.themeStore.boardCardPadding)
     .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
     .borderRadius(Theme.RADIUS_CARD)
     .alignItems(HorizontalAlign.Start)
@@ -1098,7 +1098,7 @@ export struct C_Banban {
    */
   @Builder
   taskSwipeActions(task: Task) {
-    Column({ space: 8 }) {
+    Column({ space: this.themeStore.swipeActionGap }) {
       Button({ type: ButtonType.Normal, stateEffect: false }) {
         SymbolGlyph(task.status === TaskStatus.COMPLETED
           ? $r('sys.symbol.undo')
@@ -1106,8 +1106,9 @@ export struct C_Banban {
           .fontSize(20)
           .fontColor([Color.White])
       }
-      .width('100%')
-      .layoutWeight(1)
+      // 正方形按钮：宽高同值，紧凑档按比例缩小
+      .width(this.themeStore.swipeActionSize)
+      .height(this.themeStore.swipeActionSize)
       .backgroundColor(task.status === TaskStatus.COMPLETED
         ? SWIPE_UNDO_COLOR
         : COMPLETED_CHECK_COLOR)
@@ -1132,8 +1133,8 @@ export struct C_Banban {
           .fontSize(20)
           .fontColor([Color.White])
       }
-      .width('100%')
-      .layoutWeight(1)
+      .width(this.themeStore.swipeActionSize)
+      .height(this.themeStore.swipeActionSize)
       .backgroundColor(SWIPE_DELETE_COLOR)
       .borderRadius(12)
       // 阴影与大卡片同一套（radius 8 / offsetY 3）
@@ -1151,10 +1152,12 @@ export struct C_Banban {
         this.confirmDeleteFromSwipe(task);
       })
     }
-    .width(SWIPE_REVEAL_VP)
-    // 原生 swipeAction 会把这里按 ListItem 的高度测量，所以 100% 是卡片高度（不会变成视口高度）
+    .width(this.themeStore.swipeActionSize + this.themeStore.swipeActionPadding)
+    // 原生 swipeAction 会把这里按 ListItem 的高度测量，所以 100% 是卡片高度（不会变成视口高度）；
+    // 两个正方形按钮在卡片高度内垂直居中。
     .height('100%')
-    .padding({ left: SWIPE_ACTION_PADDING_VP })
+    .justifyContent(FlexAlign.Center)
+    .padding({ left: this.themeStore.swipeActionPadding })
   }
 
   private actionKey(task: Task, kind: string): string {
@@ -1274,18 +1277,22 @@ export struct C_Banban {
             // 空态提示统一由下面的覆盖层负责
             Column()
           } else {
-          // 用 List + ListItem 承接卡片：只有 ListItem 才有 `.swipeAction()`，
-          // 左滑露出的操作按钮才能跟着卡片一起走（2026-10-29 需求方）。
-          List({ scroller: this.summaryScroller, space: 12 }) {
-            // 时间轴穿过几条甘特条，这里就显示几条事件
-            if (this.detailTasks().length === 0) {
-              ListItem() {
-                Text('时间轴没有经过任何事件（拖动下方蓝线试试）')
-                  .fontSize($r('sys.float.ohos_id_text_size_body1'))
-                  .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-                  .padding({ top: 24 })
-              }
-            } else {
+          if (this.detailTasks().length === 0) {
+            // 时间轴没穿过任何事件：灰字提示在整个区域居中（横 + 纵）
+            Column() {
+              Text('时间轴没有经过任何事件，拖动试试')
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+                .textAlign(TextAlign.Center)
+            }
+            .width('100%')
+            .layoutWeight(1)
+            .justifyContent(FlexAlign.Center)
+            .alignItems(HorizontalAlign.Center)
+          } else {
+            // 用 List + ListItem 承接卡片：只有 ListItem 才有 `.swipeAction()`，
+            // 左滑露出的操作按钮才能跟着卡片一起走（2026-10-29 需求方）。
+            List({ scroller: this.summaryScroller, space: 12 }) {
               ForEach(this.detailTasks(), (t: Task) => {
                 ListItem() {
                   this.summary(t)
@@ -1311,13 +1318,14 @@ export struct C_Banban {
                 })
               }, (t: Task) => t.id + '-' + (this.swipeTokens[String(t.id)] ?? 0))
             }
+            .width('100%')
+            // 紧凑模式：左右留白加大，让摘要大卡片整体变窄；左滑按钮随 ListItem 边缘一起内收
+            .padding({ left: 16, right: 16, top: 8, bottom: 12 })
+            .scrollBar(BarState.Off)
+            .edgeEffect(EdgeEffect.Spring)
+            // 让上面的内容撑满 70%（否则列表按内容高度收缩，下面会空出一大块）
+            .layoutWeight(1)
           }
-          .width('100%')
-          .padding({ left: 16, right: 16, top: 8, bottom: 12 })
-          .scrollBar(BarState.Off)
-          .edgeEffect(EdgeEffect.Spring)
-          // 让上面的内容撑满 70%（否则列表按内容高度收缩，下面会空出一大块）
-          .layoutWeight(1)
         }
       }
       .layoutWeight(1)

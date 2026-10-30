@@ -54,12 +54,28 @@ export class CalendarService {
 
   /** 写入日程，返回系统事件 id（调用方回填到 Task.calendarEventId）。 */
   static async addEvent(context: common.Context, task: Task): Promise<number> {
+    const manager: calendarManager.CalendarManager = calendarManager.getCalendarManager(context);
+    const calendar: calendarManager.Calendar = await CalendarService.ensureCalendar(manager);
+    const id: number = await calendar.addEvent(CalendarService.buildEvent(task));
+    hilog.info(DOMAIN, TAG, 'calendar event %{public}d added for task %{public}d', id, task.id);
+    return id;
+  }
+
+  /** 更新已有日程：任务改名 / 改期 / 改备注 / 改提前量后调用，避免日历里留下旧内容。 */
+  static async updateEvent(context: common.Context, task: Task, eventId: number): Promise<void> {
+    const manager: calendarManager.CalendarManager = calendarManager.getCalendarManager(context);
+    const calendar: calendarManager.Calendar = await CalendarService.ensureCalendar(manager);
+    const event: calendarManager.Event = CalendarService.buildEvent(task);
+    event.id = eventId;
+    await calendar.updateEvent(event);
+    hilog.info(DOMAIN, TAG, 'calendar event %{public}d updated for task %{public}d', eventId, task.id);
+  }
+
+  private static buildEvent(task: Task): calendarManager.Event {
     const start: number = CalendarService.startTime(task);
     if (start <= 0) {
       throw new Error('缺少到期时间');
     }
-    const manager: calendarManager.CalendarManager = calendarManager.getCalendarManager(context);
-    const calendar: calendarManager.Calendar = await CalendarService.ensureCalendar(manager);
     const event: calendarManager.Event = {
       title: task.name,
       type: calendarManager.EventType.NORMAL,
@@ -67,14 +83,13 @@ export class CalendarService {
       endTime: start + EVENT_MINUTES * 60 * 1000,
       description: task.note !== undefined ? task.note : ''
     };
-    // 提前量（分钟）：日历在「到点前 N 分钟」提醒，和 App 的提醒提前量一致
-    const lead: number = CalendarService.leadMinutes(task);
+    // 日历提醒提前量：按「写入日历那一刻离 DDL 还有多久」分档，
+    // 和 App 里的软件提醒（用户设置的提醒时间）是两套独立机制。
+    const lead: number = CalendarService.autoLeadMinutes(task);
     if (lead >= 0) {
       event.reminderTime = [lead];
     }
-    const id: number = await calendar.addEvent(event);
-    hilog.info(DOMAIN, TAG, 'calendar event %{public}d added for task %{public}d', id, task.id);
-    return id;
+    return event;
   }
 
   /** 删除日程：失败只记日志。 */
@@ -104,15 +119,53 @@ export class CalendarService {
     return task.dueAt !== undefined ? task.dueAt : 0;
   }
 
-  /** 提前量（分钟）：remindAt 比 dueAt 早多少；提前量已过就 0（到点提醒） */
-  private static leadMinutes(task: Task): number {
+  /**
+   * 日历提醒提前量（分钟）：以**写入日历的那一刻**到 DDL 的剩余时间分档。
+   *   剩余 < 6h             → 不提醒（返回 -1）
+   *   6h ≤ 剩余 < 12h        → 提前 2h
+   *   12h ≤ 剩余 < 36h      → 提前 6h
+   *   36h ≤ 剩余 < 3 天      → 提前 12h
+   *   3 天 ≤ 剩余 < 7 天     → 提前 1 天
+   *   7 天 ≤ 剩余 < 14 天    → 提前 3 天
+   *   14 天 ≤ 剩余 < 40 天   → 提前 7 天
+   *   其余（≥ 40 天）        → 提前 14 天
+   *
+   * 提前量不会超过剩余时间（否则提醒点会落在过去、日历不会响）；
+   * 已经过期的任务不写提醒（返回 -1）。
+   */
+  private static autoLeadMinutes(task: Task): number {
     if (task.dueAt === undefined || task.dueAt <= 0) {
       return -1;
     }
-    if (task.remindAt === undefined || task.remindAt <= 0) {
-      return 0;
+    const now: number = Date.now();
+    const remainingMs: number = task.dueAt - now;
+    if (remainingMs <= 0) {
+      return -1;
     }
-    const base: number = task.remindAt > Date.now() ? task.remindAt : task.dueAt;
-    return Math.max(0, Math.round((task.dueAt - base) / 60000));
+    const hour: number = 60 * 60 * 1000;
+    const day: number = 24 * hour;
+    // 离 DDL 不足 6 小时：时间太紧，系统日历不再提醒（软件提醒仍按用户设置执行）
+    if (remainingMs < 6 * hour) {
+      return -1;
+    }
+    let leadMs: number;
+    if (remainingMs < 12 * hour) {
+      leadMs = 2 * hour;
+    } else if (remainingMs < 36 * hour) {
+      leadMs = 6 * hour;
+    } else if (remainingMs < 3 * day) {
+      leadMs = 12 * hour;
+    } else if (remainingMs < 7 * day) {
+      leadMs = 1 * day;
+    } else if (remainingMs < 14 * day) {
+      leadMs = 3 * day;
+    } else if (remainingMs < 40 * day) {
+      leadMs = 7 * day;
+    } else {
+      leadMs = 14 * day;
+    }
+    // 不超过剩余时间，避免提醒落在过去
+    const lead: number = Math.round(Math.min(leadMs, remainingMs) / 60000);
+    return Math.max(0, lead);
   }
 }

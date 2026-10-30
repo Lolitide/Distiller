@@ -248,4 +248,47 @@ export class ThemeStore {
       ? Theme.LIST_ITEM_SPACE_COMPACT
       : Theme.LIST_ITEM_SPACE;
   }
+
+  /**
+   * 板板页摘要卡的内边距（vp）：紧凑档缩小**高度**，宽度保持不变。
+   * 2026-10-30 需求方：紧凑模式应该是「高度变矮」，不是「长度（宽度）变短」。
+   */
+  get boardCardPadding(): number {
+    return this.density === DENSITY_COMPACT ? 12 : 16;
+  }
+
+  /** 板板页摘要卡内部纵向间距（vp） */
+  get boardCardGap(): number {
+    return this.density === DENSITY_COMPACT ? 8 : 10;
+  }
+
+  /** 板板页摘要卡标题字号（fp）：紧凑档略小，配合更矮的卡片 */
+  get boardTitleSize(): number {
+    return this.density === DENSITY_COMPACT ? 19 : 22;
+  }
+
+  /** 板板页步骤行间距（vp） */
+  get boardStepGap(): number {
+    return this.density === DENSITY_COMPACT ? 4 : 6;
+  }
+
+  /** 板板页图片缩略图边长（vp） */
+  get boardThumbSize(): number {
+    return this.density === DENSITY_COMPACT ? 48 : 56;
+  }
+
+  /** 板板页左滑按钮边长（vp）：正方形，紧凑档等比缩小 */
+  get swipeActionSize(): number {
+    return this.density === DENSITY_COMPACT ? 44 : 56;
+  }
+
+  /** 板板页左滑按钮区左侧留白（vp） */
+  get swipeActionPadding(): number {
+    return this.density === DENSITY_COMPACT ? 6 : 8;
+  }
+
+  /** 板板页左滑按钮之间的间距（vp） */
+  get swipeActionGap(): number {
+    return this.density === DENSITY_COMPACT ? 6 : 8;
+  }
 }

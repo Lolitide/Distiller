@@ -52,11 +52,6 @@ const SECOND_LINE_GAP_VP: number = 6;
  * tag 槽的固定宽度（vp）：约 4 个汉字 + 内边距。
  * 槽定宽是为了让后面的**重要性标识起点对齐**；胶囊本身仍按内容自适应。
  */
-/**
- * 分隔点：第二行 tag 与后面内容之间的「·」（2026-10-19 第五次调整）。
- * 用全角间隔号而不是空格，视觉上更明确地把「分类」和「时间」分开。
- */
-const INTERPUNCT: string = '·';
 const TAG_SLOT_WIDTH_VP: number = 52;
 /** 重复标识图标字号（vp）：第二行最后那个小图标 */
 const REPEAT_ICON_SIZE_VP: number = 16;
@@ -74,7 +69,7 @@ const TAG_CHIP_VERTICAL_PADDING_VP: number = 1;
 const TAG_CHIP_RADIUS_VP: number = 8;
 
 /**
- * 低可信角标尺寸（vp）：与重复标识同档（16），比铃铛（20）小一档 —— 它是**提示**，不是操作。
+ * 低可信/过期旁的警示图标：16vp；
  * 图形用 `exclamationmark_circle`（描边）+ 官方警示色，与「重要程度」那套红圈区分开：
  * 那个是用户自己选的档位，这个是"机器没把握、请你核对"。
  */
@@ -418,16 +413,6 @@ export struct TaskCard {
         .justifyContent(FlexAlign.Start)
         .flexShrink(0)
 
-        // ①-b 分隔点「·」（2026-10-19 第五次调整：「尝试用 · 分隔」）。
-        //    放在 tag 槽之后；只有真的画了标签/类型才画点，否则整行会以孤零零一个点开头。
-        if (this.chipText !== '') {
-          Text(INTERPUNCT)
-            .fontSize($r('sys.float.ohos_id_text_size_caption'))
-            .fontColor($r('sys.color.ohos_id_color_text_tertiary'))
-            .maxLines(1)
-            .flexShrink(0)
-        }
-
         // ② 重要性标识：**固定槽，没有也占位**（作者：「如果没有预留空位」）。
         //    2026-10-19 第六次：「尝试给任务重要性标识的占位使用一个半透明的灰色的圆圈」——
         //    所以 0 档（普通）不再留白，画一个半透明灰圈，视觉上把"这一格是重要性"表达出来。
@@ -459,25 +444,25 @@ export struct TaskCard {
             .flexShrink(0)
         }
 
-        // ③ 截止文字：**整体自然显示**（作者：「后面的所有字（已过期 / 未定时 /
-        //    xxx 后截止）直接显示就行」）—— 不再拆「XXX + 后截止」两段、也不再定宽居中。
-        Text(this.dueLabel)
-          .fontSize($r('sys.float.ohos_id_text_size_body2'))
-          .fontColor(this.textColor)
-          .maxLines(1)
-          .flexShrink(1)
+        // ③ 截止文字 + 低可信/过期警示图标：两者单独包一层 2vp 间距，
+        //    不受外层 Row 的 6vp 影响，图标也不会在「已过期」三个字旁边显得太远。
+        Row({ space: 6 }) {
+          Text(this.dueLabel)
+            .fontSize($r('sys.float.ohos_id_text_size_body2'))
+            .fontColor(this.textColor)
+            .maxLines(1)
+            .flexShrink(1)
 
-        // ③-b 低可信角标（置信度 < 阈值时出现，见 `lowCertainty`）。
-        //    放在截止文案右边：这一格本来是空着的（Blank 撑开），加它不会挤动左边任何元素；
-        //    6vp 间距、16vp 描边图标、警示色，与"重要程度红圈"同色系但形状不同（那个是实心/空心圆）。
-        if (this.lowCertainty) {
-          SymbolGlyph($r('sys.symbol.exclamationmark_circle'))
-            .fontSize(LOW_CERTAINTY_ICON_SIZE_VP)
-            .fontColor([$r('sys.color.warning')])
-            .margin({ left: SECOND_LINE_GAP_VP })
-            .flexShrink(0)
-            .accessibilityText($r('app.string.card_low_certainty'))
+          if (this.lowCertainty) {
+            SymbolGlyph($r('sys.symbol.exclamationmark_circle'))
+              .fontSize(LOW_CERTAINTY_ICON_SIZE_VP)
+              .fontColor([$r('sys.color.warning')])
+              .flexShrink(0)
+              .accessibilityText($r('app.string.card_low_certainty'))
+          }
         }
+        .flexShrink(1)
+        .alignItems(VerticalAlign.Center)
 
         // 右侧弹性空白：剩下的空间留给 C 区（重复槽 + 铃铛）
         Blank()

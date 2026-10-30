@@ -281,9 +281,14 @@ export struct A_Settings {
         'ohos.permission.WRITE_CALENDAR'
       ];
       const at = abilityAccessCtrl.createAtManager();
+      const wasAllowed: boolean = this.calendarAllowed;
       const result = await at.requestPermissionOnSetting(context, permissionList);
       this.calendarAllowed = result.length > 1
         && result[1] === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
+      // 从关到开：立刻补写/更新日历
+      if (!wasAllowed && this.calendarAllowed) {
+        this.store.reconcileReminders();
+      }
     } catch (error) {
       // 首次申请（还没被用户拒绝过）或系统不支持设置页时，走普通授权框
       this.requestCalendarPermission();
@@ -412,6 +417,10 @@ export struct A_Settings {
       this.calendarAllowed = granted;
       // 授权结果以 authResults 为准：不要紧接着再查一次，
       // 系统落权限有延迟，立刻查可能还是 DENIED，会把刚显示的"已授权"刷回去。
+      // 刚开启就立刻对账，把已有 DDL 的待办补写进日历，不用等下一次冷启动。
+      if (granted) {
+        this.store.reconcileReminders();
+      }
       this.toast(granted ? '日历权限已开启' : '未获得日历权限，写日历会失败');
     } catch (error) {
       const err = error as BusinessError;

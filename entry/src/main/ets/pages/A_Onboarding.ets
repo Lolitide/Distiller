@@ -23,6 +23,12 @@ const DOMAIN: number = 0x0000;
 const TAG: string = 'Onboarding';
 /** QQ 官方「创建机器人」链接（浏览器直接打开会跳转失败，需在 QQ 内打开） */
 const BOT_CREATE_URL: string = 'https://q.qq.com/qqbot/openclaw/login.html';
+/** 折叠态「绑定 QQ Bot」一行的高度（vp） */
+const BINDING_COLLAPSED_VP: number = 56;
+/** 展开态高度（vp）：按精简后的表单内容固定，保证高度动画可控 */
+const BINDING_EXPANDED_VP: number = 360;
+/** 已绑定时的展开高度（只剩状态 + 按钮） */
+const BINDING_BOUND_VP: number = 160;
 
 @ComponentV2
 export struct A_Onboarding {
@@ -48,6 +54,22 @@ export struct A_Onboarding {
   @Local byobSecret: string = '';
   @Local byobBusy: boolean = false;
   @Local byobError: string = '';
+  /** 第 3 页教程：左右两段同时播放，左侧播完定住，右侧播完一起重播 */
+  private leftVideo: VideoController = new VideoController();
+  private rightVideo: VideoController = new VideoController();
+  /** 视频是否已经真正开始播放（用来撤掉首帧占位图，避免黑屏闪一下） */
+  @Local pushReady: boolean = false;
+  @Local calendarReady: boolean = false;
+  @Local qqLeftReady: boolean = false;
+  @Local qqRightReady: boolean = false;
+  private qqLeftPrepared: boolean = false;
+  private qqRightPrepared: boolean = false;
+  /** 绑定模块是否展开（默认只显示一行） */
+  @Local bindingExpanded: boolean = false;
+  /** 绑定模块当前高度（展开后按内容实测值收紧，去掉底部多余空白） */
+  @Local bindingHeight: number = BINDING_COLLAPSED_VP;
+  private measuredBindingHeight: number = 0;
+  private bindingAdjustTimer: number = -1;
   /** 状态栏让位：全屏窗口下引导页要自己避开通知栏 */
   @Local statusBarVp: number = 0;
 
@@ -64,8 +86,88 @@ export struct A_Onboarding {
     }
   }
 
+  aboutToDisappear(): void {
+    this.stopVideoLoop();
+    if (this.bindingAdjustTimer >= 0) {
+      clearTimeout(this.bindingAdjustTimer);
+      this.bindingAdjustTimer = -1;
+    }
+  }
+
   private hostContext(): common.Context | undefined {
     return this.getUIContext().getHostContext();
+  }
+
+  /** 进入第 3 页：两段同时从头播放（等两个都 prepared 再 start） */
+  private startVideoLoop(): void {
+    setTimeout(() => {
+      this.maybeStartQqVideos();
+    }, 80);
+  }
+
+  private resetQqVideoState(): void {
+    this.qqLeftReady = false;
+    this.qqRightReady = false;
+    this.qqLeftPrepared = false;
+    this.qqRightPrepared = false;
+  }
+
+  private maybeStartQqVideos(): void {
+    if (!this.qqLeftPrepared || !this.qqRightPrepared) {
+      return;
+    }
+    this.restartVideos();
+  }
+
+  /** 展开绑定模块：先用预估高度撑开，等动画结束后按内容实测高度收紧 */
+  private expandBinding(): void {
+    this.measuredBindingHeight = 0;
+    this.bindingExpanded = true;
+    this.bindingHeight = this.bound ? BINDING_BOUND_VP : BINDING_EXPANDED_VP;
+    this.scheduleBindingHeightFix();
+  }
+
+  private collapseBinding(): void {
+    this.bindingExpanded = false;
+    this.bindingHeight = BINDING_COLLAPSED_VP;
+    this.measuredBindingHeight = 0;
+  }
+
+  private scheduleBindingHeightFix(): void {
+    if (this.bindingAdjustTimer >= 0) {
+      clearTimeout(this.bindingAdjustTimer);
+    }
+    this.bindingAdjustTimer = setTimeout(() => {
+      this.bindingAdjustTimer = -1;
+      if (!this.bindingExpanded) {
+        return;
+      }
+      if (this.measuredBindingHeight > 0
+        && Math.abs(this.measuredBindingHeight - this.bindingHeight) > 1) {
+        this.bindingHeight = this.measuredBindingHeight;
+      }
+    }, 280);
+  }
+
+  /** 右侧播完：两个一起回到 0 重新播放 */
+  private restartVideos(): void {
+    try {
+      this.leftVideo.setCurrentTime(0);
+      this.rightVideo.setCurrentTime(0);
+      this.leftVideo.start();
+      this.rightVideo.start();
+    } catch (error) {
+      // controller 尚未绑定（页面还没挂载好）：忽略
+    }
+  }
+
+  private stopVideoLoop(): void {
+    try {
+      this.leftVideo.pause();
+      this.rightVideo.pause();
+    } catch (error) {
+      // 页面已经销毁：忽略
+    }
   }
 
   /**
@@ -158,6 +260,18 @@ export struct A_Onboarding {
       // **不能**把状态变更包进 animateTo —— 那会把新页里的开关也纳入属性动画，
       // 导致轨道颜色从深到浅过渡（2026-10-29 需求方）。
       this.page = this.page + 1;
+      if (this.page === 1) {
+        this.pushReady = false;
+        this.calendarReady = false;
+      }
+      if (this.page === 2) {
+        this.pushReady = false;
+        this.calendarReady = false;
+        this.resetQqVideoState();
+        this.startVideoLoop();
+      } else {
+        this.stopVideoLoop();
+      }
       return;
     }
     this.finish();
@@ -174,6 +288,11 @@ export struct A_Onboarding {
   private goPrev(): void {
     if (this.page > 0) {
       this.page = this.page - 1;
+      if (this.page === 2) {
+        this.startVideoLoop();
+      } else {
+        this.stopVideoLoop();
+      }
     }
   }
 
@@ -230,6 +349,10 @@ export struct A_Onboarding {
     this.boundAppId = appId;
     this.byobBusy = false;
     this.byobSecret = '';
+    // 绑定成功后内容变短：按已绑定高度重新收紧
+    this.measuredBindingHeight = 0;
+    this.bindingHeight = BINDING_BOUND_VP;
+    this.scheduleBindingHeightFix();
     const nickname: string = res.data.bot_nickname !== undefined && res.data.bot_nickname.length > 0
       ? res.data.bot_nickname : appId;
     this.toast('绑定成功，现在把消息转发给「' + nickname + '」');
@@ -499,59 +622,202 @@ export struct A_Onboarding {
         .transition(TransitionEffect.OPACITY
           .combine(TransitionEffect.scale({ x: 0.98, y: 0.98 }))
           .animation({ duration: 220, curve: Curve.FastOutSlowIn }))
-      } else {
-        Scroll() {
-          Column({ space: 12 }) {
-            if (this.page === 1) {
-              // ── 第 2 页：可选权限（通知 / 日历） ──
-              Column({ space: 12 }) {
+      } else if (this.page === 1) {
+        // ── 第 2 页：中间两张演示动图，底部可选权限 ──
+        Column() {
+          Row({ space: 3 }) {
+            Stack() {
+              Video({ src: $r('app.media.push') })
+                .width('100%')
+                .height('100%')
+                .objectFit(ImageFit.Contain)
+                .controls(false)
+                .loop(true)
+                .muted(true)
+                .autoPlay(true)
+                .backgroundColor(this.themeStore.scheme.surface)
+                .onStart(() => {
+                  this.pushReady = true;
+                })
+              if (!this.pushReady) {
                 Column() {
-                  Text('可选通道（默认关闭）')
-                    .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                    .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+                  Image($r('app.media.push_first'))
                     .width('100%')
-                    .padding({
-                      left: 14,
-                      right: 14,
-                      top: 12,
-                      bottom: 4
-                    })
-                  this.notifyRow()
-                  Divider()
-                  this.calendarRow()
+                    .height('100%')
+                    .objectFit(ImageFit.Contain)
                 }
                 .width('100%')
-                .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
-                .borderRadius(14)
-
+                .height('100%')
+                .backgroundColor(this.themeStore.scheme.surface)
               }
-              .width('100%')
-              .transition(TransitionEffect.OPACITY
-                .combine(TransitionEffect.scale({ x: 0.98, y: 0.98 }))
-                .animation({ duration: 220, curve: Curve.FastOutSlowIn }))
-            } else {
-              // ── 第 3 页：绑定 QQ Bot（可绑定，也可直接开始跳过） ──
-              Column({ space: 12 }) {
+            }
+            .layoutWeight(1)
+            .height('100%')
 
-
-                // 转发内容的数据处理说明：只在绑定/使用 Bot 的场景下出现，不占用第 1 页
-                Column({ space: 6 }) {
-                  Text('关于转发内容')
-                    .fontSize($r('sys.float.ohos_id_text_size_body1'))
-                    .fontWeight(FontWeight.Medium)
-                    .fontColor($r('sys.color.ohos_id_color_text_primary'))
-                  Text('在 QQ 把文字、截图或文件转发给 Bot 后，内容会在服务器内存中短暂中转（最长 30 分钟）'
-                    + '用于 AI 总结信息，并生成待你确认的待办。')
-                    .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                    .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+            Stack() {
+              Video({ src: $r('app.media.calendar') })
+                .width('100%')
+                .height('100%')
+                .objectFit(ImageFit.Contain)
+                .controls(false)
+                .loop(true)
+                .muted(true)
+                .autoPlay(true)
+                .backgroundColor(this.themeStore.scheme.surface)
+                .onStart(() => {
+                  this.calendarReady = true;
+                })
+              if (!this.calendarReady) {
+                Column() {
+                  Image($r('app.media.calendar_first'))
+                    .width('100%')
+                    .height('100%')
+                    .objectFit(ImageFit.Contain)
                 }
                 .width('100%')
-                .padding(14)
-                .alignItems(HorizontalAlign.Start)
-                .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
-                .borderRadius(14)
+                .height('100%')
+                .backgroundColor(this.themeStore.scheme.surface)
+              }
+            }
+            .layoutWeight(1)
+            .height('100%')
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .padding({ left: 3, right: 3 })
+          .alignItems(VerticalAlign.Center)
 
-                Column({ space: 10 }) {
+          // 可选通道模块贴底
+          Column() {
+            Text('可选通道（默认关闭）')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+              .width('100%')
+              .padding({
+                left: 14,
+                right: 14,
+                top: 12,
+                bottom: 4
+              })
+            this.notifyRow()
+            Divider()
+            this.calendarRow()
+          }
+          .width('100%')
+          .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
+          .borderRadius(14)
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .transition(TransitionEffect.OPACITY
+          .combine(TransitionEffect.scale({ x: 0.98, y: 0.98 }))
+          .animation({ duration: 220, curve: Curve.FastOutSlowIn }))
+      } else {
+        // ── 第 3 页：中间两段教程，底部「关于转发内容」+「绑定 QQ Bot」 ──
+        Column() {
+          // 视频区：左右同时播放；左侧短、播完停在最后一帧，右侧播完后两个一起重播
+          Row({ space: 3 }) {
+            Stack() {
+              Video({ src: $r('app.media.qqbot1'), controller: this.leftVideo })
+                .width('100%')
+                .height('100%')
+                .objectFit(ImageFit.Contain)
+                .controls(false)
+                .loop(false)
+                .muted(true)
+                .autoPlay(false)
+                .backgroundColor(this.themeStore.scheme.surface)
+                .onPrepared(() => {
+                  this.qqLeftPrepared = true;
+                  this.maybeStartQqVideos();
+                })
+                .onStart(() => {
+                  this.qqLeftReady = true;
+                })
+              if (!this.qqLeftReady) {
+                Column() {
+                  Image($r('app.media.qqbot1_first'))
+                    .width('100%')
+                    .height('100%')
+                    .objectFit(ImageFit.Contain)
+                }
+                .width('100%')
+                .height('100%')
+                .backgroundColor(this.themeStore.scheme.surface)
+              }
+            }
+            .layoutWeight(1)
+            .height('100%')
+
+            Stack() {
+              Video({ src: $r('app.media.qqbot2'), controller: this.rightVideo })
+                .width('100%')
+                .height('100%')
+                .objectFit(ImageFit.Contain)
+                .controls(false)
+                .loop(false)
+                .muted(true)
+                .autoPlay(false)
+                .backgroundColor(this.themeStore.scheme.surface)
+                .onPrepared(() => {
+                  this.qqRightPrepared = true;
+                  this.maybeStartQqVideos();
+                })
+                .onStart(() => {
+                  this.qqRightReady = true;
+                })
+                .onFinish(() => {
+                  // 右侧（长的）播完：两个一起回到 0 重播
+                  this.restartVideos();
+                })
+              if (!this.qqRightReady) {
+                Column() {
+                  Image($r('app.media.qqbot2_first'))
+                    .width('100%')
+                    .height('100%')
+                    .objectFit(ImageFit.Contain)
+                }
+                .width('100%')
+                .height('100%')
+                .backgroundColor(this.themeStore.scheme.surface)
+              }
+            }
+            .layoutWeight(1)
+            .height('100%')
+
+            
+          }
+          .width('100%')
+          .layoutWeight(1)
+          .padding({ left: 3, right: 3 })
+          .alignItems(VerticalAlign.Center)
+          // 展开绑定时视频平滑淡出
+          .opacity(this.bindingExpanded ? 0 : 1)
+          .animation({ duration: 220, curve: Curve.EaseInOut })
+
+          // 底部两个模块
+          Column({ space: 12 }) {
+            // 关于转发内容
+            Column({ space: 6 }) {
+              Text('关于转发内容')
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .fontWeight(FontWeight.Medium)
+                .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              Text('在 QQ 把文字、截图或文件转发给 Bot 后，内容会在服务器内存中短暂中转（最长 30 分钟）'
+                + '用于 AI 总结信息，并生成待你确认的待办。')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+            }
+            .width('100%')
+            .padding(14)
+            .alignItems(HorizontalAlign.Start)
+            .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
+            .borderRadius(14)
+
+            // 绑定 QQ Bot：默认一行，点「现在绑定」展开
+            Column() {
+              if (this.bindingExpanded) {
+                Column({ space: 8 }) {
                   Text('绑定 QQ Bot')
                     .fontSize($r('sys.float.ohos_id_text_size_body1'))
                     .fontWeight(FontWeight.Medium)
@@ -575,14 +841,12 @@ export struct A_Onboarding {
                       .fontSize($r('sys.float.ohos_id_text_size_body1'))
                       .fontColor($r('sys.color.ohos_id_color_text_primary'))
                       .width('100%')
-                    Text('点按钮复制创建链接，然后到 QQ 里粘贴打开')
-                      .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                      .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-                      .width('100%')
                     Text(BOT_CREATE_URL)
                       .fontSize($r('sys.float.ohos_id_text_size_body2'))
                       .fontColor(this.themeStore.scheme.primary)
                       .copyOption(CopyOptions.LocalDevice)
+                      .maxLines(1)
+                      .textOverflow({ overflow: TextOverflow.Ellipsis })
                       .width('100%')
                     Button({ type: ButtonType.Capsule, stateEffect: true }) {
                       Text('复制创建链接')
@@ -633,13 +897,29 @@ export struct A_Onboarding {
                         .fontColor($r('sys.color.ohos_id_color_warning'))
                         .width('100%')
                     }
+                  }
+
+                  // 与设置页一致：取消 / 绑定
+                  Row({ space: 12 }) {
+                    Button({ type: ButtonType.Capsule, stateEffect: true }) {
+                      Text('取消')
+                        .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                        .fontColor($r('sys.color.ohos_id_color_text_primary'))
+                    }
+                    .layoutWeight(1)
+                    .height(36)
+                    .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
+                    .borderRadius(18)
+                    .onClick(() => {
+                      this.collapseBinding();
+                    })
 
                     Button({ type: ButtonType.Capsule, stateEffect: true }) {
                       Text(this.byobBusy ? '绑定中…' : '绑定')
                         .fontSize($r('sys.float.ohos_id_text_size_body2'))
                         .fontColor(this.themeStore.scheme.onPrimary)
                     }
-                    .width('100%')
+                    .layoutWeight(1)
                     .height(36)
                     .backgroundColor(this.themeStore.scheme.primary)
                     .borderRadius(18)
@@ -648,26 +928,53 @@ export struct A_Onboarding {
                       this.submitByob();
                     })
                   }
-
+                  .width('100%')
                 }
                 .width('100%')
                 .padding(14)
                 .alignItems(HorizontalAlign.Start)
-                .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
-                .borderRadius(14)
+                // 记录内容真实高度：动画结束后把容器从预估高度收回到这里
+                .onAreaChange((oldArea: Area, newArea: Area) => {
+                  const measured: number = Number(newArea.height);
+                  if (measured > this.measuredBindingHeight) {
+                    this.measuredBindingHeight = measured;
+                  }
+                })
+              } else {
+                Row({ space: 8 }) {
+                  Text('绑定 QQ Bot')
+                    .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor($r('sys.color.ohos_id_color_text_primary'))
+                    .layoutWeight(1)
+                  Text(this.bound ? '已绑定' : '现在绑定')
+                    .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                    .fontColor(this.themeStore.scheme.primary)
+                    .onClick(() => {
+                      this.expandBinding();
+                    })
+                }
+                .width('100%')
+                .height(BINDING_COLLAPSED_VP)
+                .padding({ left: 14, right: 14 })
+                .alignItems(VerticalAlign.Center)
               }
-              .width('100%')
-              .transition(TransitionEffect.OPACITY
-                .combine(TransitionEffect.scale({ x: 0.98, y: 0.98 }))
-                .animation({ duration: 220, curve: Curve.FastOutSlowIn }))
             }
+            .width('100%')
+            // 高度做隐式动画：展开先按预估高度，280ms 后按内容实测值收紧，去掉底部空白
+            .height(this.bindingHeight)
+            .clip(true)
+            .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
+            .borderRadius(14)
+            .animation({ duration: 220, curve: Curve.FastOutSlowIn })
           }
           .width('100%')
         }
         .width('100%')
         .layoutWeight(1)
-        .align(Alignment.Top)
-        .scrollBar(BarState.Off)
+        .transition(TransitionEffect.OPACITY
+          .combine(TransitionEffect.scale({ x: 0.98, y: 0.98 }))
+          .animation({ duration: 220, curve: Curve.FastOutSlowIn }))
       }
 
       // 页码圆点（←→ 按钮已按需求删除，导航交给下面两个按钮）
