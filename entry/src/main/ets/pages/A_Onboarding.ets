@@ -23,6 +23,8 @@ const DOMAIN: number = 0x0000;
 const TAG: string = 'Onboarding';
 /** QQ 官方「创建机器人」链接（浏览器直接打开会跳转失败，需在 QQ 内打开） */
 const BOT_CREATE_URL: string = 'https://q.qq.com/qqbot/openclaw/login.html';
+/** 教程视频宽高比（四段视频都是 872×1162）：让说明文字紧跟视频底部 */
+const VIDEO_ASPECT_RATIO: number = 872 / 1162;
 /** 折叠态「绑定 QQ Bot」一行的高度（vp） */
 const BINDING_COLLAPSED_VP: number = 56;
 /** 展开态高度（vp）：按精简后的表单内容固定，保证高度动画可控 */
@@ -365,7 +367,7 @@ export struct A_Onboarding {
         Text('通知提醒')
           .fontSize($r('sys.float.ohos_id_text_size_body1'))
           .fontColor($r('sys.color.ohos_id_color_text_primary'))
-        Text('到点弹通知/横幅；不开也能用日历兜底')
+        Text('到点弹出通知，拒绝错过 DDL')
           .fontSize($r('sys.float.ohos_id_text_size_body2'))
           .fontColor($r('sys.color.ohos_id_color_text_secondary'))
       }
@@ -392,7 +394,7 @@ export struct A_Onboarding {
         Text('系统日历')
           .fontSize($r('sys.float.ohos_id_text_size_body1'))
           .fontColor($r('sys.color.ohos_id_color_text_primary'))
-        Text('把任务写成「知了」日程；不写也不影响任务本身')
+        Text('把待办写入系统日历，查看更快一步')
           .fontSize($r('sys.float.ohos_id_text_size_body2'))
           .fontColor($r('sys.color.ohos_id_color_text_secondary'))
       }
@@ -593,7 +595,7 @@ export struct A_Onboarding {
             // 撤回后 AI 与云端能力停用，本机基础功能（手动增删改、提醒、通知、日历、导入导出）照常。
             Column({ space: 8 }) {
               Text() {
-                Span('点击下方「同意」即表示你已阅读并同意')
+                Span('请点击此处阅读')
                   .fontSize($r('sys.float.ohos_id_text_size_body2'))
                   .fontColor($r('sys.color.ohos_id_color_text_primary'))
                 Span('《隐私政策》')
@@ -603,7 +605,7 @@ export struct A_Onboarding {
                     this.openPrivacyPolicy();
                   })
                 Span(
-                  '，同意使用云端同步与 AI 解析相关功能')
+                  '，点击「同意」按钮表示您了解并同意使用云端及 AI 相关服务。')
                   .fontSize($r('sys.float.ohos_id_text_size_body2'))
                   .fontColor($r('sys.color.ohos_id_color_text_secondary'))
               }
@@ -625,62 +627,105 @@ export struct A_Onboarding {
       } else if (this.page === 1) {
         // ── 第 2 页：中间两张演示动图，底部可选权限 ──
         Column() {
-          Row({ space: 3 }) {
-            Stack() {
-              Video({ src: $r('app.media.push') })
-                .width('100%')
-                .height('100%')
-                .objectFit(ImageFit.Contain)
-                .controls(false)
-                .loop(true)
-                .muted(true)
-                .autoPlay(true)
-                .backgroundColor(this.themeStore.scheme.surface)
-                .onStart(() => {
-                  this.pushReady = true;
-                })
-              if (!this.pushReady) {
-                Column() {
-                  Image($r('app.media.push_first'))
-                    .width('100%')
+          Row() {
+            // 视频按自身比例占位，说明文字紧贴在视频下方（不再被撑到底部模块上方）
+            Column({ space: 4 }) {
+              Stack() {
+                Video({ src: $r('app.media.push') })
+                  .width('100%')
+                  .height('100%')
+                  .objectFit(ImageFit.Contain)
+                  .controls(false)
+                  .loop(true)
+                  .muted(true)
+                  .autoPlay(true)
+                  .backgroundColor(this.themeStore.scheme.surface)
+                  .onStart(() => {
+                    this.pushReady = true;
+                  })
+                if (!this.pushReady) {
+                  Column() {
+                    Image($r('app.media.push_first'))
+                      .width('100%')
+                      .height('100%')
+                      .objectFit(ImageFit.Contain)
+                  }
+                  .width('100%')
+                  .height('100%')
+                  .backgroundColor(this.themeStore.scheme.surface)
+                }
+                // 两段视频之间不再留 space；这条 3vp 宽、与视频等高的背景色矩形直接盖在接缝上，
+                // 避免切页时上一页的蓝色 logo 从缝隙透出。
+                Row() {
+                  Blank()
+                  Column()
+                    .width(3)
                     .height('100%')
-                    .objectFit(ImageFit.Contain)
+                    .backgroundColor(this.themeStore.scheme.surface)
                 }
                 .width('100%')
                 .height('100%')
-                .backgroundColor(this.themeStore.scheme.surface)
+                .hitTestBehavior(HitTestMode.None)
               }
-            }
-            .layoutWeight(1)
-            .height('100%')
+              .width('100%')
+              .aspectRatio(VIDEO_ASPECT_RATIO)
+              // 空间不够时允许视频缩小，避免展开绑定表单后挡住 / 溢出
+              .flexShrink(1)
 
-            Stack() {
-              Video({ src: $r('app.media.calendar') })
+              Text('通知推送')
                 .width('100%')
-                .height('100%')
-                .objectFit(ImageFit.Contain)
-                .controls(false)
-                .loop(true)
-                .muted(true)
-                .autoPlay(true)
-                .backgroundColor(this.themeStore.scheme.surface)
-                .onStart(() => {
-                  this.calendarReady = true;
-                })
-              if (!this.calendarReady) {
-                Column() {
-                  Image($r('app.media.calendar_first'))
-                    .width('100%')
-                    .height('100%')
-                    .objectFit(ImageFit.Contain)
-                }
-                .width('100%')
-                .height('100%')
-                .backgroundColor(this.themeStore.scheme.surface)
-              }
+                .fontSize($r('sys.float.ohos_id_text_size_caption'))
+                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+                .textAlign(TextAlign.Center)
+                .maxLines(1)
             }
             .layoutWeight(1)
             .height('100%')
+            .justifyContent(FlexAlign.Center)
+            .alignItems(HorizontalAlign.Center)
+
+            Column({ space: 4 }) {
+              Stack() {
+                Video({ src: $r('app.media.calendar') })
+                  .width('100%')
+                  .height('100%')
+                  .objectFit(ImageFit.Contain)
+                  .controls(false)
+                  .loop(true)
+                  .muted(true)
+                  .autoPlay(true)
+                  .backgroundColor(this.themeStore.scheme.surface)
+                  .onStart(() => {
+                    this.calendarReady = true;
+                  })
+                if (!this.calendarReady) {
+                  Column() {
+                    Image($r('app.media.calendar_first'))
+                      .width('100%')
+                      .height('100%')
+                      .objectFit(ImageFit.Contain)
+                  }
+                  .width('100%')
+                  .height('100%')
+                  .backgroundColor(this.themeStore.scheme.surface)
+                }
+              }
+              .width('100%')
+              .aspectRatio(VIDEO_ASPECT_RATIO)
+              // 空间不够时允许视频缩小，避免展开绑定表单后挡住 / 溢出
+              .flexShrink(1)
+
+              Text('日历编辑')
+                .width('100%')
+                .fontSize($r('sys.float.ohos_id_text_size_caption'))
+                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+                .textAlign(TextAlign.Center)
+                .maxLines(1)
+            }
+            .layoutWeight(1)
+            .height('100%')
+            .justifyContent(FlexAlign.Center)
+            .alignItems(HorizontalAlign.Center)
           }
           .width('100%')
           .layoutWeight(1)
@@ -716,83 +761,126 @@ export struct A_Onboarding {
         // ── 第 3 页：中间两段教程，底部「关于转发内容」+「绑定 QQ Bot」 ──
         Column() {
           // 视频区：左右同时播放；左侧短、播完停在最后一帧，右侧播完后两个一起重播
-          Row({ space: 3 }) {
-            Stack() {
-              Video({ src: $r('app.media.qqbot1'), controller: this.leftVideo })
-                .width('100%')
-                .height('100%')
-                .objectFit(ImageFit.Contain)
-                .controls(false)
-                .loop(false)
-                .muted(true)
-                .autoPlay(false)
-                .backgroundColor(this.themeStore.scheme.surface)
-                .onPrepared(() => {
-                  this.qqLeftPrepared = true;
-                  this.maybeStartQqVideos();
-                })
-                .onStart(() => {
-                  this.qqLeftReady = true;
-                })
-              if (!this.qqLeftReady) {
-                Column() {
-                  Image($r('app.media.qqbot1_first'))
-                    .width('100%')
+          Row() {
+            // 视频按自身比例占位，说明文字紧贴在视频下方（不再被撑到底部模块上方）
+            Column({ space: 4 }) {
+              Stack() {
+                Video({ src: $r('app.media.qqbot1'), controller: this.leftVideo })
+                  .width('100%')
+                  .height('100%')
+                  .objectFit(ImageFit.Contain)
+                  .controls(false)
+                  .loop(false)
+                  .muted(true)
+                  .autoPlay(false)
+                  .backgroundColor(this.themeStore.scheme.surface)
+                  .onPrepared(() => {
+                    this.qqLeftPrepared = true;
+                    this.maybeStartQqVideos();
+                  })
+                  .onStart(() => {
+                    this.qqLeftReady = true;
+                  })
+                if (!this.qqLeftReady) {
+                  Column() {
+                    Image($r('app.media.qqbot1_first'))
+                      .width('100%')
+                      .height('100%')
+                      .objectFit(ImageFit.Contain)
+                  }
+                  .width('100%')
+                  .height('100%')
+                  .backgroundColor(this.themeStore.scheme.surface)
+                }
+                // 两段视频之间不再留 space；这条 3vp 宽、与视频等高的背景色矩形直接盖在接缝上，
+                // 避免切页时上一页的蓝色 logo 从缝隙透出。
+                Row() {
+                  Blank()
+                  Column()
+                    .width(3)
                     .height('100%')
-                    .objectFit(ImageFit.Contain)
+                    .backgroundColor(this.themeStore.scheme.surface)
                 }
                 .width('100%')
                 .height('100%')
-                .backgroundColor(this.themeStore.scheme.surface)
+                .hitTestBehavior(HitTestMode.None)
               }
+              .width('100%')
+              .aspectRatio(VIDEO_ASPECT_RATIO)
+              // 空间不够时允许视频缩小，避免展开绑定表单后挡住 / 溢出
+              .flexShrink(1)
+
+              Text('QQ 内转发消息')
+                .width('100%')
+                .fontSize($r('sys.float.ohos_id_text_size_caption'))
+                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+                .textAlign(TextAlign.Center)
+                .maxLines(1)
             }
             .layoutWeight(1)
             .height('100%')
+            .justifyContent(FlexAlign.Center)
+            .alignItems(HorizontalAlign.Center)
 
-            Stack() {
-              Video({ src: $r('app.media.qqbot2'), controller: this.rightVideo })
-                .width('100%')
-                .height('100%')
-                .objectFit(ImageFit.Contain)
-                .controls(false)
-                .loop(false)
-                .muted(true)
-                .autoPlay(false)
-                .backgroundColor(this.themeStore.scheme.surface)
-                .onPrepared(() => {
-                  this.qqRightPrepared = true;
-                  this.maybeStartQqVideos();
-                })
-                .onStart(() => {
-                  this.qqRightReady = true;
-                })
-                .onFinish(() => {
-                  // 右侧（长的）播完：两个一起回到 0 重播
-                  this.restartVideos();
-                })
-              if (!this.qqRightReady) {
-                Column() {
-                  Image($r('app.media.qqbot2_first'))
-                    .width('100%')
-                    .height('100%')
-                    .objectFit(ImageFit.Contain)
+            Column({ space: 4 }) {
+              Stack() {
+                Video({ src: $r('app.media.qqbot2'), controller: this.rightVideo })
+                  .width('100%')
+                  .height('100%')
+                  .objectFit(ImageFit.Contain)
+                  .controls(false)
+                  .loop(false)
+                  .muted(true)
+                  .autoPlay(false)
+                  .backgroundColor(this.themeStore.scheme.surface)
+                  .onPrepared(() => {
+                    this.qqRightPrepared = true;
+                    this.maybeStartQqVideos();
+                  })
+                  .onStart(() => {
+                    this.qqRightReady = true;
+                  })
+                  .onFinish(() => {
+                    // 右侧（长的）播完：两个一起回到 0 重播
+                    this.restartVideos();
+                  })
+                if (!this.qqRightReady) {
+                  Column() {
+                    Image($r('app.media.qqbot2_first'))
+                      .width('100%')
+                      .height('100%')
+                      .objectFit(ImageFit.Contain)
+                  }
+                  .width('100%')
+                  .height('100%')
+                  .backgroundColor(this.themeStore.scheme.surface)
                 }
-                .width('100%')
-                .height('100%')
-                .backgroundColor(this.themeStore.scheme.surface)
               }
+              .width('100%')
+              .aspectRatio(VIDEO_ASPECT_RATIO)
+              // 空间不够时允许视频缩小，避免展开绑定表单后挡住 / 溢出
+              .flexShrink(1)
+
+              Text('APP 内自动生成')
+                .width('100%')
+                .fontSize($r('sys.float.ohos_id_text_size_caption'))
+                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+                .textAlign(TextAlign.Center)
+                .maxLines(1)
             }
             .layoutWeight(1)
             .height('100%')
-
-            
+            .justifyContent(FlexAlign.Center)
+            .alignItems(HorizontalAlign.Center)
           }
           .width('100%')
           .layoutWeight(1)
           .padding({ left: 3, right: 3 })
           .alignItems(VerticalAlign.Center)
-          // 展开绑定时视频平滑淡出
+          // 展开绑定时视频与说明文字整体向上缩小并完全淡出
           .opacity(this.bindingExpanded ? 0 : 1)
+          .scale(this.bindingExpanded ? { x: 0.88, y: 0.88 } : { x: 1.0, y: 1.0 })
+          .translate({ y: this.bindingExpanded ? -24 : 0 })
           .animation({ duration: 220, curve: Curve.EaseInOut })
 
           // 底部两个模块
@@ -813,6 +901,9 @@ export struct A_Onboarding {
             .alignItems(HorizontalAlign.Start)
             .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
             .borderRadius(14)
+            // 展开绑定表单时降到 50% 透明度，取消后渐入复原
+            .opacity(this.bindingExpanded ? 0.5 : 1)
+            .animation({ duration: 220, curve: Curve.EaseInOut })
 
             // 绑定 QQ Bot：默认一行，点「现在绑定」展开
             Column() {
@@ -840,6 +931,11 @@ export struct A_Onboarding {
                     Text('1. 先创建一个 QQ 机器人')
                       .fontSize($r('sys.float.ohos_id_text_size_body1'))
                       .fontColor($r('sys.color.ohos_id_color_text_primary'))
+                      .width('100%')
+                    // 与设置页「绑定 QQ」同一句说明
+                    Text('点按钮复制创建链接，然后到 QQ 里粘贴打开')
+                      .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                      .fontColor($r('sys.color.ohos_id_color_text_secondary'))
                       .width('100%')
                     Text(BOT_CREATE_URL)
                       .fontSize($r('sys.float.ohos_id_text_size_body2'))
