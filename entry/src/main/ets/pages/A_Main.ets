@@ -25,6 +25,7 @@ import { BackendConfig } from '../service/backend/BackendConfig';
 import { candidateToTask } from '../service/backend/TaskMapper';
 import { ManualParseResult, ManualParseService } from '../service/cloud/ManualParseService';
 import { ForwardImageService } from '../service/cloud/ForwardImageService';
+import { ForwardFileService } from '../service/cloud/ForwardFileService';
 import { Task, TaskPriority, TaskStatus, TaskSource } from '../model';
 import { RelayApi } from '../service/backend/RelayApi';
 import { ForwardPendingData, ForwardItem } from '../service/backend/BackendTypes';
@@ -113,12 +114,17 @@ struct A_Main {
     }, 30000);
   }
 
-  /** 板板标题右侧的实时时间（分钟精度；30 秒刷新一次，跨分钟不会迟太久） */
+  /**
+   * 板板标题右侧的实时时间（分钟精度；30 秒刷新一次，跨分钟不会迟太久）。
+   * 2026-10-29 需求方：`现在是 mm月dd日 星期x 时段 hh:mm`，时间用 12 小时制。
+   */
   private refreshBanbanNowLabel(): void {
     const d: Date = new Date();
     this.banbanNowLabel = `现在是  ${TaskListViewModel.pad2(d.getMonth() + 1)}月`
       + `${TaskListViewModel.pad2(d.getDate())}日  `
-      + `${TaskListViewModel.pad2(d.getHours())}:${TaskListViewModel.pad2(d.getMinutes())}`;
+      + `${TaskListViewModel.weekdayCn(d.getDay())}  `
+      + `${TaskListViewModel.periodLabel(d.getHours())} `
+      + `${TaskListViewModel.hour12(d.getHours())}:${TaskListViewModel.pad2(d.getMinutes())}`;
   }
 
   /** 首次启动：没看过引导就全屏覆盖；不阻塞列表初始化 */
@@ -150,6 +156,11 @@ struct A_Main {
     if (shareError.length > 0) {
       this.toast(shareError);
     }
+    // 从后台回来：立刻补一次同步，并重试 Push Token 上报（首次启动时网络可能还没就绪）
+    if (SyncService.enabled && !this.showOnboarding) {
+      SyncService.syncOnce(true);
+      PushRegistrar.register(true);
+    }
   }
 
   private async pullForwarded(): Promise<void> {
@@ -178,9 +189,13 @@ struct A_Main {
         const item: ForwardItem = data.items[i];
         let task: Task;
         try {
-          task = item.kind === 'image' && item.url !== undefined && item.url.length > 0
-            ? await this.imageToPending(item, i)
-            : await this.forwardToPending(item, i);
+          if (item.kind === 'image' && item.url !== undefined && item.url.length > 0) {
+            task = await this.imageToPending(item, i);
+          } else if (item.kind === 'file' && item.url !== undefined && item.url.length > 0) {
+            task = await this.fileToPending(item, i);
+          } else {
+            task = await this.forwardToPending(item, i);
+          }
         } catch (error) {
           const err = error as BusinessError;
           hilog.error(DOMAIN, TAG, 'forward item failed: %{public}s', err.message);
@@ -234,6 +249,8 @@ struct A_Main {
         const task: Task = candidateToTask(parsed.candidate, 0, raw, true);
         task.clientTaskId = 'forward-' + (item.id !== undefined ? item.id : String(now));
         task.createdAt = now;
+        task.source = TaskSource.BOT;
+        task.originDetail = '机器人转发';
         task.pendingSource = 'forward';
         task.pendingSeen = false;
         return task;
@@ -251,7 +268,8 @@ struct A_Main {
     task.clientTaskId = 'forward-' + (item.id !== undefined ? item.id : String(now));
     task.status = TaskStatus.PENDING_CONFIRM;
     task.priority = TaskPriority.NORMAL;
-    task.source = TaskSource.SHARE;
+    task.source = TaskSource.BOT;
+    task.originDetail = '机器人转发';
     task.createdAt = now;
     task.pendingSeen = false;
     task.pendingSource = 'forward';
@@ -273,6 +291,8 @@ struct A_Main {
           const task: Task = candidateToTask(parsed.candidate, 0, parsed.text, true);
           task.clientTaskId = 'forward-' + (item.id !== undefined ? item.id : String(now));
           task.createdAt = now;
+          task.source = TaskSource.BOT;
+          task.originDetail = '机器人转发';
           task.pendingSource = 'image';
           task.pendingSeen = false;
           return task;
@@ -285,7 +305,8 @@ struct A_Main {
           task.clientTaskId = 'forward-' + (item.id !== undefined ? item.id : String(now));
           task.status = TaskStatus.PENDING_CONFIRM;
           task.priority = TaskPriority.NORMAL;
-          task.source = TaskSource.SHARE;
+          task.source = TaskSource.BOT;
+          task.originDetail = '机器人转发';
           task.createdAt = now;
           task.pendingSeen = false;
           task.pendingSource = 'image';
@@ -300,10 +321,61 @@ struct A_Main {
     task.clientTaskId = 'forward-' + (item.id !== undefined ? item.id : String(now));
     task.status = TaskStatus.PENDING_CONFIRM;
     task.priority = TaskPriority.NORMAL;
-    task.source = TaskSource.SHARE;
+    task.source = TaskSource.BOT;
+    task.originDetail = '机器人转发';
     task.createdAt = now;
     task.pendingSeen = false;
     task.pendingSource = 'image';
+    return task;
+  }
+
+  /** 转发文件 → 缓存 → 后端抽取文本 → 待确认；下载/解析失败保留文件名 */
+  private async fileToPending(item: ForwardItem, index: number): Promise<Task> {
+    const now: number = Date.now() + index;
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    const fileName: string = item.filename !== undefined && item.filename.length > 0
+      ? item.filename : '文件消息';
+    let uri: string = '';
+    if (context !== undefined && item.url !== undefined) {
+      uri = await ForwardFileService.download(context, item.url, fileName);
+    }
+    if (uri.length > 0) {
+      const parsed: ManualParseResult = await ManualParseService.parseFile(uri, fileName);
+      if (parsed.ok && parsed.candidate !== undefined) {
+        const task: Task = candidateToTask(parsed.candidate, 0, parsed.text, true);
+        task.clientTaskId = 'forward-' + (item.id !== undefined ? item.id : String(now));
+        task.createdAt = now;
+        task.source = TaskSource.BOT;
+        task.originDetail = '机器人转发';
+        task.pendingSource = 'file';
+        task.pendingSeen = false;
+        return task;
+      }
+      if (parsed.text.length > 0) {
+        const task: Task = new Task();
+        task.name = fileName.length > 20 ? fileName.substring(0, 20) : fileName;
+        task.rawText = parsed.text;
+        task.clientTaskId = 'forward-' + (item.id !== undefined ? item.id : String(now));
+        task.status = TaskStatus.PENDING_CONFIRM;
+        task.priority = TaskPriority.NORMAL;
+        task.source = TaskSource.BOT;
+        task.originDetail = '机器人转发';
+        task.createdAt = now;
+        task.pendingSeen = false;
+        task.pendingSource = 'file';
+        return task;
+      }
+    }
+    const task: Task = new Task();
+    task.name = fileName.length > 20 ? fileName.substring(0, 20) : fileName;
+    task.clientTaskId = 'forward-' + (item.id !== undefined ? item.id : String(now));
+    task.status = TaskStatus.PENDING_CONFIRM;
+    task.priority = TaskPriority.NORMAL;
+    task.source = TaskSource.BOT;
+    task.originDetail = '机器人转发';
+    task.createdAt = now;
+    task.pendingSeen = false;
+    task.pendingSource = 'file';
     return task;
   }
 
@@ -404,14 +476,9 @@ struct A_Main {
       this.store.reconcileReminders();
     }, 60000);
     SyncService.init(context);
-    SettingsRepository.getSyncEnabled(context).then((enabled: boolean) => {
-      // 关掉同步就不轮询；打开会立即拉一次
-      SyncService.setEnabled(enabled);
-      if (enabled) {
-        // FE-76：同步开着才去取 Push Token 并上报（`push_ready` 由后端告诉）
-        PushRegistrar.register();
-      }
-    });
+    // 设置页已移除「云端同步」开关：同步常开，启动即拉一次并上报 Push Token。
+    SyncService.setEnabled(true);
+    PushRegistrar.register();
   }
 
   aboutToDisappear(): void {
@@ -652,6 +719,11 @@ struct A_Main {
         scroller: this.taskListScroller,
         store: this.store,
         onIndexChange: (index: number) => {
+          // 切换页签时退出多选编辑态（2026-10-29 修 bug：
+          // 点「多选」后切到板板/设置，编辑态会一直挂着，回来仍是勾选模式）
+          if (index !== this.currentIndex) {
+            this.store.exitEdit();
+          }
           this.currentIndex = index;
         },
         onAdd: () => {

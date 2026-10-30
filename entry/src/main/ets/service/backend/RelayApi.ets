@@ -20,7 +20,9 @@ import {
   ParseData,
   PushTokenData,
   RegisterData,
-  SubscribeData
+  SubscribeData,
+  TenantRegisterData,
+  TenantStatusData
 } from './BackendTypes';
 
 const BASE: string = '/api/relay';
@@ -40,6 +42,20 @@ export class RelayApi {
 
   static async bindStatus(): Promise<ApiResult<BindStatusData>> {
     return await ApiClient.get<BindStatusData>(BASE + '/bind/status');
+  }
+
+  /** BYOB：把用户自建 Bot 的 AppID / AppSecret 交给后端托管并启动连接。 */
+  static async registerTenant(appId: string, appSecret: string): Promise<ApiResult<TenantRegisterData>> {
+    return await ApiClient.post<TenantRegisterData>(BASE + '/tenant/register',
+      { 'app_id': appId, 'app_secret': appSecret });
+  }
+
+  static async tenantStatus(): Promise<ApiResult<TenantStatusData>> {
+    return await ApiClient.get<TenantStatusData>(BASE + '/tenant/status');
+  }
+
+  static async unbindTenant(): Promise<ApiResult<Record<string, Object>>> {
+    return await ApiClient.post<Record<string, Object>>(BASE + '/tenant/unbind', {});
   }
 
   /** 重新绑定前清掉旧绑定（否则刚生成新码就会被旧 bound=true 判成功） */
@@ -87,6 +103,15 @@ export class RelayApi {
   static async parseImage(imageB64: string, source: string): Promise<ApiResult<ParseData>> {
     return await ApiClient.post<ParseData>(BASE + '/parse', {
       'image_b64': imageB64,
+      'source': source
+    });
+  }
+
+  /** 手动添加：文件 → 后端抽取文本 → 候选（docx/xlsx/pptx/pdf/txt…） */
+  static async parseFile(fileB64: string, fileName: string, source: string): Promise<ApiResult<ParseData>> {
+    return await ApiClient.post<ParseData>(BASE + '/parse', {
+      'file_b64': fileB64,
+      'file_name': fileName,
       'source': source
     });
   }

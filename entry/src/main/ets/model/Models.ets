@@ -162,6 +162,13 @@ export class Task {
   @Trace calendarEventId?: number;
   /** 18.2 用户是否改过内容字段：为 true 时 5 秒轮询不再覆盖 name/note/dueAt/place/priority（FE-79） */
   @Trace userEdited?: boolean;
+  /**
+   * 18.3 是否已经隐藏「AI 生成」标识（2026-10-29）：
+   * 用户只要在详情页改过这条 AI 生成任务的任一内容字段，离开时置 true；
+   * 之后再次打开详情页就不再显示底部的 AI 标识（本次会话内仍显示）。
+   * 落盘保存，重启后仍然生效。
+   */
+  @Trace aiLabelHidden?: boolean;
   /** 19. 重复规则**数组**（元素见 `RepeatRule`）；命中任一条即算今天要做（并集） */
   @Trace repeat?: RepeatRule[];
   /** 20. 规则外的补充原话：只在规则表达不了时兜底（如「每学期第 3 周交」） */
@@ -191,6 +198,8 @@ export class Task {
   @Trace pendingSeen?: boolean;
   /** 30. 待确认来源：group / forward / image（普通待办不用） */
   @Trace pendingSource?: string;
+  /** 31. 回收站：ignored（忽略的消息）/ deleted（删除的待办）；为空表示仍在活跃列表 */
+  @Trace trashKind?: string;
 }
 
 /** 类型（`category`）预设：作业 / 考试 / 活动 / 通知 / 其他；也可自定义（字段表 §1 第 23 项） */

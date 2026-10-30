@@ -81,6 +81,8 @@ export class TaskListStore {
   @Trace groups: TaskDayGroup[] = TaskListViewModel.groupByDay([], new Date());
   /** 待确认消息：不进时间线，但和任务一起落盘 */
   @Trace pendingList: Task[] = [];
+  /** 回收站：忽略的消息 + 删除的待办（保留原 status，只标记 trashKind） */
+  @Trace trashList: Task[] = [];
   /** 是否处于编辑（多选）模式 */
   @Trace editing: boolean = false;
   /** 已勾选的任务 id */
@@ -156,6 +158,18 @@ export class TaskListStore {
     return n;
   }
 
+  /** 回收站某个分类（ignored / deleted），按删除前后时间从新到旧 */
+  trashTasks(kind: string): Task[] {
+    const list: Task[] = this.trashList.filter((task: Task) => task.trashKind === kind);
+    list.sort((a: Task, b: Task) => b.createdAt - a.createdAt);
+    return list;
+  }
+
+  /** 回收站总条数（设置页右侧文案） */
+  get trashCount(): number {
+    return this.trashList.length;
+  }
+
   markPendingSeen(task: Task): void {
     if (task.pendingSeen !== true) {
       task.pendingSeen = true;
@@ -173,14 +187,12 @@ export class TaskListStore {
   }
 
   ignorePending(task: Task): void {
-    const rest: Task[] = [];
-    this.pendingList.forEach((item: Task) => {
-      if (item.id !== task.id) {
-        rest.push(item);
-      }
-    });
-    this.pendingList = rest;
-    this.rebuildGroups(this.allTasks());
+    const all: Task[] = this.allTasks();
+    const kept: Task[] = all.filter((item: Task) => item.id !== task.id);
+    task.trashKind = 'ignored';
+    task.pendingSeen = true;
+    this.trashList = [task].concat(this.trashList);
+    this.rebuildGroups(kept);
     this.persist();
   }
 
@@ -190,11 +202,26 @@ export class TaskListStore {
    */
   init(context: common.Context): void {
     this.dataContext = context;
-    this.rebuildGroups(TaskRepository.load(context));
+    const loaded: Task[] = TaskRepository.load(context);
+    const active: Task[] = [];
+    const trash: Task[] = [];
+    loaded.forEach((task: Task) => {
+      if (task.trashKind === 'ignored' || task.trashKind === 'deleted') {
+        trash.push(task);
+      } else if (task.status === TaskStatus.DELETED) {
+        // 旧版软删只改了 status；迁移到回收站，避免老数据凭空消失。
+        task.trashKind = 'deleted';
+        trash.push(task);
+      } else {
+        active.push(task);
+      }
+    });
+    this.trashList = trash;
+    this.rebuildGroups(active);
     this.expireOverdue();
     // 启动即回写一次：把旧 `__ob_` 键文件/迁移数据规整成普通 JSON。
     // 但读出来是空列表时不要回写：文件可能只是暂时解析失败，直接写空会把唯一副本抹掉。
-    if (this.allTasks().length > 0) {
+    if (active.length > 0 || trash.length > 0) {
       this.persist();
     }
   }
@@ -289,7 +316,7 @@ export class TaskListStore {
     if (ctx === undefined) {
       return;
     }
-    TaskRepository.save(ctx, this.allTasks());
+    TaskRepository.save(ctx, this.allTasks().concat(this.trashList));
   }
 
   /**
@@ -572,14 +599,16 @@ export class TaskListStore {
    * 真接 `ReminderService` 后这里要先撤销提醒再软删）。
    */
   deleteTask(taskId: number): boolean {
+    const all: Task[] = this.allTasks();
     const found: Task | undefined = this.findTask(taskId);
     if (found === undefined) {
       return false;
     }
-    found.status = TaskStatus.DELETED;
+    found.trashKind = 'deleted';
     found.alarm = TaskAlarm.OFF;
-    // `reminderId` 交给对账器撤销后再清，避免系统里留下一个孤儿提醒
-    this.refreshGroups();
+    this.trashList = [found].concat(this.trashList.filter((task: Task) => task.id !== taskId));
+    const kept: Task[] = all.filter((task: Task) => task.id !== taskId);
+    this.rebuildGroups(kept);
     this.persist();
     this.reconcileReminders();
     return true;
@@ -1149,6 +1178,11 @@ export class TaskListStore {
         }
       });
     });
+    this.pendingList.forEach((task: Task) => {
+      if (this.matchesFilter(task)) {
+        ids.push(task.id);
+      }
+    });
     return ids;
   }
 
@@ -1162,33 +1196,82 @@ export class TaskListStore {
     this.selectedIds = this.visibleTaskIds();
   }
 
+  /** 从回收站恢复：清掉 trashKind，回到原状态（待确认仍回待确认，普通任务回时间线） */
+  restoreSelected(): number {
+    const ids: number[] = this.selectedIds;
+    if (ids.length === 0) {
+      return 0;
+    }
+    const restore: Task[] = this.trashList.filter((task: Task) => ids.indexOf(task.id) >= 0);
+    restore.forEach((task: Task) => {
+      task.trashKind = undefined;
+    });
+    this.trashList = this.trashList.filter((task: Task) => ids.indexOf(task.id) < 0);
+    this.rebuildGroups(this.allTasks().concat(restore));
+    this.persist();
+    this.exitEdit();
+    return restore.length;
+  }
+
+  /** 回收站里彻底删除：只删本机记录，不再进任何列表 */
+  purgeSelected(): number {
+    const ids: number[] = this.selectedIds;
+    if (ids.length === 0) {
+      return 0;
+    }
+    const before: number = this.trashList.length;
+    this.trashList = this.trashList.filter((task: Task) => ids.indexOf(task.id) < 0);
+    this.persist();
+    this.exitEdit();
+    return before - this.trashList.length;
+  }
+
+  /** 回收站详情页：恢复单条（清 `trashKind`，回到原状态，与 `restoreSelected` 同一套逻辑） */
+  restoreTask(taskId: number): boolean {
+    const found: Task | undefined = this.trashList.find((task: Task) => task.id === taskId);
+    if (found === undefined) {
+      return false;
+    }
+    found.trashKind = undefined;
+    this.trashList = this.trashList.filter((task: Task) => task.id !== taskId);
+    this.rebuildGroups(this.allTasks().concat([found]));
+    this.persist();
+    return true;
+  }
+
+  /** 回收站详情页：彻底删除单条（只删本机记录，不再进任何列表） */
+  purgeTask(taskId: number): boolean {
+    const before: number = this.trashList.length;
+    this.trashList = this.trashList.filter((task: Task) => task.id !== taskId);
+    if (this.trashList.length === before) {
+      return false;
+    }
+    this.persist();
+    return true;
+  }
+
   /**
-   * 删除已勾选的任务：从各组里摘掉，**空的组直接丢掉**（组头副标题的计数由 `TaskDayGroup` 的 getter 自动跟着变），
-   * **并自动退出编辑模式**（需求方 2026-10-16），返回删掉的条数。
-   *
-   * TODO(需求方): 真删要走 `repository/` 落库（现在只动内存里的 Mock 数据，重启即还原）；
-   * 另外「删除要不要二次确认」未定 —— 现在点了立刻删。
+   * 删除已勾选的任务：现在改为**进回收站**（保留原 `status`，只打 `trashKind='deleted'`），
+   * 并自动退出编辑模式，返回处理的条数。
    */
   deleteSelected(): number {
     const ids: number[] = this.selectedIds;
     if (ids.length === 0) {
       return 0;
     }
-    const kept: TaskDayGroup[] = [];
+    const all: Task[] = this.allTasks();
+    const kept: Task[] = [];
     const removed: Task[] = [];
-    this.groups.forEach((group: TaskDayGroup) => {
-      group.tasks.forEach((task: Task) => {
-        if (ids.indexOf(task.id) >= 0) {
-          removed.push(task);
-        }
-      });
-      const remain: Task[] = group.tasks.filter((task: Task) => ids.indexOf(task.id) < 0);
-      group.tasks = remain;
-      if (remain.length > 0) {
-        kept.push(group);
+    all.forEach((task: Task) => {
+      if (ids.indexOf(task.id) >= 0) {
+        task.trashKind = 'deleted';
+        removed.push(task);
+      } else {
+        kept.push(task);
       }
     });
-    this.groups = kept;
+    this.trashList = removed.concat(this.trashList);
+    this.rebuildGroups(kept);
     this.persist();
     const ctx: common.Context | undefined = this.dataContext;
     if (ctx !== undefined) {
@@ -1197,14 +1280,9 @@ export class TaskListStore {
         ReminderCoordinator.cancelNow(task, ctx);
       });
     }
-    // 删掉的如果是**最后一个带某标签的任务**，那个标签芯片会跟着消失 → 把筛选键也收回「全部」，
-    // 免得界面回到「全部」、列表却还按那个不存在的标签筛（见 `effectiveFilter` 的说明）。
-    // 这里顺手把状态写正，`effectiveFilter` 只是兜底。
     if (this.effectiveFilter === FILTER_ALL) {
       this.activeFilter = FILTER_ALL;
     }
-    // 删完**自动退出编辑模式**（需求方 2026-10-16：「删除完成后自动退出编辑状态」）：
-    // 这样右上角直接回到「编辑/搜索」、底部直接回到「＋」，不用用户再点一次「取消」。
     this.exitEdit();
     return ids.length;
   }

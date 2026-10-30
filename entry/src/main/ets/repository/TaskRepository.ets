@@ -72,6 +72,7 @@ interface TaskPlain {
   reminderAt?: number;
   calendarEventId?: number;
   userEdited?: boolean;
+  aiLabelHidden?: boolean;
   repeat?: RepeatRule[];
   repeatText?: string;
   source?: TaskSource;
@@ -85,6 +86,7 @@ interface TaskPlain {
   missingFields?: string[];
   pendingSeen?: boolean;
   pendingSource?: string;
+  trashKind?: string;
 }
 
 /**
@@ -285,6 +287,9 @@ export class TaskRepository {
     if (task.userEdited !== undefined) {
       plain.userEdited = task.userEdited;
     }
+    if (task.aiLabelHidden !== undefined) {
+      plain.aiLabelHidden = task.aiLabelHidden;
+    }
     if (task.repeat !== undefined) {
       plain.repeat = task.repeat;
     }
@@ -323,6 +328,9 @@ export class TaskRepository {
     }
     if (task.pendingSource !== undefined) {
       plain.pendingSource = task.pendingSource;
+    }
+    if (task.trashKind !== undefined) {
+      plain.trashKind = task.trashKind;
     }
     return plain;
   }
@@ -388,6 +396,7 @@ export class TaskRepository {
     task.reminderAt = raw.reminderAt;
     task.calendarEventId = raw.calendarEventId;
     task.userEdited = raw.userEdited;
+    task.aiLabelHidden = raw.aiLabelHidden;
     task.repeatText = raw.repeatText;
     task.source = raw.source;
     task.originDetail = raw.originDetail;
@@ -409,6 +418,9 @@ export class TaskRepository {
     }
     if (typeof raw.pendingSource === 'string') {
       task.pendingSource = raw.pendingSource;
+    }
+    if (typeof raw.trashKind === 'string') {
+      task.trashKind = raw.trashKind;
     }
     if (Array.isArray(raw.steps)) {
       const steps: TaskStep[] = [];

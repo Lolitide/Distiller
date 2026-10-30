@@ -80,6 +80,33 @@ export interface BindStatusData {
   /** 绑定时刻（毫秒）：用于区分「旧绑定」与「本次新绑定」 */
   bound_at_ms?: number;
   source?: string;
+  /** BYOB：设备托管的 Bot AppID / 运行状态（不包含 AppSecret） */
+  bot_app_id?: string;
+  bot_nickname?: string;
+  bot_running?: boolean;
+  bot_ready?: boolean;
+}
+
+export interface TenantRegisterData {
+  bound: boolean;
+  app_id: string;
+  bot_nickname?: string;
+  running: boolean;
+  ready: boolean;
+}
+
+export interface TenantItemData {
+  device_id: string;
+  app_id: string;
+  bot_nickname: string;
+  created_at: string;
+  status: string;
+  running?: boolean;
+  ready?: boolean;
+}
+
+export interface TenantStatusData {
+  tenant?: TenantItemData;
 }
 
 export interface GroupItemDto {
@@ -269,6 +296,8 @@ export interface ForwardItem {
   kind?: string;
   text: string;
   url?: string;
+  filename?: string;
+  mime?: string;
   created_at: number;
 }
 

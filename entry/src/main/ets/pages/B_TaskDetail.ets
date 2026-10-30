@@ -33,7 +33,8 @@ import { TagSuggestBar } from '../components/TagSuggestBar';
 import { TaskNoteCard } from '../components/TaskNoteCard';
 import { TaskRawTextCard } from '../components/TaskRawTextCard';
 import { TaskMediaCard } from '../components/TaskMediaCard';
-import { Task, TaskAlarm, TaskStatus } from '../model';
+import { AiLabelBar } from '../components/AiLabelBar';
+import { Task, TaskAlarm, TaskSource, TaskStatus } from '../model';
 import { NAV_STACK_KEY, TaskDetailParam } from '../viewmodel/TaskNavParams';
 import { showDeleteConfirmDialog } from '../utils/DeleteConfirmDialog';
 
@@ -83,6 +84,13 @@ export struct B_TaskDetail {
   @Local tagBarVisible: boolean = false;
   /** 进入页面时的内容快照：离开时对比，只有真改过才标记 userEdited（避免轮询覆盖） */
   private snapshot: string = '';
+  /**
+   * 底部「AI 生成」标识是否显示（2026-10-29 需求方）：
+   *  · 进页面时定一次 —— `aiLabelHidden === true` 表示用户以前改过这条任务，永久不再显示；
+   *  · 本次会话里改了内容也**不立刻隐藏**（要求「关闭本次详情前都要显示」），
+   *    下次再进来时 `aiLabelHidden` 已在 `aboutToDisappear` 置真，标识才会消失。
+   */
+  @Local aiLabelVisible: boolean = false;
   /** 改名输入框的控制器：进入编辑时把光标放到文本末尾（不默认全选） */
   private nameController: TextInputController = new TextInputController();
   /**
@@ -105,6 +113,11 @@ export struct B_TaskDetail {
    */
   @Computed
   get navMenu(): HdsNavigationMenuContentOptions {
+    // 回收站里点开的条目：右上角不给「响铃 / 删除」——删除已经由页内的「彻底删除」承接，
+    // 再放一颗删除会把任务又软删一遍，语义重复。
+    if (this.param.trashMode) {
+      return MainTitleBar.emptyMenu();
+    }
     const hasRemind: boolean = this.param.task.remindAt !== undefined;
     const remindOn: boolean = this.param.task.alarm === TaskAlarm.ON;
     return MainTitleBar.detailMenu(hasRemind, remindOn, () => {
@@ -118,7 +131,10 @@ export struct B_TaskDetail {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
     this.syncStatusBarHeight();
     this.snapshot = this.contentSnapshot();
-    if (this.param.pendingMode) {
+    // AI 标识只在「用户从未改过这条 AI 生成任务」时显示；改过一次之后永久隐藏。
+    // 注意：这里定的是**本次会话**的初值，本次编辑不会把它改掉（见字段注释）。
+    this.aiLabelVisible = this.aiGenerated && this.param.task.aiLabelHidden !== true;
+    if (this.param.pendingMode && !this.param.trashMode) {
       this.param.store.markPendingSeen(this.param.task);
     }
   }
@@ -237,9 +253,27 @@ export struct B_TaskDetail {
     // 真改过内容才置脏：置脏后 5 秒轮询不再覆盖这些字段（FE-79）
     if (this.contentSnapshot() !== this.snapshot) {
       this.param.task.userEdited = true;
+      // 用户改过 AI 生成任务的内容 → 下次打开详情页不再显示底部 AI 标识
+      // （本次会话内仍显示：`aiLabelVisible` 只在 aboutToAppear 时计算一次）
+      if (this.aiGenerated) {
+        this.param.task.aiLabelHidden = true;
+      }
     }
     // 详情页的字段是「直接改 Task」，离开时统一落盘一次（FE-30：重启后编辑仍在）
     this.param.store.saveNow();
+  }
+
+  /**
+   * 是否 AI 生成内容：有置信度，或来源不是手动录入。
+   * 只有 AI 生成的任务才挂显式标识条（手动记录的不该被误标）。
+   */
+  @Computed
+  get aiGenerated(): boolean {
+    const certainty: number | undefined = this.param.task.certainty;
+    if (certainty !== undefined && certainty > 0) {
+      return true;
+    }
+    return this.param.task.source !== undefined && this.param.task.source !== TaskSource.MANUAL;
   }
 
   /** 点名称 → 进入编辑：草稿从当前值起（抢焦点交给输入框的 `onAppear`，见 nameRow） */
@@ -334,7 +368,10 @@ export struct B_TaskDetail {
   @Builder
   nameRow() {
     Row() {
-      this.statusIcon()
+      // 待确认消息只是候选，还不是正式任务：不展示「是否完成」的虚线圆。
+      if (!this.param.pendingMode) {
+        this.statusIcon()
+      }
 
       if (this.editingName) {
         TextInput({ text: this.draftName, controller: this.nameController })
@@ -374,7 +411,7 @@ export struct B_TaskDetail {
           // 结果文字被上下裁掉（需求方 2026-10-16 截图里字的下沿是切平的）。用 `TextInput` 默认高度最稳。
           .maxLines(1)
           .enterKeyType(EnterKeyType.Done)
-          .margin({ left: CONTENT_GAP_VP })
+          .margin({ left: this.param.pendingMode ? 0 : CONTENT_GAP_VP })
           .onChange((value: string) => {
             this.draftName = value;
           })
@@ -399,6 +436,13 @@ export struct B_TaskDetail {
             .fontColor(this.param.task.status === TaskStatus.COMPLETED
               ? $r('sys.color.ohos_id_color_text_tertiary')
               : $r('sys.color.ohos_id_color_text_primary'))
+            // 已完成：标题加删除线（2026-10-29 需求方；详情页的到期行仍显示原时间，不做「已完成」替换）
+            .decoration({
+              type: this.param.task.status === TaskStatus.COMPLETED
+                ? TextDecorationType.LineThrough
+                : TextDecorationType.None,
+              color: $r('sys.color.ohos_id_color_text_secondary')
+            })
             .maxLines(1)
             // 点名称 → 改名（需求方 2026-10-16）
             .onClick(() => {
@@ -408,7 +452,7 @@ export struct B_TaskDetail {
         .scrollable(ScrollDirection.Horizontal)
         .scrollBar(BarState.Off)
         .layoutWeight(1)
-        .margin({ left: CONTENT_GAP_VP })
+        .margin({ left: this.param.pendingMode ? 0 : CONTENT_GAP_VP })
         .align(Alignment.Start)
       }
     }
@@ -461,6 +505,55 @@ export struct B_TaskDetail {
     })
   }
 
+  /**
+   * 回收站条目顶部：**恢复 / 彻底删除**（2026-10-29 需求方：
+   * 「回收站里的消息点开后应该出现恢复和彻底删除两个按钮，而不是依旧是忽略和保留」）。
+   *
+   * 与列表页底部操作条同一套动作：恢复→清 `trashKind` 回原状态；彻底删除→本机记录直接抹掉。
+   * 两者做完都退回回收站页。
+   */
+  @Builder
+  trashActions() {
+    Row({ space: 12 }) {
+      Button({ type: ButtonType.Capsule, stateEffect: true }) {
+        Text('恢复')
+          .fontSize($r('sys.float.ohos_id_text_size_body1'))
+          .fontColor(this.themeStore.scheme.onPrimary)
+      }
+      .layoutWeight(1)
+      .height(44)
+      .backgroundColor(this.themeStore.scheme.primary)
+      .borderRadius(22)
+      .onClick(() => {
+        this.param.store.restoreTask(this.param.task.id);
+        this.popBack();
+      })
+
+      Button({ type: ButtonType.Capsule, stateEffect: true }) {
+        Text('彻底删除')
+          .fontSize($r('sys.float.ohos_id_text_size_body1'))
+          .fontColor(this.themeStore.scheme.error)
+      }
+      .layoutWeight(1)
+      .height(44)
+      .backgroundColor(this.themeStore.scheme.errorContainer)
+      .borderRadius(22)
+      .onClick(() => {
+        showDeleteConfirmDialog(this.getUIContext(), '彻底删除',
+          '删除后不可恢复，确定继续吗？', () => {
+            this.param.store.purgeTask(this.param.task.id);
+            this.popBack();
+          });
+      })
+    }
+    .width('100%')
+    .padding({
+      left: CONTENT_SIDE_PADDING_VP,
+      right: CONTENT_SIDE_PADDING_VP,
+      top: CONTENT_GAP_VP
+    })
+  }
+
   build() {
     HdsNavDestination() {
       // 2026-10-21 修「详情页底部导航条颜色未跟随页面」：
@@ -496,8 +589,10 @@ export struct B_TaskDetail {
             }
             .width('100%')
 
-            // 待确认消息：保留 / 忽略放在最上方，先确认再往下看细节
-            if (this.param.pendingMode) {
+            // 顶部动作：回收站优先（恢复 / 彻底删除）；否则待确认消息显示保留 / 忽略
+            if (this.param.trashMode) {
+              this.trashActions()
+            } else if (this.param.pendingMode) {
               this.pendingActions()
             }
 
@@ -603,6 +698,19 @@ export struct B_TaskDetail {
             if (this.param.task.rawText !== undefined && this.param.task.rawText.trim().length > 0) {
               Column() {
                 TaskRawTextCard({ task: this.param.task })
+              }
+              .width('100%')
+              .padding({
+                left: CONTENT_SIDE_PADDING_VP,
+                right: CONTENT_SIDE_PADDING_VP,
+                top: CONTENT_GAP_VP
+              })
+            }
+
+            // AI 生成内容显式标识（合规）：2026-10-29 需求方要求**放在整页最下面**，常驻显示
+            if (this.aiLabelVisible) {
+              Column() {
+                AiLabelBar()
               }
               .width('100%')
               .padding({

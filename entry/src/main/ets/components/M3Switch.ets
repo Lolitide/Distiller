@@ -52,7 +52,12 @@ export struct M3Switch {
    */
   build() {
     Toggle({ type: ToggleType.Switch, isOn: this.isOn })
-      .selectedColor(this.themeStore.scheme.primary)
+      // 关闭态时 selectedColor 也取浅色轨道色：
+      // Toggle 首帧可能先按"选中"绘制一帧再用 switchStyle 的 unselectedColor 覆盖，
+      // 之前会看到轨道由深变浅的闪动；把关闭态的 selectedColor 也设成浅色即可消除。
+      .selectedColor(this.isOn
+        ? this.themeStore.scheme.primary
+        : this.themeStore.scheme.surfaceContainerHighest)
       .switchStyle({
         unselectedColor: this.themeStore.scheme.surfaceContainerHighest,
         // 滑块统一纯白：之前用 onPrimary/outline 会因状态延迟显示成黑圆

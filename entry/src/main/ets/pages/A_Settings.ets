@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 设置页（一级页，底部页签第二个）。
  *
  * ## 2026-10-19 第二版重做（作者反馈）
@@ -7,7 +7,7 @@
  * 这一版按作者的原话改：
  *   · **主题色** → 三个**颜色圆点**（不写色名）；
  *   · **卡片密度 / 提醒提前量 / 解析方式** → **点一行弹选择器**，不再铺按钮；
- *   · 权限管理补齐 **通知 / 日历 / 订阅消息管理** 三项（先占位，如实标未接入）；
+ *   · 权限管理补齐 **通知 / 日历 / 绑定 QQ**；
  *   · 修「滑到底看不全」：`Scroll` 加 `contentEndOffset`，最后一项不再被页签栏压住；
  *   · 修「大标题压住内容」：让位段做成内容首项，与任务列表同一套。
  *
@@ -39,8 +39,7 @@ import { M3Switch } from '../components/M3Switch';
 import { Task } from '../model';
 import { buildDemoTasks, DEMO_TASK_PREFIX } from '../mock/DemoTasks';
 import { TaskListStore } from '../viewmodel/TaskListStore';
-import { NAV_STACK_KEY, ROUTE_CLOUD_FIELDS, ROUTE_PRIVACY_POLICY } from '../viewmodel/TaskNavParams';
-import { PrivacyConsent } from '../service/system/PrivacyConsent';
+import { NAV_STACK_KEY, ROUTE_CLOUD_FIELDS, ROUTE_PRIVACY_POLICY, ROUTE_RECYCLE_BIN } from '../viewmodel/TaskNavParams';
 import { TaskExportViewModel, TaskImportParseResult } from '../viewmodel/TaskExportViewModel';
 import { TaskExportResult, TaskExportService } from '../service/system/TaskExportService';
 import { TaskImportFileResult, TaskImportService } from '../service/system/TaskImportService';
@@ -49,7 +48,6 @@ import { BackendConfig } from '../service/backend/BackendConfig';
 import { RelayApi } from '../service/backend/RelayApi';
 import { apiErrorMessage, GroupItemDto } from '../service/backend/BackendTypes';
 import { SyncService } from '../service/cloud/SyncService';
-import { PushRegistrar } from '../service/cloud/PushRegistrar';
 import { NotificationService } from '../service/system/NotificationService';
 import { PermissionEvents } from '../service/system/PermissionEvents';
 import { TaskRepository } from '../repository/TaskRepository';
@@ -76,6 +74,8 @@ const PAGE_SIDE_PADDING_VP: number = 16;
 const TITLE_CLEARANCE_VP: number = 64;
 /** 让开悬浮页签栏（vp）：与 `A_TaskList.LIST_BOTTOM_CLEARANCE_VP` 同值 */
 const BOTTOM_CLEARANCE_VP: number = 80;
+/** QQ 官方「快速创建机器人」入口（用户自建 Bot，拿到 AppID/AppSecret 后接后端） */
+const BOT_CREATE_URL: string = 'https://q.qq.com/qqbot/openclaw/login.html';
 
 /**
  * 底部渐变遮罩高度（vp）：与 A_TaskList.BOTTOM_MASK_VP 同值同理由 ——
@@ -129,12 +129,6 @@ export struct A_Settings {
   @Local themeStore: ThemeStore = ThemeStore.instance();
 
   /**
-   * 隐私授权状态（单例的 `@Trace` 字段）：撤回/重新授权会驱动「隐私说明」那一行的状态文案刷新。
-   * 真实判定在服务层（`PrivacyConsent.allowed()`），这里只读来显示。
-   */
-  @Local consent: PrivacyConsent = PrivacyConsent.instance();
-
-  /**
    * 底部遮罩的两端色（`GradientDirection.Bottom`：第一项画在**上**边，所以上透下实）。
    * 与 `A_TaskList.bottomMaskColors` 同一套算法，色相都取当前主题的 `surface`。
    */
@@ -160,24 +154,25 @@ export struct A_Settings {
 
   @Local remindLead: number = DEFAULT_REMIND_LEAD;
 
-  /* ── 后端连接（2026-10-21 对接 qqbot-backend）── */
-  /** 连接状态文案（已连接 / 失败原因） */
-  @Local backendState: string = '未连接';
-  @Local backendBusy: boolean = false;
   /*
    * 2026-10-27：原来这里有个 `@Local exportMenuShown`（导出格式 `bindPopup` 小浮窗的显隐），
    * 导出现在改成 `showDialog` 三选项对话框，不再需要这个状态。
    */
-  /** 绑定状态与配对码 */
+  /** 绑定状态 */
   @Local bound: boolean = false;
+  /** BYOB：用户自建 Bot 的 AppID / AppSecret（Secret 只提交给后端，不落本机） */
+  @Local showByobForm: boolean = false;
+  @Local byobAppId: string = '';
+  @Local byobSecret: string = '';
+  @Local byobBusy: boolean = false;
+  @Local byobError: string = '';
+  @Local boundAppId: string = '';
   @Local bindCode: string = '';
   @Local bindHint: string = '';
   /** 配对码已过期：显示「重新生成」而不是继续倒计时 */
   @Local bindExpired: boolean = false;
   /** 配对码剩余秒数（每秒减一，界面倒计时） */
   @Local bindLeftSec: number = 0;
-  /** 云端同步开关（关闭即停止轮询） */
-  @Local syncEnabled: boolean = true;
   /**
    * 演示模式开关（设置 → 关于）：打开时往列表里放一组演示任务，关掉即摘掉。
    *
@@ -194,7 +189,7 @@ export struct A_Settings {
   /** 配对码到期绝对时刻（后台定时器被节流也按真实时间算） */
   private bindExpireAt: number = 0;
 
-  /* ── 权限管理（通知 / 日历 / 订阅消息）── */
+  /* ── 权限管理（通知 / 日历 / 绑定 QQ）── */
   @Local notifyAllowed: boolean = false;
   /** 系统横幅是否开启；旧系统读不到时按通知权限兜底 */
   @Local notifyBannerAllowed: boolean = false;
@@ -204,8 +199,6 @@ export struct A_Settings {
   /** 群列表（选择性订阅用；只列机器人真正在的群） */
   @Local groupList: GroupItemDto[] = [];
   @Local groupsLoading: boolean = false;
-  /** 不订阅自己发的消息（服务端默认 true） */
-  @Local skipSelf: boolean = true;
 
   /** 当前打开的选择器 */
   @Local sheetKind: number = SHEET_NONE;
@@ -222,7 +215,6 @@ export struct A_Settings {
     this.loadSettings();
     this.loadBackend();
     this.loadPermissions();
-    this.loadSyncEnabled();
     this.loadDemoMode();
     // 引导页里授权通知/日历后，这里没有重新走生命周期，靠广播刷新
     PermissionEvents.setListener(() => {
@@ -265,23 +257,36 @@ export struct A_Settings {
   }
 
   private async loadNotifyPermission(): Promise<void> {
+    const wasAllowed: boolean = this.notifyAllowed;
     try {
       this.notifyAllowed = await notificationManager.isNotificationEnabled();
     } catch (error) {
       // 读不到保持原值，不擅自改判
     }
+    // 通知权限从关到开：立刻补发/重算本地提醒，否则要等下一次冷启动
+    if (!wasAllowed && this.notifyAllowed) {
+      this.store.reconcileReminders();
+    }
+  }
+
+  /** 日历「去设置」：优先打开权限设置页；未申请过/不支持时回退系统授权框 */
+  private async openCalendarSettings(): Promise<void> {
+    const context: common.Context | undefined = this.hostContext();
+    if (context === undefined) {
+      return;
+    }
     try {
-      const setting = await notificationManager.getNotificationSetting();
-      const banner = setting.bannerEnabled;
-      if (banner !== undefined) {
-        this.notifyBannerAllowed = banner;
-      } else {
-        // API 22 没有 bannerEnabled 字段；按通知权限兜底，避免永远卡在「去授权」。
-        this.notifyBannerAllowed = this.notifyAllowed;
-      }
+      const permissionList: Permissions[] = [
+        'ohos.permission.READ_CALENDAR',
+        'ohos.permission.WRITE_CALENDAR'
+      ];
+      const at = abilityAccessCtrl.createAtManager();
+      const result = await at.requestPermissionOnSetting(context, permissionList);
+      this.calendarAllowed = result.length > 1
+        && result[1] === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED;
     } catch (error) {
-      // 读不到横幅状态时按通知权限兜底；不谎报「已开启」也不死锁。
-      this.notifyBannerAllowed = this.notifyAllowed;
+      // 首次申请（还没被用户拒绝过）或系统不支持设置页时，走普通授权框
+      this.requestCalendarPermission();
     }
   }
 
@@ -322,28 +327,6 @@ export struct A_Settings {
       this.subscribedCount = count;
     } else {
       this.subscribedCount = -1;
-    }
-  }
-
-  /** 读设备偏好（目前只有「不订阅自己的消息」，默认 true） */
-  private async loadPrefs(): Promise<void> {
-    if (!SyncService.hasIdentity()) {
-      this.skipSelf = true;
-      return;
-    }
-    const res = await RelayApi.myData();
-    if (res.ok && res.data !== undefined && res.data.skip_self !== undefined) {
-      this.skipSelf = res.data.skip_self;
-    }
-  }
-
-  /** 开关「不订阅自己的消息」：先乐观更新，失败再回滚 */
-  private async setSkipSelf(on: boolean): Promise<void> {
-    this.skipSelf = on;
-    const res = await RelayApi.setPrefs(on);
-    if (!res.ok) {
-      this.skipSelf = !on;
-      this.toast('保存失败：' + apiErrorMessage(res));
     }
   }
 
@@ -410,23 +393,7 @@ export struct A_Settings {
   }
 
   /** 点「去开启」：弹出系统通知授权框（用户拒绝时保持未授权，不重复骚扰） */
-  private async requestNotifyPermission(): Promise<void> {
-    const context: common.Context | undefined = this.hostContext();
-    if (context === undefined) {
-      return;
-    }
-    try {
-      await notificationManager.requestEnableNotification(context as common.UIAbilityContext);
-      await this.loadNotifyPermission();
-      this.toast(this.notifyReady ? '通知与横幅已开启' : '通知已授权，请到系统设置开启横幅');
-    } catch (error) {
-      const err = error as BusinessError;
-      hilog.warn(DOMAIN, TAG, 'requestEnableNotification failed: %{public}s', err.message);
-      this.toast('打开通知授权失败，请到系统设置里开启');
-    }
-  }
-
-  /** 点「去授权」：申请日历读写权限（user_grant，系统弹框） */
+  /** 点「去设置」：申请日历读写权限（user_grant，系统弹框） */
   private async requestCalendarPermission(): Promise<void> {
     const context: common.Context | undefined = this.hostContext();
     if (context === undefined) {
@@ -466,7 +433,7 @@ export struct A_Settings {
     this.toast(added > 0 ? '已订阅 ' + added + ' 个群' : '订阅已是最新');
   }
 
-  /** 读服务器地址 + 探测连接 + 查绑定状态 */
+  /** 读本地缓存 + 刷新绑定状态（不再展示连接状态） */
   private async loadBackend(): Promise<void> {
     const context: common.Context | undefined = this.hostContext();
     if (context === undefined) {
@@ -476,49 +443,80 @@ export struct A_Settings {
     // 服务器地址固定写在 `BackendConfig.DEFAULT_BASE_URL`，设置页不再暴露输入框。
     // 先用本地缓存，网络回来后再以接口为准 —— 避免"切出去切回来就显示未绑定"
     this.bound = BackendConfig.bound;
-    await this.refreshConnection(false);
-    await this.loadPrefs();
+    await this.refreshBinding();
   }
 
-  /**
-   * 探测连接并刷新绑定状态。
-   * @param showBusy 是否显示"连接中"（点按钮时 true，进页面时 false）
-   */
-  private async refreshConnection(showBusy: boolean): Promise<boolean> {
+  /** 只刷新绑定状态；失败时保持本地缓存值（网络抖动不等于解绑） */
+  private async refreshBinding(): Promise<void> {
     const context: common.Context | undefined = this.hostContext();
     if (context === undefined) {
-      return false;
+      return;
     }
-    if (showBusy) {
-      this.backendBusy = true;
-      this.backendState = '正在连接…';
-    }
-    if (BackendConfig.baseUrl.length === 0) {
-      this.backendState = '未配置服务器地址';
-      this.backendBusy = false;
-      return false;
-    }
-    const health = await RelayApi.health();
-    if (!health.ok || health.data === undefined) {
-      this.backendState = '未连接：' + apiErrorMessage(health);
-      this.backendBusy = false;
-      return false;
-    }
-    const hd = health.data;
-    this.backendState = '已连接 · ' + hd.version
-      + (hd.api_version !== undefined ? ' · v' + hd.api_version : '');
-
-    // 有设备身份才能查绑定；没有就顺手注册一个
     await SyncService.ensureDevice();
     const status = await RelayApi.bindStatus();
     if (status.ok && status.data !== undefined) {
       this.bound = status.data.bound;
+      this.boundAppId = status.data.bot_app_id !== undefined ? status.data.bot_app_id : '';
       BackendConfig.setBound(context, this.bound);
     }
-    // status 失败时保持本地缓存值（网络抖动不等于解绑）
+  }
 
-    this.backendBusy = false;
-    return true;
+  /** 复制 QQ 官方「创建机器人」链接（浏览器直接打开会跳转失败，需在 QQ 内打开） */
+  private async copyBotCreateLink(): Promise<void> {
+    try {
+      const data: pasteboard.PasteData =
+        pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, BOT_CREATE_URL);
+      await pasteboard.getSystemPasteboard().setData(data);
+      this.toast('链接已复制，请到 QQ 里粘贴打开');
+    } catch (error) {
+      const err = error as BusinessError;
+      hilog.warn(DOMAIN, TAG, 'copy bot create link failed: %{public}s', err.message);
+      this.toast('复制失败：' + err.message);
+    }
+  }
+
+  private showByob(): void {
+    this.showByobForm = true;
+    this.byobError = '';
+    this.byobAppId = this.boundAppId;
+    this.byobSecret = '';
+  }
+
+  /** BYOB：把用户自建 Bot 的 AppID / AppSecret 交给后端托管 */
+  private async submitByob(): Promise<void> {
+    if (this.byobBusy) {
+      return;
+    }
+    const appId: string = this.byobAppId.trim();
+    const secret: string = this.byobSecret.trim();
+    if (!/^\d{5,20}$/.test(appId)) {
+      this.byobError = 'AppID 应为 5–20 位数字';
+      return;
+    }
+    if (secret.length < 8) {
+      this.byobError = 'AppSecret 长度不正确';
+      return;
+    }
+    this.byobBusy = true;
+    this.byobError = '';
+    const res = await RelayApi.registerTenant(appId, secret);
+    if (!res.ok || res.data === undefined) {
+      this.byobError = apiErrorMessage(res);
+      this.byobBusy = false;
+      return;
+    }
+    const ctx: common.Context | undefined = this.hostContext();
+    if (ctx !== undefined) {
+      BackendConfig.setBound(ctx, true);
+    }
+    this.bound = true;
+    this.boundAppId = appId;
+    this.showByobForm = false;
+    this.byobSecret = '';
+    this.byobBusy = false;
+    const nickname: string = res.data.bot_nickname !== undefined && res.data.bot_nickname.length > 0
+      ? res.data.bot_nickname : appId;
+    this.toast('绑定成功，现在把消息转发给「' + nickname + '」');
   }
 
   /** 生成配对码并开始轮询绑定结果（2 秒 × 60 次） */
@@ -662,7 +660,7 @@ export struct A_Settings {
     // 取消重新绑定：旧绑定没有被解掉，保持原来的状态
   }
 
-  /** 复制配对码到剪贴板（用户要粘贴到 QQ 私聊里发给机器人） */
+  /** 复制配对码到剪贴板（旧版配对流程保留，当前 UI 不再使用） */
   private async copyBindCode(): Promise<void> {
     if (this.bindCode.length === 0) {
       return;
@@ -685,7 +683,10 @@ export struct A_Settings {
     if (ctx === undefined) {
       return;
     }
-    NotificationService.openSettings(ctx as common.UIAbilityContext);
+    NotificationService.openSettings(ctx as common.UIAbilityContext).then(() => {
+      // 系统通知设置是半模态；关闭后重新读一次权限/横幅，并补发之前因权限关闭没发出去的提醒
+      this.loadNotifyPermission();
+    });
   }
 
   private replayOnboarding(): void {
@@ -733,34 +734,12 @@ export struct A_Settings {
     this.toast(removed > 0 ? `已移除 ${removed} 条演示任务` : '列表里没有演示任务');
   }
 
-  private async loadSyncEnabled(): Promise<void> {    const ctx: common.Context | undefined = this.hostContext();
-    if (ctx === undefined) {
-      return;
-    }
-    this.syncEnabled = await SettingsRepository.getSyncEnabled(ctx, true);
-  }
-
-  private onSyncToggle(isOn: boolean): void {
-    this.syncEnabled = isOn;
-    const ctx: common.Context | undefined = this.hostContext();
-    if (ctx === undefined) {
-      return;
-    }
-    SettingsRepository.setSyncEnabled(ctx, isOn);
-    SyncService.setEnabled(isOn);
-    if (isOn) {
-      // 刚打开同步：顺手把推送令牌也报一次（FE-76；没服务器/没身份时它自己会降级成「未启用」）
-      PushRegistrar.register();
-    }
-    this.toast(isOn ? '云端同步已开启' : '云端同步已关闭，不再拉取群消息');
-  }
-
   /**
    * 推送通道 / 推送验证说明这两行**已删除**（需求方 2026-10-27：「推送通道删去、推送验证说明删去」）。
    *
    * 连带删掉的成员：`pushStatus` 字段、`pushLine` getter、`retryPush()`、`showPushHelp()`，
    * 以及 `PushStatus` / `PUSH_PHASE_*` 的导入 —— 它们只服务那两行。
-   * 推送本身仍在跑（`PushRegistrar.register()` 在打开云端同步时照常上报），只是不再把
+   * 推送本身仍在跑（`A_Main` 启动/回前台时由 `PushRegistrar.register()` 上报），只是不再把
    * 开发者向的诊断信息摊在设置页上。
    */
 
@@ -813,7 +792,6 @@ export struct A_Settings {
       SyncService.stop();
       this.store.init(context);
       this.bound = false;
-      this.backendState = '已清空，可重新绑定';
       this.toast('已删除');
     });
   }
@@ -1073,7 +1051,7 @@ export struct A_Settings {
     this.getUIContext().getPromptAction().showDialog({
       title: '导出任务',
       // 引导语：讲"选完会怎样"，格式差异交给按钮自己说，避免同一句话出现两遍
-      message: '任务保存在本机，导出的文件请自行保管。',
+      message: '导出文件保存至本地，请自行保管',
       buttons: [
         { text: 'CSV（表格，不含原文）', color: this.themeStore.scheme.primary },
         { text: 'JSON（完整，含原文）', color: this.themeStore.scheme.primary },
@@ -1112,12 +1090,16 @@ export struct A_Settings {
     const content: string = csv ? TaskExportViewModel.buildCsv(tasks) : TaskExportViewModel.buildJson(tasks);
     const fileName: string = TaskExportViewModel.fileName(ext);
     const suffix: string = csv ? 'CSV|.csv' : 'JSON|.json';
-    const result: TaskExportResult = await TaskExportService.saveFile(context, fileName, suffix, content);
+    // CSV 无法承载元数据段 → 同时落一份 `xxx.csv.meta.json` 隐式标识（合规要求）
+    const metaName: string | undefined = csv ? fileName + '.meta.json' : undefined;
+    const meta: string | undefined = csv ? TaskExportViewModel.buildCsvMeta() : undefined;
+    const result: TaskExportResult =
+      await TaskExportService.saveFile(context, fileName, suffix, content, metaName, meta);
     if (result.cancelled) {
       return;
     }
     if (result.ok) {
-      this.toast(`已导出 ${tasks.length} 条任务` + (csv ? '（CSV）' : '（JSON，含原文）'));
+      this.toast(`已导出 ${tasks.length} 条任务` + (csv ? '（CSV，含 AI 生成标识）' : '（JSON，含原文与 AI 元数据）'));
       return;
     }
     this.toast(result.message.length > 0 ? result.message : '导出失败');
@@ -1179,7 +1161,7 @@ export struct A_Settings {
     const content: string = TaskExportViewModel.buildCsv(tasks);
     const result: TaskExportResult = await TaskExportService.copyToClipboard(content);
     if (result.ok) {
-      this.toast(`已复制 ${tasks.length} 条任务（CSV）到剪贴板`);
+      this.toast(`已复制 ${tasks.length} 条任务（CSV，含 AI 生成标识）到剪贴板`);
       return;
     }
     this.toast(result.message.length > 0 ? result.message : '复制失败');
@@ -1359,6 +1341,7 @@ export struct A_Settings {
       Row().width('100%').height(TITLE_CLEARANCE_VP + this.statusBarVp)
 
       Scroll() {
+        
       Column() {
 
         // ① 视觉个性化
@@ -1402,16 +1385,15 @@ export struct A_Settings {
         .borderRadius(Theme.RADIUS_CARD)
         .clip(true)
 
-        // ③ 权限管理：通知 / 日历 / 订阅消息（先占位，如实标未接入）
+        // ③ 权限管理：通知 / 日历 / 绑定 QQ
         Column() {
           this.sectionTitle('权限管理')
         }
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
-          // 2026-10-27：通知权限 + 通知与横幅设置合并为一行。
-          // 只有「系统通知权限」和「系统横幅」都开启，右侧才显示「已开启」；
-          // 权限没开先弹授权，权限已开但横幅没开则跳系统通知设置。
+          // 2026-10-28：按钮永远显示「去设置」，点击统一打开系统通知设置；
+          // 横幅状态在 API 26 以下读不到，不再用状态文案猜测。
           Row({ space: 8 }) {
             Text('通知与横幅')
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
@@ -1419,27 +1401,16 @@ export struct A_Settings {
               .layoutWeight(1)
               .maxLines(1)
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
-              Text(this.notifyReady ? '已开启' : '去授权')
+              Text('去设置')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.notifyReady
-                  ? this.themeStore.scheme.onSecondaryContainer
-                  : this.themeStore.scheme.onPrimary)
+                .fontColor(this.themeStore.scheme.onPrimary)
             }
             .height(34)
             .padding({ left: 14, right: 14 })
-            .backgroundColor(this.notifyReady
-              ? this.themeStore.scheme.secondaryContainer
-              : this.themeStore.scheme.primary)
+            .backgroundColor(this.themeStore.scheme.primary)
             .borderRadius(17)
             .onClick(() => {
-              if (this.notifyReady) {
-                return;
-              }
-              if (!this.notifyAllowed) {
-                this.requestNotifyPermission();
-              } else {
-                this.openNotificationSettings();
-              }
+              this.openNotificationSettings();
             })
           }
           .width('100%')
@@ -1455,127 +1426,19 @@ export struct A_Settings {
               .fontColor($r('sys.color.ohos_id_color_text_primary'))
               .layoutWeight(1)
               .maxLines(1)
-            // 同「通知权限」：灰色「已授权 / 未授权」与右边胶囊重复，已删（2026-10-27）
+            // 与「通知与横幅」一致：按钮永远显示「去设置」，点击走系统授权/设置
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
-              Text(this.calendarAllowed ? '已授权' : '去授权')
+              Text('去设置')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                // 同「通知权限」：已授权＝状态 → 与 ChipGroup 选中 chip 同色（secondaryContainer / onSecondaryContainer）
-                .fontColor(this.calendarAllowed
-                  ? this.themeStore.scheme.onSecondaryContainer
-                  : this.themeStore.scheme.onPrimary)
+                .fontColor(this.themeStore.scheme.onPrimary)
             }
             .height(34)
             .padding({ left: 14, right: 14 })
-            .backgroundColor(this.calendarAllowed
-              ? this.themeStore.scheme.secondaryContainer
-              : this.themeStore.scheme.primary)
+            .backgroundColor(this.themeStore.scheme.primary)
             .borderRadius(17)
             .onClick(() => {
-              if (!this.calendarAllowed) {
-                this.requestCalendarPermission();
-              }
+              this.openCalendarSettings();
             })
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-
-          this.rowDivider()
-
-          Row({ space: 8 }) {
-            Text('订阅消息管理')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              .layoutWeight(1)
-              .maxLines(1)
-            Text(!this.bound
-              ? '未绑定 QQ'
-              : (this.subscribedCount < 0 ? '未连接' : '已订阅 ' + this.subscribedCount + ' 个群'))
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-            Button({ type: ButtonType.Capsule, stateEffect: true }) {
-              Text('选择群')
-                .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.bound
-                  ? this.themeStore.scheme.onPrimary
-                  : this.themeStore.scheme.onSurfaceVariant)
-            }
-            .height(34)
-            .padding({ left: 14, right: 14 })
-            .backgroundColor(this.bound
-              ? this.themeStore.scheme.primary
-              : this.themeStore.scheme.surfaceContainerHigh)
-            .borderRadius(17)
-            .onClick(() => {
-              if (this.bound) {
-                this.openGroupSheet();
-              } else {
-                this.toast('请先绑定 QQ');
-              }
-            })
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-
-          this.rowDivider()
-
-          // 「不订阅自己的消息」：服务端在**入窗之前**丢掉本人消息，默认开
-          Row({ space: 8 }) {
-            Column({ space: 2 }) {
-              Text('不订阅自己的消息')
-                .fontSize($r('sys.float.ohos_id_text_size_body1'))
-                .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              Text('屏蔽用户自己在群中发送的信息')
-                .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-                .maxLines(2)
-            }
-            .layoutWeight(1)
-            .alignItems(HorizontalAlign.Start)
-
-            M3Switch({
-              isOn: this.skipSelf,
-              onToggle: (isOn: boolean) => {
-                this.setSkipSelf(isOn);
-              }
-            })
-          }
-          .width('100%')
-          .height(64)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-        }
-        .width('100%')
-        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
-        .borderRadius(Theme.RADIUS_CARD)
-        .clip(true)
-
-        // ④ 后端连接（qqbot-backend）
-        Column() {
-          this.sectionTitle('后端连接')
-        }
-        .margin({ top: SECTION_GAP_VP })
-
-        Column() {
-          // ⚠️ 这里不能复用 `infoRow(...)`：`@Builder` 的值参数不参与刷新，
-          // 状态变化后仍显示初始的「未连接」。必须直接读 `@Local` 字段。
-          Row() {
-            Text('连接状态')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              .layoutWeight(1)
-              .maxLines(1)
-              .textAlign(TextAlign.Start)
-            Text(this.backendState)
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor(this.backendState.startsWith('已连接')
-                ? this.themeStore.scheme.primary
-                : $r('sys.color.ohos_id_color_text_secondary'))
-              .maxLines(1)
-              .textAlign(TextAlign.End)
           }
           .width('100%')
           .height(ROW_HEIGHT_VP)
@@ -1595,20 +1458,15 @@ export struct A_Settings {
             Button({ type: ButtonType.Capsule, stateEffect: true }) {
               Text(this.bound ? '重新绑定' : '去绑定')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.bindCode.length === 0
-                  ? this.themeStore.scheme.onPrimary
-                  : this.themeStore.scheme.onSurfaceVariant)
+                .fontColor(this.themeStore.scheme.onPrimary)
             }
             .height(34)
             .padding({ left: 14, right: 14 })
-            .backgroundColor(this.bindCode.length === 0
-              ? this.themeStore.scheme.primary
-              : this.themeStore.scheme.surfaceContainerHigh)
+            .backgroundColor(this.themeStore.scheme.primary)
             .borderRadius(17)
+            .enabled(!this.byobBusy)
             .onClick(() => {
-              if (this.bindCode.length === 0) {
-                this.startBind();
-              }
+              this.showByob();
             })
           }
           .width('100%')
@@ -1616,163 +1474,165 @@ export struct A_Settings {
           .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
           .alignItems(VerticalAlign.Center)
 
-          if (this.bindCode.length > 0) {
-            Column({ space: 6 }) {
-              Text(this.bindCode)
-                .fontSize(30)
-                .fontWeight(FontWeight.Bold)
-                .letterSpacing(4)
-              Text(this.bindHint)
+          if (this.showByobForm) {
+            Column({ space: 10 }) {
+              Text('1. 先创建一个 QQ 机器人')
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .fontColor($r('sys.color.ohos_id_color_text_primary'))
+                .width('100%')
+              Text('点按钮复制创建链接，然后到 QQ 里粘贴打开')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
                 .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-                .textAlign(TextAlign.Center)
-              Text('剩余 ' + this.bindLeftSec + ' 秒')
+                .width('100%')
+
+              Text(BOT_CREATE_URL)
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.themeStore.scheme.onSurfaceVariant)
-              Row({ space: 10 }) {
-                Button({ type: ButtonType.Capsule, stateEffect: true }) {
-                  Text('复制配对码')
-                    .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                    .fontColor(this.themeStore.scheme.onPrimary)
-                }
-                .height(32)
-                .padding({ left: 14, right: 14 })
-                .backgroundColor(this.themeStore.scheme.primary)
-                .borderRadius(16)
-                .onClick(() => {
-                  this.copyBindCode();
+                .fontColor(this.themeStore.scheme.primary)
+                .copyOption(CopyOptions.LocalDevice)
+                .width('100%')
+
+              Button({ type: ButtonType.Capsule, stateEffect: true }) {
+                Text('复制创建链接')
+                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                  .fontColor(this.themeStore.scheme.primary)
+              }
+              .height(36)
+              .padding({ left: 16, right: 16 })
+              .backgroundColor(Color.Transparent)
+              .border({ width: 1, color: this.themeStore.scheme.outline })
+              .borderRadius(18)
+              .onClick(() => {
+                this.copyBotCreateLink();
+              })
+
+              Text('2. 填入机器人凭据')
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .fontColor($r('sys.color.ohos_id_color_text_primary'))
+                .width('100%')
+                .margin({ top: 4 })
+              TextInput({ text: this.byobAppId, placeholder: 'AppID（机器人 ID）' })
+                .height(44)
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .padding({ left: 12, right: 12 })
+                .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
+                .borderRadius(12)
+                .maxLength(20)
+                .onChange((value: string) => {
+                  this.byobAppId = value;
+                  this.byobError = '';
+                })
+              TextInput({ text: this.byobSecret, placeholder: 'AppSecret' })
+                .height(44)
+                .fontSize($r('sys.float.ohos_id_text_size_body1'))
+                .padding({ left: 12, right: 12 })
+                .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
+                .borderRadius(12)
+                .type(InputType.Password)
+                .maxLength(128)
+                .onChange((value: string) => {
+                  this.byobSecret = value;
+                  this.byobError = '';
                 })
 
+              if (this.byobError.length > 0) {
+                Text(this.byobError)
+                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                  .fontColor($r('sys.color.ohos_id_color_warning'))
+                  .width('100%')
+              }
+
+              Row({ space: 10 }) {
                 Button({ type: ButtonType.Capsule, stateEffect: true }) {
                   Text('取消')
                     .fontSize($r('sys.float.ohos_id_text_size_body2'))
                     .fontColor(this.themeStore.scheme.primary)
                 }
-                .height(32)
-                .padding({ left: 14, right: 14 })
+                .layoutWeight(1)
+                .height(34)
                 .backgroundColor(Color.Transparent)
                 .border({ width: 1, color: this.themeStore.scheme.outline })
-                .borderRadius(16)
+                .borderRadius(17)
+                .enabled(!this.byobBusy)
                 .onClick(() => {
-                  this.cancelBind();
+                  this.showByobForm = false;
+                  this.byobSecret = '';
+                  this.byobError = '';
+                })
+
+                Button({ type: ButtonType.Capsule, stateEffect: true }) {
+                  Text(this.byobBusy ? '绑定中…' : '绑定')
+                    .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                    .fontColor(this.themeStore.scheme.onPrimary)
+                }
+                .layoutWeight(1)
+                .height(34)
+                .backgroundColor(this.themeStore.scheme.primary)
+                .borderRadius(17)
+                .enabled(!this.byobBusy)
+                .onClick(() => {
+                  this.submitByob();
                 })
               }
-            }
-            .width('100%')
-            .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP, bottom: 12 })
-            .alignItems(HorizontalAlign.Center)
-          }
+              .width('100%')
 
-          if (this.bindExpired && this.bindCode.length === 0) {
-            Column({ space: 8 }) {
-              Text('配对码已过期，请重新生成')
+              Text('绑定后，把要添加的消息转发给它，就能自动收集到 APP 里啦')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                .fontColor(this.themeStore.scheme.onSurfaceVariant)
-              Button({ type: ButtonType.Capsule, stateEffect: true }) {
-                Text('重新生成')
-                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                  .fontColor(this.themeStore.scheme.onPrimary)
-              }
-              .height(32)
-              .padding({ left: 16, right: 16 })
-              .backgroundColor(this.themeStore.scheme.primary)
-              .borderRadius(16)
-              .onClick(() => {
-                this.startBind();
-              })
+                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+                .width('100%')
             }
             .width('100%')
-            .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP, bottom: 12 })
-            .alignItems(HorizontalAlign.Center)
+            .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP, bottom: 14 })
+            .alignItems(HorizontalAlign.Start)
           }
-        }
-        .width('100%')
-        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
-        .borderRadius(Theme.RADIUS_CARD)
-        .clip(true)
 
-        // ⑤ 云端数据：字段清单 + 同步开关 + 整包删除
-        Column() {
-          this.sectionTitle('云端数据')
-        }
-        .margin({ top: SECTION_GAP_VP })
-
-        Column() {
-          Row({ space: 8 }) {
-            Column({ space: 2 }) {
-              Text('云端同步')
-                .fontSize($r('sys.float.ohos_id_text_size_body1'))
-                .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              Text('关闭后不再拉取群消息候选')
+          if (this.bound && !this.showByobForm) {
+            Column({ space: 4 }) {
+              Text(this.boundAppId.length > 0 ? '已绑定 Bot：' + this.boundAppId : '已绑定 Bot')
+                .fontSize($r('sys.float.ohos_id_text_size_body2'))
+                .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+              Text('将消息转发给 Bot，可以自动收进知了 APP')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
                 .fontColor($r('sys.color.ohos_id_color_text_secondary'))
             }
-            .layoutWeight(1)
+            .width('100%')
+            .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP, bottom: 12 })
             .alignItems(HorizontalAlign.Start)
-
-            // ⚠️ 必须用 `M3Switch`，不能写裸 `Toggle`：`Toggle` 的选中轨道默认取
-            // `ohos_id_color_emphasize`（系统蓝），换了主题色也不会变（2026-10-25 作者截图指出）。
-            // 这一行是合并 `feature/mvp-completion` 时带进来的裸 Toggle，已纠正。
-            M3Switch({
-              isOn: this.syncEnabled,
-              onToggle: (isOn: boolean) => {
-                this.onSyncToggle(isOn);
-              }
-            })
-            .id('syncEnabledToggle')
           }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-
-          this.rowDivider()
-          Row({ space: 8 }) {
-            Text('会离开手机的字段')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              .layoutWeight(1)
-              .maxLines(1)
-            Text('查看')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor(this.themeStore.scheme.primary)
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-          .onClick(() => {
-            this.openCloudFields();
-          })
-
-          this.rowDivider()
-          Row() {
-            Text('删除服务端数据')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_warning'))
-              .layoutWeight(1)
-              .textAlign(TextAlign.Start)
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-          .onClick(() => {
-            this.deleteServerData();
-          })
         }
         .width('100%')
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
         .borderRadius(Theme.RADIUS_CARD)
         .clip(true)
 
-        // ⑤ 数据
+        // ⑤ 数据（2026-10-29 需求方：与「云端数据」调换位置，本机数据在前）
         Column() {
           this.sectionTitle('数据')
         }
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
+          // 「回收站」：忽略的消息 + 删除的待办；点进去是独立页
+          Row({ space: 8 }) {
+            Text('回收站')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+              .maxLines(1)
+              .textAlign(TextAlign.Start)
+            SymbolGlyph($r('sys.symbol.chevron_right'))
+              .fontSize(Theme.FONT_CAPTION)
+              .fontColor([$r('sys.color.icon_tertiary')])
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            AppStorage.get<NavPathStack>(NAV_STACK_KEY)?.pushPathByName(ROUTE_RECYCLE_BIN, this.store);
+          })
+
+          this.rowDivider()
+
           // 「导出任务」：点一下弹**三选项对话框**（`showDialog`，2026-10-27 需求方指定）。
           // 原来是 `bindPopup` 贴着这一行的小浮窗（三行纯文字），改成居中对话框后：
           // 标题说"导出任务"、正文三行说清三种口径的差别、底部三颗按钮直接选，
@@ -1784,9 +1644,9 @@ export struct A_Settings {
               .layoutWeight(1)
               .maxLines(1)
               .textAlign(TextAlign.Start)
-            Text('CSV / JSON / 剪贴板')
+            Text('导出')
               .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+              .fontColor(this.themeStore.scheme.primary)
               .maxLines(1)
             SymbolGlyph($r('sys.symbol.chevron_right'))
               .fontSize(Theme.FONT_CAPTION)
@@ -1844,7 +1704,54 @@ export struct A_Settings {
         .borderRadius(Theme.RADIUS_CARD)
         .clip(true)
 
-        // ⑥ 关于
+        // ⑥ 云端数据：字段清单 + 整包删除（2026-10-29 与「数据」调换位置，排在它后面）
+        Column() {
+          this.sectionTitle('云端数据')
+        }
+        .margin({ top: SECTION_GAP_VP })
+
+        Column() {
+          Row({ space: 8 }) {
+            Text('会离开本机的字段')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
+              .layoutWeight(1)
+              .maxLines(1)
+            Text('查看')
+              .fontSize($r('sys.float.ohos_id_text_size_body2'))
+              .fontColor(this.themeStore.scheme.primary)
+              .margin({ left: 8 })
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.openCloudFields();
+          })
+
+          this.rowDivider()
+          Row() {
+            Text('删除服务端数据')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_warning'))
+              .layoutWeight(1)
+              .textAlign(TextAlign.Start)
+          }
+          .width('100%')
+          .height(ROW_HEIGHT_VP)
+          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
+          .alignItems(VerticalAlign.Center)
+          .onClick(() => {
+            this.deleteServerData();
+          })
+        }
+        .width('100%')
+        .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
+        .borderRadius(Theme.RADIUS_CARD)
+        .clip(true)
+
+        // ⑦ 关于
         Column() {
           this.sectionTitle('关于')
         }
@@ -1886,11 +1793,6 @@ export struct A_Settings {
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
               .fontColor($r('sys.color.ohos_id_color_text_primary'))
               .layoutWeight(1)
-            Text(this.consent.granted ? '已授权' : '已撤回')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor(this.consent.granted
-                ? $r('sys.color.ohos_id_color_text_secondary')
-                : this.themeStore.scheme.error)
             Text('查看')
               .fontSize($r('sys.float.ohos_id_text_size_body2'))
               .fontColor(this.themeStore.scheme.primary)
@@ -1912,7 +1814,7 @@ export struct A_Settings {
               .layoutWeight(1)
             Text('下次启动')
               .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+              .fontColor(this.themeStore.scheme.primary)
           }
           .width('100%')
           .height(ROW_HEIGHT_VP)
