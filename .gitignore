@@ -36,3 +36,5 @@ docs/_调查/_tmp/**
 **/.env
 **/.env.*
 !**/.env.example
+# DevEco CodeGenie 本地缓存
+/.codegenie
