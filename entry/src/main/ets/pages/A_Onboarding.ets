@@ -25,12 +25,24 @@ const TAG: string = 'Onboarding';
 const BOT_CREATE_URL: string = 'https://q.qq.com/qqbot/openclaw/login.html';
 /** 教程视频宽高比（四段视频都是 872×1162）：让说明文字紧跟视频底部 */
 const VIDEO_ASPECT_RATIO: number = 872 / 1162;
+/**
+ * 视频最大高度占「视频区可用高度」的比例（2026-11-02 需求方：视频高度缩小点）。
+ * 1.0 = 吃满可用高度；0.85 让视频整体缩一圈，上下留出呼吸空间。
+ */
+const VIDEO_MAX_HEIGHT_RATIO: string = '85%';
 /** 折叠态「绑定 QQ Bot」一行的高度（vp） */
 const BINDING_COLLAPSED_VP: number = 56;
 /** 展开态高度（vp）：按精简后的表单内容固定，保证高度动画可控 */
 const BINDING_EXPANDED_VP: number = 360;
 /** 已绑定时的展开高度（只剩状态 + 按钮） */
 const BINDING_BOUND_VP: number = 160;
+/**
+ * 表单校验失败时，错误行占用的额外高度（vp）：
+ * 正文一行（约 22vp）+ Column 的 8vp 行间距。
+ * 表单容器高度是写死的（为了展开/收起动画），内容变高时必须把它一起加上，
+ * 否则 `.clip(true)` 会把底部「取消 / 绑定」裁掉。
+ */
+const BINDING_ERROR_LINE_VP: number = 30;
 
 @ComponentV2
 export struct A_Onboarding {
@@ -74,15 +86,27 @@ export struct A_Onboarding {
   private bindingAdjustTimer: number = -1;
   /** 状态栏让位：全屏窗口下引导页要自己避开通知栏 */
   @Local statusBarVp: number = 0;
+  /**
+   * 底部导航条/手势条高度（vp）。
+   * 全屏窗口下页面铺到屏幕底，底部按钮必须**自己**留在导航条上方，
+   * 且距导航条 ≥28vp（AGC UX 自检：Mate X7 展开态「底部控件抬高避让小于 28vp」）。
+   */
+  @Local bottomVp: number = 0;
 
   aboutToAppear(): void {
     this.bound = BackendConfig.bound;
     this.statusBarVp = this.getUIContext().px2vp(WindowInsets.topPxCached());
+    this.bottomVp = this.getUIContext().px2vp(WindowInsets.bottomPxCached());
     const ctx: common.Context | undefined = this.getUIContext().getHostContext();
     if (ctx !== undefined) {
       WindowInsets.topPx(ctx).then((px: number) => {
         if (px > 0) {
           this.statusBarVp = this.getUIContext().px2vp(px);
+        }
+      });
+      WindowInsets.bottomPx(ctx).then((px: number) => {
+        if (px > 0) {
+          this.bottomVp = this.getUIContext().px2vp(px);
         }
       });
     }
@@ -133,6 +157,26 @@ export struct A_Onboarding {
     this.bindingExpanded = false;
     this.bindingHeight = BINDING_COLLAPSED_VP;
     this.measuredBindingHeight = 0;
+  }
+
+  /**
+   * 错误行显示/隐藏时同步表单容器高度（2026-11-02 修 bug）。
+   *
+   * 现象：点「绑定」触发校验（如「AppID 应为 5–20 位数字」）后，错误行把内容撑高，
+   * 但容器 `.height(this.bindingHeight)` 还是展开时测到的旧值，配合 `.clip(true)`
+   * 就把底部「取消 / 绑定」整行裁掉一半。
+   *
+   * 处理：基准高度用「无错误时实测的内容高度」，有错误时再加上一行错误提示的高度。
+   * 只在展开态生效，收起态恒为 56vp。
+   */
+  private syncBindingHeightForError(): void {
+    if (!this.bindingExpanded) {
+      return;
+    }
+    const base: number = this.measuredBindingHeight > 0
+      ? this.measuredBindingHeight
+      : (this.bound ? BINDING_BOUND_VP : BINDING_EXPANDED_VP);
+    this.bindingHeight = base + (this.byobError.length > 0 ? BINDING_ERROR_LINE_VP : 0);
   }
 
   private scheduleBindingHeightFix(): void {
@@ -329,17 +373,21 @@ export struct A_Onboarding {
     const secret: string = this.byobSecret.trim();
     if (!/^\d{5,20}$/.test(appId)) {
       this.byobError = 'AppID 应为 5–20 位数字';
+      this.syncBindingHeightForError();
       return;
     }
     if (secret.length < 8) {
       this.byobError = 'AppSecret 长度不正确';
+      this.syncBindingHeightForError();
       return;
     }
     this.byobBusy = true;
     this.byobError = '';
+    this.syncBindingHeightForError();
     const res = await RelayApi.registerTenant(appId, secret);
     if (!res.ok || res.data === undefined) {
       this.byobError = apiErrorMessage(res);
+      this.syncBindingHeightForError();
       this.byobBusy = false;
       return;
     }
@@ -439,25 +487,25 @@ export struct A_Onboarding {
     // 当前页圆点用主题主色（深色），另一页用浅色轨道色
     Row({ space: 6 }) {
       Column()
-        .width(this.page === 0 ? 18 : 8)
-        .height(8)
-        .borderRadius(4)
+        .width(this.page === 0 ? 24 : 12)
+        .height(12)
+        .borderRadius(6)
         .backgroundColor(this.page === 0
           ? this.themeStore.scheme.primary
           : this.themeStore.scheme.outlineVariant)
         .animation({ duration: 160, curve: Curve.EaseOut })
       Column()
-        .width(this.page === 1 ? 18 : 8)
-        .height(8)
-        .borderRadius(4)
+        .width(this.page === 1 ? 24 : 12)
+        .height(12)
+        .borderRadius(6)
         .backgroundColor(this.page === 1
           ? this.themeStore.scheme.primary
           : this.themeStore.scheme.outlineVariant)
         .animation({ duration: 160, curve: Curve.EaseOut })
       Column()
-        .width(this.page === 2 ? 18 : 8)
-        .height(8)
-        .borderRadius(4)
+        .width(this.page === 2 ? 24 : 12)
+        .height(12)
+        .borderRadius(6)
         .backgroundColor(this.page === 2
           ? this.themeStore.scheme.primary
           : this.themeStore.scheme.outlineVariant)
@@ -627,7 +675,8 @@ export struct A_Onboarding {
       } else if (this.page === 1) {
         // ── 第 2 页：中间两张演示动图，底部可选权限 ──
         Column() {
-          Row() {
+          // 两段视频之间留 10vp 间距（2026-11-01 需求方：把两个视频之间的 space 拉大）
+          Row({ space: 10 }) {
             // 视频按自身比例占位，说明文字紧贴在视频下方（不再被撑到底部模块上方）
             Column({ space: 4 }) {
               Stack() {
@@ -667,10 +716,11 @@ export struct A_Onboarding {
                 .height('100%')
                 .hitTestBehavior(HitTestMode.None)
               }
-              .width('100%')
+              .layoutWeight(1)
               .aspectRatio(VIDEO_ASPECT_RATIO)
-              // 空间不够时允许视频缩小，避免展开绑定表单后挡住 / 溢出
-              .flexShrink(1)
+              .constraintSize({ maxWidth: '100%', maxHeight: VIDEO_MAX_HEIGHT_RATIO })
+              // 自适应说明：以可用高度为准反推宽度（aspectRatio），避免宽屏/展开态下视频被下方模块压住；
+              // 宽度被 maxWidth 收回时，height 会按同一比例重算，不会拉扁媒体。
 
               Text('通知推送')
                 .width('100%')
@@ -710,10 +760,11 @@ export struct A_Onboarding {
                   .backgroundColor(this.themeStore.scheme.surface)
                 }
               }
-              .width('100%')
+              .layoutWeight(1)
               .aspectRatio(VIDEO_ASPECT_RATIO)
-              // 空间不够时允许视频缩小，避免展开绑定表单后挡住 / 溢出
-              .flexShrink(1)
+              .constraintSize({ maxWidth: '100%', maxHeight: VIDEO_MAX_HEIGHT_RATIO })
+              // 自适应说明：以可用高度为准反推宽度（aspectRatio），避免宽屏/展开态下视频被下方模块压住；
+              // 宽度被 maxWidth 收回时，height 会按同一比例重算，不会拉扁媒体。
 
               Text('日历编辑')
                 .width('100%')
@@ -761,7 +812,8 @@ export struct A_Onboarding {
         // ── 第 3 页：中间两段教程，底部「关于转发内容」+「绑定 QQ Bot」 ──
         Column() {
           // 视频区：左右同时播放；左侧短、播完停在最后一帧，右侧播完后两个一起重播
-          Row() {
+          // 两段视频之间留 10vp 间距（2026-11-01 需求方）
+          Row({ space: 10 }) {
             // 视频按自身比例占位，说明文字紧贴在视频下方（不再被撑到底部模块上方）
             Column({ space: 4 }) {
               Stack() {
@@ -805,10 +857,11 @@ export struct A_Onboarding {
                 .height('100%')
                 .hitTestBehavior(HitTestMode.None)
               }
-              .width('100%')
+              .layoutWeight(1)
               .aspectRatio(VIDEO_ASPECT_RATIO)
-              // 空间不够时允许视频缩小，避免展开绑定表单后挡住 / 溢出
-              .flexShrink(1)
+              .constraintSize({ maxWidth: '100%', maxHeight: VIDEO_MAX_HEIGHT_RATIO })
+              // 自适应说明：以可用高度为准反推宽度（aspectRatio），避免宽屏/展开态下视频被下方模块压住；
+              // 宽度被 maxWidth 收回时，height 会按同一比例重算，不会拉扁媒体。
 
               Text('QQ 内转发消息')
                 .width('100%')
@@ -856,10 +909,11 @@ export struct A_Onboarding {
                   .backgroundColor(this.themeStore.scheme.surface)
                 }
               }
-              .width('100%')
+              .layoutWeight(1)
               .aspectRatio(VIDEO_ASPECT_RATIO)
-              // 空间不够时允许视频缩小，避免展开绑定表单后挡住 / 溢出
-              .flexShrink(1)
+              .constraintSize({ maxWidth: '100%', maxHeight: VIDEO_MAX_HEIGHT_RATIO })
+              // 自适应说明：以可用高度为准反推宽度（aspectRatio），避免宽屏/展开态下视频被下方模块压住；
+              // 宽度被 maxWidth 收回时，height 会按同一比例重算，不会拉扁媒体。
 
               Text('APP 内自动生成')
                 .width('100%')
@@ -973,6 +1027,7 @@ export struct A_Onboarding {
                       .onChange((value: string) => {
                         this.byobAppId = value;
                         this.byobError = '';
+                        this.syncBindingHeightForError();
                       })
                     TextInput({ text: this.byobSecret, placeholder: 'AppSecret' })
                       .height(44)
@@ -985,6 +1040,7 @@ export struct A_Onboarding {
                       .onChange((value: string) => {
                         this.byobSecret = value;
                         this.byobError = '';
+                        this.syncBindingHeightForError();
                       })
 
                     if (this.byobError.length > 0) {
@@ -1030,9 +1086,11 @@ export struct A_Onboarding {
                 .padding(14)
                 .alignItems(HorizontalAlign.Start)
                 // 记录内容真实高度：动画结束后把容器从预估高度收回到这里
+                // 2026-11-02：**只在没显示错误时记录基准高度** —— 错误行会把内容撑高，
+                // 而容器高度不够时子节点量到的仍然是被裁剪后的高度，写进基准会让后面算不对。
                 .onAreaChange((oldArea: Area, newArea: Area) => {
                   const measured: number = Number(newArea.height);
-                  if (measured > this.measuredBindingHeight) {
+                  if (this.byobError.length === 0 && measured > this.measuredBindingHeight) {
                     this.measuredBindingHeight = measured;
                   }
                 })
@@ -1122,7 +1180,10 @@ export struct A_Onboarding {
         })
       }
       .width('100%')
-      .margin({ bottom: 20 })
+      // 2026-11-02（AGC 自检：Mate X7 展开态底部按钮距导航条 <28vp）：
+      // 原来写死 20vp，且没算手势条自身高度。改成「导航条高度 + 28vp」，
+      // 手机/折叠展开都保证按钮底边离导航条 ≥28vp（手机端也顺带抬高了）。
+      .margin({ bottom: this.bottomVp + 28 })
     }
     .width('100%')
     .height('100%')

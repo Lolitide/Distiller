@@ -6,11 +6,14 @@
  * 观感沿用需求方 2026-10-16 定下的那套：
  *  · 图示用**官方 Symbol `inbox`** 放大到 96vp（官方没有随 SDK 发"空状态插图"这类位图资源，
  *    `sys.media` 里没有 empty 类图，Symbol 是唯一能做到"官方风格"的图示）；
- *  · 颜色两处都取**比页面背景（#f1f3f5）更深的官方灰**：图示 `gray_03`(#d1d1d6)、
- *    文字 `ohos_id_color_text_tertiary`(#66182431)；
- *  · 以后要换真插图，把 `SymbolGlyph` 换成 `Image($r('app.media.xxx'))` 即可，布局不用动。
+ *  · 颜色按**对比度合规**取值（AGC UX 自检：图标≥3:1、正文≥4.5:1）：
+ *    图示 `scheme.outline`（约 4.2:1）、
+ *    文字 `ohos_id_color_text_secondary`（约 5.6:1）。
+ *    早期用的 `gray_03`(#d1d1d6) + `text_tertiary`(#66182431) 只有 1.4:1 / 2.4:1，自检不通过。
+ *  · 以后要换真插图，把 `SymbolGlyph` 换成 `Image(<app.media 里的空态图>)` 即可，布局不用动。
  */
 import { LengthMetrics } from '@kit.ArkUI';
+import { ThemeStore } from '../utils/Theme';
 
 /** 图示尺寸（vp）：接近官方空状态插图的观感档位 */
 const EMPTY_ICON_SIZE_VP: number = 96;
@@ -31,15 +34,18 @@ export struct EmptyHint {
    */
   @Require @Param message: Resource;
 
+  /** 视觉个性化：M3 色系（空态图示取 `scheme.outline`，保证与浅底对比度 ≥ 3:1） */
+  @Local themeStore: ThemeStore = ThemeStore.instance();
+
   build() {
     Column() {
       SymbolGlyph($r('sys.symbol.inbox'))
         .fontSize(`${EMPTY_ICON_SIZE_VP}vp`)
-        .fontColor([$r('sys.color.gray_03')])
+        .fontColor([this.themeStore.scheme.outline])
 
       Text(this.message)
         .fontSize($r('sys.float.ohos_id_text_size_body2'))
-        .fontColor($r('sys.color.ohos_id_color_text_tertiary'))
+        .fontColor($r('sys.color.ohos_id_color_text_secondary'))
         .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
         // 2026-10-25（板板页接入本组件）：**文案长度不固定** —— 任务列表那条是三个字「无任务」，
         // 板板那条是一整句。没有左右留白时，长句会贴着屏幕两边、并在很靠边的地方断行

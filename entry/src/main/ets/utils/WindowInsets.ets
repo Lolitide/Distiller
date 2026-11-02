@@ -33,6 +33,12 @@ export class WindowInsets {
    */
   private static cachedTopPx: number = 0;
 
+  /**
+   * 上一次查到的底部导航条/手势条高度（px）——同步缓存，用法同 `cachedTopPx`。
+   * 引导页要「底部按钮离导航条 ≥28vp」，首帧就得是够高的位置，不能等 async 回来再跳一下。
+   */
+  private static cachedBottomPx: number = 0;
+
   /** 状态栏高度（px）；取不到返回 0（同时会刷新同步缓存） */
   static async topPx(context: common.Context): Promise<number> {
     try {
@@ -64,11 +70,17 @@ export class WindowInsets {
         // 三键导航机型：手势条那条是 0，导航栏高度在 TYPE_SYSTEM.bottomRect 里
         height = win.getWindowAvoidArea(window.AvoidAreaType.TYPE_SYSTEM).bottomRect.height;
       }
+      WindowInsets.cachedBottomPx = height;
       return height;
     } catch (error) {
       const err = error as BusinessError;
       hilog.warn(DOMAIN, TAG, 'bottomPx failed: %{public}s', err.message);
       return 0;
     }
+  }
+
+  /** 已缓存的底部导航条高度（px）；还没查过就是 0 */
+  static bottomPxCached(): number {
+    return WindowInsets.cachedBottomPx;
   }
 }

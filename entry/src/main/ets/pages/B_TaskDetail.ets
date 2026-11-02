@@ -362,7 +362,7 @@ export struct B_TaskDetail {
    * · 字号/字重与列表页导航栏 mainTitle **同一套官方 token**：
    *   `titlebar_main_title_text_font_size` + `title_primary_weight`（`fontSize` 吃 `Resource`、
    *   `fontWeight` 的签名是 `number | FontWeight | ResourceStr`，两个都能直接收资源 ✓）；
-   * · 已完成 → 名称变灰（`ohos_id_color_text_tertiary`），与卡片"完成态灰化"一致；
+   * · 已完成 → 名称变灰（`ohos_id_color_text_secondary`，5.6:1 满足正文 4.5:1），与卡片"完成态灰化"一致；
    * · 点名称进入编辑，回车提交（本页没有"保存"按钮，符合需求方「点击回车就算修改完成」）。
    */
   @Builder
@@ -434,7 +434,7 @@ export struct B_TaskDetail {
             // 与编辑态同一个字重（枚举），两态之间不会"变细"
             .fontWeight(FontWeight.Bold)
             .fontColor(this.param.task.status === TaskStatus.COMPLETED
-              ? $r('sys.color.ohos_id_color_text_tertiary')
+              ? $r('sys.color.ohos_id_color_text_secondary')
               : $r('sys.color.ohos_id_color_text_primary'))
             // 已完成：标题加删除线（2026-10-29 需求方；详情页的到期行仍显示原时间，不做「已完成」替换）
             .decoration({

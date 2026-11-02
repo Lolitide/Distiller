@@ -121,7 +121,7 @@ export struct DateTimePickerBody {
           .height(Theme.HIT_MIN + Theme.GAP_S)
           .fontSize(Theme.FONT_BODY)
           .fontColor($r('sys.color.ohos_id_color_text_primary'))
-          .placeholderColor($r('sys.color.ohos_id_color_text_tertiary'))
+          .placeholderColor($r('sys.color.ohos_id_color_text_secondary'))
           .backgroundColor($r('sys.color.comp_background_secondary'))
           .borderRadius(Theme.RADIUS_CHIP)
           .padding({ left: Theme.GAP_M, right: Theme.GAP_M })

@@ -26,7 +26,7 @@ const CURSOR_SCHEMA: number = 4;
  * 固定服务器地址：设置在代码里，设置页不再暴露输入框/服务器行。
  * 换环境时只改这一处。
  */
-export const DEFAULT_BASE_URL: string = 'https://pipiwoof.tail27705d.ts.net';
+export const DEFAULT_BASE_URL: string = 'https://distiller.ltd';
 
 export class BackendConfig {
   /** 当前生效的服务器地址（`ApiClient` 直接读它） */
