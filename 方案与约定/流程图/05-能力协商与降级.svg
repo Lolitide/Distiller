@@ -13,7 +13,7 @@
     .ts{fill:#4B5563;font-size:12px}
     .tt{fill:#111827;font-size:18px;font-weight:bold}
     .ln{stroke:#4A90D9;stroke-width:1.8;fill:none;marker-end:url(#a5)}
-    .badge{fill:#E5484D}
+    .badge{fill:#46A758}
     .bgt{fill:#FFFFFF;font-size:11px;font-weight:bold}
   </style>
 
@@ -45,7 +45,7 @@
   <text x="740" y="394" class="ts" text-anchor="middle">消费 /candidates</text>
 
   <rect x="560" y="142" width="230" height="24" rx="12" class="badge"/>
-  <text x="675" y="159" class="bgt" text-anchor="middle">❌ 字段未实现 → 恒走 v1</text>
+  <text x="675" y="159" class="bgt" text-anchor="middle">✅ 已实现 → 可走 v2</text>
 
-  <text x="26" y="424" class="ts">现状：health 仅返回 version/time/bot_running/window，无 api_version 与 capabilities。</text>
+  <text x="26" y="424" class="ts">现状（2026-10-15）：health 已返回 api_version:2 与 capabilities（candidates/parse/feedback 恒在，ocr 跟随本机模型）。</text>
 </svg>

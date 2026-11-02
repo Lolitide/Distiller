@@ -4,12 +4,16 @@
 > （`qqbot-backend/server.py`、`qqbot-backend/relay.py`、`qqbot-backend/llm_worker.py`）核验。
 > UI 对应关系来自 `知了设计UI/` 下的 8 张 Figma 导出稿。
 > 状态口径：**✅ 已实现** / **❌ 约定未实现**。
+>
+> **2026-10-28 当前主链路**：**自动群采集暂时关闭**（`QQBOT_GROUP_COLLECT=0`，默认值）。服务端默认不接收、不落库群消息，也不做跨消息上下文/聚类；App 只处理**用户主动私聊/转发给 Bot** 的单条文本，进入「待确认」。`/groups`、`/subscribe`、`/messages`、`/candidates` 代码保留，但当前不会因群消息产生新数据。
 
 ---
 
 ## 整体数据流
 
 ![整体数据流](流程图/01-整体数据流.svg)
+
+> 该图是原「群消息 → 候选」链路；**2026-10-28 起自动群采集暂停**，当前实际主链路是「用户转发 → `/forward/pending` → `/parse` → 待确认」。
 
 ---
 
@@ -23,7 +27,9 @@
 | 成功信封 | `{ "ok": true, "data": { ... } }` |
 | 失败信封 | `{ "ok": false, "error": { "code": "...", "message": "..." } }` |
 | 时间格式 | `YYYY-MM-DD HH:mm:ss` |
-| 正文合规 | 群消息只存在内存 30 分钟滚动窗口，**不落盘**；服务端不存任务、不存原文正文 |
+| 正文合规 | 群消息/转发文本只存在内存 30 分钟滚动窗口/转发队列，**不落盘**；服务端不存任务、不存原文正文 |
+| 凭据合规 | BYOB 的 AppSecret 仅以 AES-256-GCM 密文存 `tenants.json`；接口响应/日志不回显，解绑即删 |
+| 限流（2026-11-01） | 公网口按**客户端 IP**限流（60s 窗口）：`/device/register` 10 次、`/tenant/register` 5 次、`/parse` 20 次、`/bind/code` 10 次；超限返回 `429 rate_limited`。1 秒轮询的 `/forward/pending` **不限流**。 |
 
 ### 错误码
 
@@ -36,6 +42,11 @@
 | `not_found` | 404 | 路径不存在（**老后端即没有 v2 接口**） | 视作「不支持」，降级 |
 | `internal` | 500 | 服务端异常 | 展示 message，重试 |
 | `not_supported` | 501 | 接口存在但功能未启用（如未装模型） | 降级到本地规则（**v2 预留**） |
+| `secret_key_missing` | 400 | BYOB 主密钥未配置 | 服务端配置 `QQBOT_SECRET_KEY`，不是用户错误 |
+| `bot_start_failed` | 400 | AppID/AppSecret 无效或 Bot 未上线 | 提示核对凭据；看后端 `[tenant:...]` 日志 |
+| `bot_already_bound` | 400 | 同一 AppID 已绑到另一设备，且 AppSecret 不一致 | 用同一份 AppSecret 重装会自动转移；重置过 Secret 需先在原设备解绑 |
+| `rate_limited` | 429 | 请求过于频繁（注册设备/注册租户/解析/配对码） | 按提示等待重试 |
+| `tenant_busy` | 400 | 同时启动的租户过多（启动队列已满） | 稍后重试 |
 
 ---
 
@@ -68,25 +79,46 @@
 - **响应**：`{ "ok": true, "data": { "device_id": "dev_xxx", "token": "..." } }`
 - **对应界面**：`首次启动.svg`（首次启动即注册，本地保存身份，见图 §1.1）。
 
-### 1.3 `POST /api/relay/bind/code` ✅
+### 1.3 `POST /api/relay/tenant/register` ✅（2026-10-28 BYOB）
 
-- **作用**：生成 6 位配对码，用户在 QQ 里私聊机器人发送该码即完成绑定。
+- **作用**：用户自建 QQ Bot 后，把 **AppID / AppSecret** 交给后端；后端按设备加密保存 Secret，并拉起该用户的 botpy 子进程。
 - **鉴权**：设备身份。
-- **响应**：`{ "ok": true, "data": { "code": "7K3M9Q", "expires_in": 300, "hint": "在 QQ 里私聊机器人，发送：绑定 7K3M9Q" } }`
-- **对应界面**：Onboarding 绑定页（展示配对码 + 等待，见 §1.1 图）。
+- **请求**：`{ "app_id": "1906107486", "app_secret": "..." }`
+- **响应**：`{ "ok": true, "data": { "bound": true, "app_id": "1906107486", "bot_nickname": "", "running": true, "ready": true } }`
+- **错误**：`secret_key_missing`（服务端未配 `QQBOT_SECRET_KEY`）、`bot_start_failed`（凭据错/未上线）、`bot_already_bound`（同一 AppID 已绑另一设备且 Secret 不一致）、`tenant_limit`。
+- **卸载重装**：若 AppID + AppSecret 与旧租户一致，服务端会停掉旧设备 runner、删除旧租户/绑定，再把 Bot 转移到新 `device_id`（不会报 `bot_already_bound`）。
+- **对应界面**：`设置.svg` → 绑定 QQ（复制创建链接到 QQ 内打开 → 填 AppID/AppSecret → 绑定）。
+- **安全**：Secret **只进后端**，落盘为 AES-256-GCM 密文；接口响应、日志均不回显。
+
+### 1.3.1 `GET /api/relay/tenant/status` ✅ / `POST /api/relay/tenant/unbind` ✅
+
+- **作用**：查看当前设备托管的 Bot 运行状态；解绑时停止子进程并删除租户记录。
+- **鉴权**：设备身份。
+- **status 响应**：`{ "ok": true, "data": { "tenant": { "app_id": "...", "running": true, "ready": true } } }`（无租户时 `tenant: null`）
+- **unbind 响应**：`{ "ok": true, "data": { "unbound": true } }`
+- **备注**：解绑同时清 `bindings`，但不会自动删除 App 本地任务。
+- **安全缺口**：当前租户 Bot 的私聊未校验发送者是否为 Bot 主人；任何人发消息都会进入 owner 转发队列。上线前需补一次性 owner 校验码或首个 `user_openid` 白名单。
+
+### 1.3.2 `POST /api/relay/bind/code`（旧版，保留兼容）
+
+- **状态**：代码仍保留，**App 新 UI 不再调用**；旧配对码链路仅用于历史调试。
+- **说明**：生成 6 位配对码，用户私聊官方 Bot 发码完成绑定。BYOB 下不需要配对码，因为 Bot 本身已经属于该用户。
 
 ### 1.4 `GET /api/relay/bind/status` ✅
 
-- **作用**：查询当前设备是否已完成绑定（绑定页轮询）。
+- **作用**：查询当前设备是否已完成绑定（App 启动/回前台时刷新）。
 - **鉴权**：设备身份。
 - **响应**：
   - 未绑定：`{ "ok": true, "data": { "bound": false } }`
-  - 已绑定：`{ "ok": true, "data": { "bound": true, "user_openid_tail": "…1234", "bound_at": "...", "source": "pair_code" } }`
-- **对应界面**：Onboarding 绑定页（轮询到 `bound:true` 后进入主界面，见 §1.1 图）。
+  - BYOB 已绑定：`{ "ok": true, "data": { "bound": true, "source": "byob", "bot_app_id": "1906107486", "bot_running": true, "bot_ready": true } }`
+  - 旧配对码绑定：`{ "ok": true, "data": { "bound": true, "user_openid_tail": "…1234", "source": "pair_code" } }`
+- **对应界面**：`设置.svg` 绑定状态；App 不再轮询配对码。
 
-### 1.5 `GET /api/relay/groups` ✅
+### 1.5 `GET /api/relay/groups` ✅（当前不产生新数据）
 
-- **作用**：列出「机器人所在的群」——按该账号的授权做隔离，未授权群不可见。
+> **自动群采集暂停**：`QQBOT_GROUP_COLLECT=0` 时 bot 不接收群消息，因此本接口只可能返回历史 `bot.db` 中的群/授权数据，不会因新群消息增长。BYOB 当前只保证私聊转发。
+
+- **作用**：列出**机器人历史上出现过消息的群**（读 `bot.db`）。当前 `QQBOT_GROUP_COLLECT=0`，不会因新群消息增长；`/admin/grant` 那套「按账号授权隔离」只服务于**旧配对码链路**，BYOB 不依赖它。
 - **鉴权**：设备身份。
 - **响应**：
   ```json
@@ -116,7 +148,9 @@
 - **响应**：`{ "ok": true, "data": { "subscribed": false, "group_openid": "..." } }`
 - **对应界面**：`设置.svg`（关闭群订阅，见图 §1.5）。
 
-### 1.8 `GET /api/relay/messages?after=<seq>&limit=<n>` ✅
+### 1.8 `GET /api/relay/messages?after=<seq>&limit=<n>` ✅（当前无新增群消息）
+
+> `QQBOT_GROUP_COLLECT=0` 时群消息不进入内存窗口，本接口只可能读到历史窗口/历史 `bot.db` 内容；当前 App 主链路不依赖它。转发的单条文本走 `/forward/pending`，不进 `/messages`。
 
 - **作用**：按 `seq` 增量拉取**已订阅群**的原始群消息（供「查看原话」与搜索）。每条消息带后端 `parse` 结构（小模型优先、失败回退规则）。
 - **鉴权**：设备身份。
@@ -157,7 +191,7 @@
 - **作用**：查看 / 一键删除该设备在服务端的全部数据（隐私合规）。
 - **鉴权**：设备身份。
 - **GET 响应**：`{ "ok": true, "data": { "device_count": 1, "bindings": 1, "subscriptions": 3, "queue_items": 12 } }`
-- **DELETE 响应**：`{ "ok": true, "data": { "deleted": true } }`（同时清绑定、订阅、配对码，无绑定则连群授权一并清除）
+- **DELETE 响应**：`{ "ok": true, "data": { "deleted": true } }`（清绑定、订阅、配对码、BYOB 租户记录；同时停止该设备的 botpy 子进程；无绑定则连群授权一并清除）
 - **对应界面**：`设置.svg`（隐私/关于区「清除服务端数据」，见图 §1.5）。
 
 ### 1.10 `POST /api/relay/dev/ingest` ✅（联调专用）
@@ -446,14 +480,14 @@
 
 | 设计稿（`知了设计UI/`） | 页面职责 | 依赖接口 | 预览 |
 | --- | --- | --- | --- |
-| `首次启动.svg` | 首次启动 / 协议 / Onboarding 绑定 | `GET /health`、`POST /device/register`、`POST /bind/code`、`GET /bind/status` | §1.1 |
+| `首次启动.svg` | 首次启动 / 协议 / 设备注册 | `GET /health`、`POST /device/register` | §1.1 |
+| `设置.svg` | 设置 / 绑定 QQ（BYOB）/ 群订阅 / 隐私 | `POST /tenant/register`、`GET /tenant/status`、`POST /tenant/unbind`、`GET /bind/status`、`GET /groups`、`POST /subscribe`、`POST /unsubscribe`、`GET/DELETE /my/data` | §1.3 |
 | `任务列表.svg` | 待办列表 | 交付前端：`GET /candidates`（转本地 `Task`，按 `candidate_id` upsert）+ `GET /messages`（取原文写 `raw_text`） | §2.1 |
 | `任务列表-编辑状态.svg` | 多选编辑态（全选/删除） | 纯本地 `Task` CRUD（无接口） | §2.1 |
 | `任务详情.svg` | 待办详情（原话 / 提醒 / 编辑） | `GET /candidates`、`GET /messages`（按 `source.msg_ids` 回溯原文）、`GET /attachment`（附件）、`POST /feedback` | §2.1 |
 | `删除弹窗.svg` | 删除确认弹窗 | 纯本地删除（无接口） | §2.1 |
 | `搜素.svg` | 搜索（本地全文） | 本地 `Task` 全文（前端算） | §1.8 |
 | `添加任务.svg` | 添加任务（粘贴 / 分享 / 截图 / 语音 / 文本） | `POST /parse`（无状态抽取；含 `ocr` 时截图直传，缺模型 501 → 端侧 `service/ai` 兜底） | §2.2 |
-| `设置.svg` | 设置（开关 / 子页面 / 隐私关于） | `GET /groups`、`POST /subscribe`、`POST /unsubscribe`、`GET/DELETE /my/data` | §1.5 |
 
 > 上表按**交付前端的口径**写：待办来自候选流，落成本机 22 列 `Task`（见 `07_前后端对接方案.md` §3 的字段映射）。
 > 分组「今天/明天/周二/待定」按 `due_at`→`remind_at`→待定；筛选/分组都在前端算，不占接口。
@@ -466,6 +500,8 @@
 
 | 接口 | 状态 | 说明 | 流程图 |
 | --- | --- | --- | --- |
+| `POST /api/relay/tenant/register` | ✅ | BYOB：按设备加密保存 AppID/AppSecret，拉起租户 botpy；`test_tenants.py` 覆盖加密/fail-closed | §1.3 |
+| `GET /api/relay/tenant/status` / `POST /api/relay/tenant/unbind` | ✅ | 租户运行状态 / 解绑并停止子进程 | §1.3.1 |
 | `GET /api/relay/candidates` | ✅ | `candidate_engine.py`：去重 → 聚类 → 簇级小模型/规则 → 安全闸；`rev_seq` 游标 + upsert 语义 | §2.1 |
 | `POST /api/relay/parse` | ✅ | 无状态抽取；文本/截图/文件三来源；截图走本机多模态 OCR（无模型 501，前端降级端侧）；`test_parse_api.py` 覆盖 | §2.2 |
 | `POST /api/relay/feedback` | ✅ | accept/dismiss 计数 + `drop_words` 手动删词（接 `/feedback`） | §2.3 |
@@ -499,7 +535,8 @@
 
 ## 6. 一句话总结
 
-> **已实现（v1）**：`health` / `device/register` / `bind/code` / `bind/status` / `groups` / `subscribe` / `unsubscribe` / `messages` / `my/data` / `dev/ingest`。
+> **已实现（v1）**：`health` / `device/register` / `bind/status` / `groups` / `subscribe` / `unsubscribe` / `messages` / `my/data` / `dev/ingest`；`bind/code` 仅为旧流程保留。
+> **已实现（BYOB，2026-10-28）**：`POST /tenant/register`、`GET /tenant/status`、`POST /tenant/unbind`；App 绑定改为「用户创建 Bot → 填 AppID/AppSecret」。
 > **已实现（v2）**：`/candidates`、`/parse`（含截图 OCR 与 docx/xlsx/pptx/pdf 文件抽取）、`/feedback`、`/attachment`（附件过路）、`/messages/update`（**用户改待办**），以及 `/health` 的 `api_version` + `capabilities`（`ocr` 跟随模型可用性）。
 > **前端**：交付前端（`cicad_fe`，袁正琨）仍是静态原型 + mock，**尚未对接**；逐字段映射与落位见 `07_前后端对接方案.md`。
 > 后端做「消息 → 候选（去重 + 聚类 + 综合总结）」，前端做「候选 → 本地任务 + 全程管理」。

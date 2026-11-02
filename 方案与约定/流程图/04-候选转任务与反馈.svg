@@ -17,7 +17,7 @@
     .tt{fill:#111827;font-size:18px;font-weight:bold}
     .ln{stroke:#4A90D9;stroke-width:1.8;fill:none;marker-end:url(#a4)}
     .dash{stroke:#E8A33D;stroke-width:1.6;fill:none;stroke-dasharray:5 4;marker-end:url(#a4o)}
-    .badge{fill:#E5484D}
+    .badge{fill:#46A758}
     .bgt{fill:#FFFFFF;font-size:11px;font-weight:bold}
   </style>
 
@@ -53,7 +53,7 @@
   <text x="460" y="426" class="t" text-anchor="middle">POST /api/relay/feedback（可选）</text>
   <text x="460" y="446" class="ts" text-anchor="middle">{ candidate_id, action, edited_fields }</text>
   <rect x="624" y="386" width="58" height="22" rx="11" class="badge"/>
-  <text x="653" y="401" class="bgt" text-anchor="middle">❌ 未实现</text>
+  <text x="653" y="401" class="bgt" text-anchor="middle">✅ 已实现</text>
 
   <text x="26" y="492" class="ts">已定：候选 ↔ 任务基数 1:1，一键转任务，转完后候选不再影响任务。</text>
 </svg>

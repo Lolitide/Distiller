@@ -33,3 +33,10 @@ venv/
 *.swp
 Thumbs.db
 desktop.ini
+
+# ==================== 本机私有 / 敏感（绝不提交）====================
+/云服务器数据.txt
+/.cache/
+/.deveco/
+/_tmp_ops/
+~$*.docx

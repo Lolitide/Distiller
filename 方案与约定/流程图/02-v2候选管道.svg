@@ -12,14 +12,14 @@
     .ts{fill:#4B5563;font-size:12px}
     .tt{fill:#111827;font-size:18px;font-weight:bold}
     .ln{stroke:#4A90D9;stroke-width:1.8;fill:none;marker-end:url(#a2)}
-    .badge{fill:#E5484D}
+    .badge{fill:#46A758}
     .bgt{fill:#FFFFFF;font-size:12px;font-weight:bold}
   </style>
 
   <text x="26" y="34" class="tt">v2 · 候选生成管道（后端）</text>
 
   <rect x="560" y="16" width="130" height="26" rx="13" class="badge"/>
-  <text x="625" y="34" class="bgt" text-anchor="middle">❌ 未实现</text>
+  <text x="625" y="34" class="bgt" text-anchor="middle">✅ 已实现</text>
 
   <rect x="150" y="66" width="420" height="52" rx="8" class="bx"/>
   <text x="360" y="90" class="t" text-anchor="middle">群消息进入 30 min 内存窗口</text>

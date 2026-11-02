@@ -16,13 +16,13 @@
     .tt{fill:#111827;font-size:18px;font-weight:bold}
     .ln{stroke:#4A90D9;stroke-width:1.8;fill:none;marker-end:url(#a3)}
     .dash{stroke:#E8A33D;stroke-width:1.6;fill:none;stroke-dasharray:5 4;marker-end:url(#a3o)}
-    .badge{fill:#E5484D}
+    .badge{fill:#46A758}
     .bgt{fill:#FFFFFF;font-size:12px;font-weight:bold}
   </style>
 
   <text x="26" y="34" class="tt">「添加任务」→ POST /api/relay/parse（无状态抽取）</text>
   <rect x="836" y="16" width="150" height="26" rx="13" class="badge"/>
-  <text x="911" y="34" class="bgt" text-anchor="middle">❌ 接口未实现</text>
+  <text x="911" y="34" class="bgt" text-anchor="middle">✅ 接口已实现</text>
 
   <rect x="26" y="140" width="160" height="88" rx="8" class="bx"/>
   <text x="106" y="170" class="t" text-anchor="middle">输入来源</text>
