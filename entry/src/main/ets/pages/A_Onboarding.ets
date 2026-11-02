@@ -120,14 +120,6 @@ export struct A_Onboarding {
     }
   }
 
-  aboutToDisappear(): void {
-    this.stopVideoLoop();
-    if (this.bindingAdjustTimer >= 0) {
-      clearTimeout(this.bindingAdjustTimer);
-      this.bindingAdjustTimer = -1;
-    }
-  }
-
   private hostContext(): common.Context | undefined {
     return this.getUIContext().getHostContext();
   }
