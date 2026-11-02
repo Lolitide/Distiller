@@ -19,3 +19,10 @@
 *.exe binary
 *.ttf binary
 *.otf binary
+# 宣传与说明材料（体积较大的二进制，禁止行尾转换与文本 diff）
+*.mp4 binary
+*.mov binary
+*.pptx binary
+*.docx binary
+*.xlsx binary
+*.zip binary
