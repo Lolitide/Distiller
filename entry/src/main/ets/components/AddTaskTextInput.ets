@@ -39,7 +39,7 @@ export struct AddTaskTextInput {
       // 字号/颜色走官方语义 token：正文 `body1`、占位用文字三级灰
       .fontSize($r('sys.float.ohos_id_text_size_body1'))
       .fontColor($r('sys.color.ohos_id_color_text_primary'))
-      .placeholderColor($r('sys.color.ohos_id_color_text_tertiary'))
+      .placeholderColor($r('sys.color.ohos_id_color_text_secondary'))
       // 底色：2026-10-25 两轮定稿 ——
       //  ① 先去掉系统冷灰 `segment_button_v2_capsule_button_background`（在暖色面板上偏蓝）；
       //  ② 再按作者「这几个的 bg 颜色改成列表页面 card 的 bg 取色」统一成

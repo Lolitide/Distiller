@@ -55,7 +55,7 @@ export struct AddTaskStepsPreview {
       // 删除：解析偶尔会把"通知类"句子也算进来，给用户一个去掉的出口
       SymbolGlyph($r('sys.symbol.xmark_circle'))
         .fontSize(Theme.FONT_CAPTION)
-        .fontColor([$r('sys.color.icon_tertiary')])
+        .fontColor([$r('sys.color.icon_secondary')])
         .onClick(() => {
           this.removeAt(index);
         })

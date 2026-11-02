@@ -28,8 +28,13 @@ export default class EntryAbility extends UIAbility {
   private mainWindow: window.Window | undefined = undefined;
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    // 2026-11-02 修 bug（AGC UX 自检在 Mate 80 / Mate X5 上截到「文字整体发白、看不清」）：
+    // 本应用的配色是**只有亮色一套**（`M3Palette` 静态派生 surface/container，没有 dark 变体），
+    // 但文字/图标用的是 `sys.color.ohos_id_color_text_primary|secondary` 这类**跟随系统**的语义 token。
+    // 系统一开深色模式，这些 token 变白，而页面底色仍是亮色 → 白字压浅底，直接不可读。
+    // 这里强制亮色，让系统 token 与自绘配色始终对齐（真要做深色，得先给 M3Scheme 补 dark 变体）。
     try {
-      this.context.getApplicationContext().setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
+      this.context.getApplicationContext().setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT);
     } catch (err) {
       hilog.error(DOMAIN, 'testTag', 'Failed to set colorMode. Cause: %{public}s', JSON.stringify(err));
     }

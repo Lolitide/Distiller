@@ -235,7 +235,7 @@ export struct TaskStepsSection {
             Text(step.content)
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
               .fontColor(step.done === 1
-                ? $r('sys.color.ohos_id_color_text_tertiary')
+                ? $r('sys.color.ohos_id_color_text_secondary')
                 : $r('sys.color.ohos_id_color_text_primary'))
               .maxLines(1)
               .textAlign(TextAlign.Start)

@@ -773,6 +773,12 @@ struct A_Main {
     // 那是**标题收缩联动**的驱动；MINI 是「固定为小标题模式」，没有要联动的量。
     // 留着它只会让导航组件白订阅滚动事件，所以三页都 MINI 之后一并去掉。
     .titleMode(HdsNavigationTitleMode.MINI)
+    // 2026-11-01（AGC UX 自检：折叠/展开后布局不合理）：
+    // HdsNavigation 默认 Auto —— 宽度 ≥600vp 时自动切成左右分栏，
+    // 而本应用是**单栏 + 全屏子页**的形态（deviceTypes 只有 phone），
+    // 展开态下右半屏会是一整块空白，列表被挤到左侧 1/3。
+    // 固定 Stack：折叠/展开、横竖屏切换都保持单栏，子页全屏压栈。
+    .mode(NavigationMode.Stack)
     .hideBackButton(true)
     .titleBar({
       // 2026-10-21 窗口改回**全屏**（见 EntryAbility.setupWindow），所以这里必须恢复 `true`：

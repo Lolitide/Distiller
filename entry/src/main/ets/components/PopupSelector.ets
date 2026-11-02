@@ -78,8 +78,8 @@ export struct PopupSelector {
         .textAlign(TextAlign.End)
 
       SymbolGlyph($r('sys.symbol.chevron_right'))
-        .fontSize(Theme.FONT_CAPTION)
-        .fontColor([$r('sys.color.icon_tertiary')])
+        .fontSize(Theme.ICON_CHEVRON)
+        .fontColor([$r('sys.color.icon_secondary')])
         .margin({ left: Theme.GAP_S })
     }
     .width('100%')

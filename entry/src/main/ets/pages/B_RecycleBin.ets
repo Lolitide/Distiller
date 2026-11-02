@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 回收站（二级页）：
  *  · 「忽略的消息」= 待确认里点忽略的消息；
  *  · 「删除的待办」= 时间线/待确认里删掉的任务；
@@ -171,7 +171,7 @@ export struct B_RecycleBin {
     Column() {
       Text('还没有删除的消息/待办')
         .fontSize($r('sys.float.ohos_id_text_size_body2'))
-        .fontColor($r('sys.color.ohos_id_color_text_tertiary'))
+        .fontColor($r('sys.color.ohos_id_color_text_secondary'))
     }
     .width('100%')
     .layoutWeight(1)

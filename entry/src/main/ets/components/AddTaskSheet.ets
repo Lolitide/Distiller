@@ -158,7 +158,7 @@ export struct AddTaskSheet {
         .fontSize($r('sys.float.ohos_id_text_size_button1'))
         .fontColor(this.draft.canSave
           ? this.themeStore.scheme.primary
-          : $r('sys.color.ohos_id_color_text_tertiary'))
+          : $r('sys.color.ohos_id_color_text_secondary'))
         .padding({
           left: SAVE_SIDE_PADDING_VP,
           right: SAVE_SIDE_PADDING_VP,

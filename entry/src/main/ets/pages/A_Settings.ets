@@ -1,4 +1,4 @@
-﻿/*
+/*
  * 设置页（一级页，底部页签第二个）。
  *
  * ## 2026-10-19 第二版重做（作者反馈）
@@ -37,7 +37,6 @@ import { M3SegmentGroup, M3SegmentOption } from '../components/M3SegmentGroup';
 // 开关统一走 M3 取色的组件（`Toggle` 默认取系统蓝，见 M3Switch 顶部注释）
 import { M3Switch } from '../components/M3Switch';
 import { Task } from '../model';
-import { buildDemoTasks, DEMO_TASK_PREFIX } from '../mock/DemoTasks';
 import { TaskListStore } from '../viewmodel/TaskListStore';
 import { NAV_STACK_KEY, ROUTE_CLOUD_FIELDS, ROUTE_PRIVACY_POLICY, ROUTE_RECYCLE_BIN } from '../viewmodel/TaskNavParams';
 import { TaskExportViewModel, TaskImportParseResult } from '../viewmodel/TaskExportViewModel';
@@ -173,13 +172,6 @@ export struct A_Settings {
   @Local bindExpired: boolean = false;
   /** 配对码剩余秒数（每秒减一，界面倒计时） */
   @Local bindLeftSec: number = 0;
-  /**
-   * 演示模式开关（设置 → 关于）：打开时往列表里放一组演示任务，关掉即摘掉。
-   *
-   * 2026-10-27 需求方：「任务列表页删去『样例』按钮，转而统一到设置的『关于』下新增『演示模式』开关」——
-   * 这条状态要**记住**（列表右下角那颗按钮是无状态的，这里多了个开关态），所以走 `SettingsRepository`。
-   */
-  @Local demoMode: boolean = false;
   private bindTimer: number = -1;
   /** 本次「去绑定/重新绑定」的开始时间（用于忽略旧 bound_at） */
   private bindStartedAt: number = 0;
@@ -215,7 +207,6 @@ export struct A_Settings {
     this.loadSettings();
     this.loadBackend();
     this.loadPermissions();
-    this.loadDemoMode();
     // 引导页里授权通知/日历后，这里没有重新走生命周期，靠广播刷新
     PermissionEvents.setListener(() => {
       this.loadPermissions();
@@ -707,41 +698,7 @@ export struct A_Settings {
     this.toast('下次启动会显示启动引导');
   }
 
-  /**
-   * 读「演示模式」开关的持久化状态。
-   *
-   * ⚠️ 只同步**开关外观**，不在这里重新灌一遍演示任务 —— 任务本身已经落盘在列表里，
-   * 每次进设置页都灌一次会反复触发 upsert / 重分组。真正灌/摘只在用户拨开关时发生。
-   */
-  private async loadDemoMode(): Promise<void> {
-    const ctx: common.Context | undefined = this.hostContext();
-    if (ctx === undefined) {
-      return;
-    }
-    this.demoMode = await SettingsRepository.getDemoMode(ctx);
-  }
-
-  /**
-   * 拨「演示模式」：开 → 往列表加入一组演示任务；关 → 按 `clientTaskId` 前缀把它们摘掉。
-   *
-   * 数据侧逻辑：`mock/DemoTasks.buildDemoTasks()` 负责造任务，
-   * `store.upsertAll()` 按 `clientTaskId` 幂等合并，`store.removeTasksByClientIdPrefix()`
-   * 只软删带 `sample-` 前缀的任务 —— 用户自己的任务一条都不会被动到。
-   */
-  private onDemoToggle(isOn: boolean): void {
-    this.demoMode = isOn;
-    const ctx: common.Context | undefined = this.hostContext();
-    if (ctx !== undefined) {
-      SettingsRepository.setDemoMode(ctx, isOn);
-    }
-    if (isOn) {
-      const added: number = this.store.upsertAll(buildDemoTasks());
-      this.toast(added > 0 ? `已加入 ${added} 条演示任务` : '演示任务已在列表里');
-      return;
-    }
-    const removed: number = this.store.removeTasksByClientIdPrefix(DEMO_TASK_PREFIX);
-    this.toast(removed > 0 ? `已移除 ${removed} 条演示任务` : '列表里没有演示任务');
-  }
+  /** 版本信息等「关于」区的内容由 `versionLabel` 等字段直接渲染（演示模式开关已按需求删除） */
 
   /**
    * 推送通道 / 推送验证说明这两行**已删除**（需求方 2026-10-27：「推送通道删去、推送验证说明删去」）。
@@ -1629,8 +1586,8 @@ export struct A_Settings {
               .maxLines(1)
               .textAlign(TextAlign.Start)
             SymbolGlyph($r('sys.symbol.chevron_right'))
-              .fontSize(Theme.FONT_CAPTION)
-              .fontColor([$r('sys.color.icon_tertiary')])
+              .fontSize(Theme.ICON_CHEVRON)
+              .fontColor([$r('sys.color.icon_secondary')])
           }
           .width('100%')
           .height(ROW_HEIGHT_VP)
@@ -1658,8 +1615,8 @@ export struct A_Settings {
               .fontColor(this.themeStore.scheme.primary)
               .maxLines(1)
             SymbolGlyph($r('sys.symbol.chevron_right'))
-              .fontSize(Theme.FONT_CAPTION)
-              .fontColor([$r('sys.color.icon_tertiary')])
+              .fontSize(Theme.ICON_CHEVRON)
+              .fontColor([$r('sys.color.icon_secondary')])
           }
           .width('100%')
           .height(ROW_HEIGHT_VP)
@@ -1767,32 +1724,8 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
-          // 「演示模式」：列表页右下角那颗「样例」按钮搬到这里（需求方 2026-10-27）。
-          // 开 → 加入一组演示任务；关 → 按 clientTaskId 前缀（`sample-`）摘掉它们，用户自己的任务不受影响。
-          // 2026-10-27 第二轮：需求方要去掉开关下面那句说明文案，只留标题 + 开关。
-          Row({ space: 8 }) {
-            Text('演示模式')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              .layoutWeight(1)
-              .maxLines(1)
-              .textAlign(TextAlign.Start)
-
-            // 开关同样必须用 `M3Switch`（裸 `Toggle` 的选中轨道固定取系统蓝，换主题色不会变）
-            M3Switch({
-              isOn: this.demoMode,
-              onToggle: (isOn: boolean) => {
-                this.onDemoToggle(isOn);
-              }
-            })
-            .id('demoModeToggle')
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-
-          this.rowDivider()
+          // 2026-11-02 需求方：「把演示模式那一行删掉」——「关于」里不再提供演示任务开关，
+          // 直接以「版本」开头（原来是 演示模式 / 版本 / 隐私说明 / 重看引导）。
           this.infoRow('版本', this.versionLabel)
           this.rowDivider()
           // 「隐私说明」：2026-10-27 改成**独立页面**（弹窗塞不下一篇合规的隐私政策），
@@ -1839,7 +1772,8 @@ export struct A_Settings {
            *  · 「提醒状态」→ 已搬到「通知个性化」里；
            *  · 「推送通道」「推送验证说明」→ **删除**（连同 `pushStatus` / `pushLine` /
            *    `retryPush` / `showPushHelp` 与 `PushStatus` 导入）。
-           * 所以「关于」现在只剩：演示模式 / 版本 / 隐私说明 / 重新查看启动引导。
+           * 所以「关于」现在只剩：版本 / 隐私说明 / 重新查看启动引导
+           * （2026-11-02：演示模式开关也按需求删除了）。
            */
         }
         .width('100%')

@@ -128,12 +128,16 @@ export struct TaskCard {
    * ⚠️ 2026-10-17 按字段表 §2.1 改为图形标识后，这里**不再**按重要程度着色
    * （旧口径：普通白 / 重要浅黄 / 严重浅红 —— 已废弃，重要程度改由第二行的红圈/红实心圆表达）。
    *   统一白底 → `ohos_id_color_card_bg`（`#ffffffff`）
-   *   完成   → `gray_03`（`#d1d1d6`，官方浅灰阶第三档）
+   *   完成   → `surface-container-highest`（tone 90，比正文底浅一档的"灰化"）
+   *
+   * ⚠️ 2026-11-01（AGC UX 自检不通过后）：完成态原用 `gray_03`(#d1d1d6)，
+   * 与卡片上的 `ohos_id_color_text_secondary`(#99000000) 只有约 **3.8:1**，不足正文 4.5:1；
+   * 改用 M3 tone 90 后，次级文字对比度约 **5.3:1**，仍是"灰化"观感。
    */
   @Computed
   get cardBackground(): ResourceColor {
     if (this.completed) {
-      return $r('sys.color.gray_03');
+      return this.themeStore.scheme.surfaceContainerHighest;
     }
     // 2026-10-19 M3 化：卡片底色 = `surface-container-low`。
     // 作者要求「卡片色略深于背景色」—— 页面底色是 `surface`（tone 98），
@@ -227,7 +231,7 @@ export struct TaskCard {
         // 2026-10-19 M3 化：铃铛开启态用 **primary**（不是种子色原值），
         // 这样它和其它 M3 元素处在同一套 tonal palette 上，不会比其他高亮偏艳。
         ? this.themeStore.scheme.primary
-        : $r('sys.color.icon_tertiary')])
+        : $r('sys.color.icon_secondary')])
       .width(BELL_HIT_SIZE_VP)
       .height(BELL_HIT_SIZE_VP)
       .onClick(() => {
@@ -425,7 +429,7 @@ export struct TaskCard {
               .width(PRIORITY_BADGE_SIZE_VP)
               .height(PRIORITY_BADGE_SIZE_VP)
               .borderRadius(PRIORITY_BADGE_SIZE_VP / 2)
-              .backgroundColor($r('sys.color.icon_tertiary'))
+              .backgroundColor($r('sys.color.icon_secondary'))
               .opacity(PRIORITY_PLACEHOLDER_OPACITY)
           }
         }
@@ -580,9 +584,9 @@ export struct TaskCard {
           .fontColor($r('sys.color.ohos_id_color_text_secondary'))
         if (this.task.pendingSeen !== true) {
           Column()
-            .width(8)
-            .height(8)
-            .borderRadius(4)
+            .width(12)
+            .height(12)
+            .borderRadius(6)
             .backgroundColor(this.themeStore.scheme.error)
         }
       }

@@ -330,7 +330,7 @@ export struct A_TaskList {
    * · 图示用**官方 Symbol**（`inbox`）放大到 96vp —— 官方没有随 SDK 发"空状态插图"这种位图资源
    *   （`sys.media` 里没有 empty 类图），Symbol 是唯一能做到"官方风格"的图示；
    * · 颜色两处都取**比页面背景（`#f1f3f5`）更深的官方灰**：图示 `gray_03`(`#d1d1d6`)，
-   *   文字 `ohos_id_color_text_tertiary`(`#66182431`)；
+   *   文字 `ohos_id_color_text_secondary`（AGC 自检要求正文 ≥4.5:1，三级灰只有约 2.4:1）；
    * · ⚠️ **顶部 Chip 行必须一起保留**：筛选到一个都没有时如果把 Chip 行也藏了，用户就**回不到「全部」**了
    *   （实测踩到过：筛「已完成」再删掉那条 → Chip 行消失 → 卡在空筛选里）。
    *   所以这里自己拼「标题栏让位 + Chip 行 + 余下空间居中」，而不是整个列表都不渲染。
@@ -372,9 +372,9 @@ export struct A_TaskList {
       if (this.store.pendingUnseenCount() > 0) {
         Row({ space: 4 }) {
           Column()
-            .width(8)
-            .height(8)
-            .borderRadius(4)
+            .width(12)
+            .height(12)
+            .borderRadius(6)
             .backgroundColor(this.themeStore.scheme.error)
           Text(String(this.store.pendingUnseenCount()))
             .fontSize(12)
