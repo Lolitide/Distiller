@@ -79,22 +79,30 @@ export class TaskExportRow {
 }
 
 /**
- * 隐式标识（AI 生成合成内容的文件元数据，依据《标识办法》第五条）。
- * 五个要素：生成合成标签、服务提供者名称/编码、内容制作编号、生成方式说明。
+ * 隐式标识（AI 生成合成内容的**文件元数据**），依据《人工智能生成合成内容标识办法》第五条
+ * 与《人工智能生成合成内容标识方法 文件元数据隐式标识 附录 E（规范性）》：
+ *
+ *  · 扩展**字段名（或关键词）里必须出现 `AIGC`**；
+ *  · 字段的**值是字符串**，内容形如
+ *    `{"AIGC":{"Label":"1","ContentProducer":"…","ProduceID":"…","ReservedCode1":"",
+ *      "ContentPropagator":"…","PropagateID":"…","ReservedCode2":""}}`；
+ *  · 各要素取值以附录 E j) 的字符集（基本是 ASCII 可打印字符）为主 —— 所以
+ *    `ContentProducer` 用**包名**而不是中文应用名；
+ *  · 首次写入时「内容传播服务提供者」「内容传播编号」与「生成合成服务提供者」「内容制作编号」相同（附录 E 注 1）。
+ *
+ * 2026-11-03：原来这里是自定义的 `{aiGenerated, provider, providerId, contentId, generator}`，
+ * 字段名与格式都不符合附录 E，AGC「AI 文本生成」资质审核会卡 —— 改成按标准逐字段拼。
  */
-export class AiMetadata {
-  /** 生成合成标签要素 */
-  aiGenerated: boolean = true;
-  /** 生成合成服务提供者名称 */
-  provider: string = '知了 / Distiller';
-  /** 生成合成服务提供者编码（应用包名） */
-  providerId: string = 'com.xjtu.distiller';
-  /** 内容制作编号：每次导出生成一个唯一批次号 */
-  contentId: string = '';
-  /** 生成方式说明 */
-  generator: string = '服务端大模型解析';
-  /** 依据标准（可选） */
-  labelStandard: string = 'GB 45438-2025 / 标识办法';
+const AIGC_FIELD: string = 'AIGC';
+/** 生成合成标签：1 = 属于人工智能生成合成内容（2 = 可能，3 = 疑似） */
+const AIGC_LABEL_GENERATED: string = '1';
+/** 生成合成服务提供者编码：用应用包名（ASCII，符合附录 E 的字符集要求） */
+const AIGC_PRODUCER: string = 'com.xjtu.distiller';
+
+/** CSV 的伴随元数据文件（CSV 没有元数据段，隐式标识单独落一个 JSON） */
+export class AigcMetaFile {
+  /** 字段名必须含 `AIGC`；值是附录 E 规定的那串 JSON 字符串 */
+  AIGC: string = '';
 }
 
 /** JSON 导出的外层结构（带元信息，方便对方判断"这是什么时候、哪个版本的导出"） */
@@ -106,8 +114,8 @@ export class TaskExportBundle {
   count: number = 0;
   /** 显式标识：文件顶层说明 */
   aiNotice: string = AI_NOTICE;
-  /** 隐式标识：文件元数据 */
-  aiMetadata: AiMetadata = new AiMetadata();
+  /** 隐式标识：按附录 E 拼好的 AIGC 元数据字符串（见上方常量注释） */
+  AIGC: string = '';
   tasks: TaskExportRow[] = [];
 }
 
@@ -144,7 +152,7 @@ export class TaskExportViewModel {
     bundle.exportedAtMs = now.getTime();
     bundle.exportedAt = TaskExportViewModel.stamp(now.getTime());
     bundle.count = tasks.length;
-    bundle.aiMetadata = TaskExportViewModel.buildMetadata();
+    bundle.AIGC = TaskExportViewModel.aigcMetadata(util.generateRandomUUID());
     const rows: TaskExportRow[] = [];
     for (let i = 0; i < tasks.length; i++) {
       rows.push(TaskExportViewModel.toRow(tasks[i]));
@@ -154,18 +162,28 @@ export class TaskExportViewModel {
   }
 
   /**
-   * CSV 的隐式标识伴随文件（`xxx.csv.meta.json`）。
-   * CSV 格式本身没有元数据段，所以导出时另存一份同内容的 JSON 元数据。
+   * CSV 的隐式标识伴随文件（`xxx.csv.aigc.json`）。
+   * CSV 格式本身没有元数据段，所以导出时另存一份只含 AIGC 字段的元数据 JSON。
    */
   static buildCsvMeta(): string {
-    return JSON.stringify(TaskExportViewModel.buildMetadata(), null, 2);
+    const meta: AigcMetaFile = new AigcMetaFile();
+    meta.AIGC = TaskExportViewModel.aigcMetadata(util.generateRandomUUID());
+    return JSON.stringify(meta, null, 2);
   }
 
-  /** 一次导出 = 一个内容制作编号（UUID），JSON 与伴随文件各自调用一次即可 */
-  private static buildMetadata(): AiMetadata {
-    const meta: AiMetadata = new AiMetadata();
-    meta.contentId = util.generateRandomUUID();
-    return meta;
+  /**
+   * 按附录 E 拼隐式标识字符串：值必须是**字符串**，内含 `AIGC` 包装对象与七个要素。
+   * @param produceId 内容制作编号（每次导出一个 UUID）
+   */
+  private static aigcMetadata(produceId: string): string {
+    const inner: string = '{"Label":"' + AIGC_LABEL_GENERATED + '"'
+      + ',"ContentProducer":"' + AIGC_PRODUCER + '"'
+      + ',"ProduceID":"' + produceId + '"'
+      + ',"ReservedCode1":""'
+      + ',"ContentPropagator":"' + AIGC_PRODUCER + '"'
+      + ',"PropagateID":"' + produceId + '"'
+      + ',"ReservedCode2":""}';
+    return '{"' + AIGC_FIELD + '":' + inner + '}';
   }
 
   /** 是否 AI 生成内容（有置信度或来源不是手动）；任务卡片、详情页与本导出同一口径 */
