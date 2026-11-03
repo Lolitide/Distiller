@@ -43,6 +43,9 @@ export default class EntryAbility extends UIAbility {
     // 隐私授权同样在首帧前灌好：服务层的 `PrivacyConsent.allowed()` 是**同步**判定，
     // 不能等异步读完首选项（否则冷启动头几秒 AI/云能力会"先允许再拒绝"）
     this.preloadPrivacyConsent();
+    // 平台托管侧（AGC「标准化隐私声明托管服务」）的签署记录才是权威值：撤回/重签可能发生在应用之外，
+    // 后台对齐一次本地门禁。查不到平台记录（模拟器 / hdc 调试包）时保持本地值，见 PrivacyConsent
+    PrivacyConsent.syncFromPlatform(this.context);
     // 系统分享拉起（冷启动）：拿到内容先暂存，A_Main 上树后取走
     ShareIntake.handleWant(want);
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');

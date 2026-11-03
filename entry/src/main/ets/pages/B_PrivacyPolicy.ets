@@ -13,6 +13,12 @@
  *   · **与 AI / 云功能分隔**：政策里把「只在本机」和「会上传到服务器」两类逐条分开写，
  *     撤回只影响后者与 AI 能力。
  *
+ * ⚠️ 2026-11-03（AGC 审核驳回「应用出现两个隐私弹窗」）：
+ * 隐私声明的**同意流程**交给系统的标准隐私弹窗（应用在 AGC 勾了「标准化隐私声明托管服务」），
+ * 本页只是**设置里的阅读页**，不是弹窗、也不在首启流程里，不构成重复弹窗。页底的撤回/重新授权
+ * 改走官方隐私管理服务：撤回 = `privacyManager.disableService()`（撤销平台签署记录），
+ * 重新授权 = `privacyManager.requestAppPrivacyConsent()`（由系统拉标准弹框，应用不自己画）。
+ *
  * 入口：设置 → 关于 → 隐私说明（`A_Settings.openPrivacyPage()`）。
  * 路由：`resources/base/profile/router_map.json` 里注册为 `PrivacyPolicyPage`。
  */
@@ -65,18 +71,27 @@ export struct B_PrivacyPolicy {
     }
   }
 
-  /** 撤回 / 重新授权：落盘并联动同步运行态 */
+  /** 撤回 / 重新授权：调平台隐私管理服务（`privacyManager`）+ 本地门禁联动 */
   private async applyConsent(granted: boolean): Promise<void> {
     const context: common.Context | undefined = this.getUIContext().getHostContext();
     if (context === undefined) {
       return;
     }
-    await PrivacyConsent.setGranted(context, granted);
     if (!granted) {
+      // 官方 `disableService()`：撤销平台托管侧的签署记录，下次打开会重新弹系统标准隐私弹窗
+      const platformRevoked: boolean = await PrivacyConsent.revoke(context);
       // 撤回后立刻停掉同步；SyncService 自己也有一层 consent 门禁，这里是双保险。
       SyncService.setEnabled(false);
       await SettingsRepository.setSyncEnabled(context, false);
-      this.toast('已撤回授权：AI 与云端功能已停用，本机基础功能仍可用');
+      this.toast(platformRevoked
+        ? '已撤回授权：AI 与云端功能已停用，下次打开会重新弹出隐私弹窗'
+        : 'AI 与云端功能已停用；应用市场侧的同意记录未能撤销（模拟器/调试包不支持）');
+      return;
+    }
+    // 托管场景下由**系统**拉起标准化隐私弹框（应用自己不再画隐私声明）；未接入时退化为本地开启
+    const agreed: boolean = await PrivacyConsent.requestConsent(context as common.UIAbilityContext);
+    if (!agreed) {
+      this.toast('未同意隐私声明，AI 与云端功能仍保持停用');
       return;
     }
     // 重新授权后 SyncService 会按 consent 恢复；设置页已没有「云端同步」开关。
@@ -90,6 +105,7 @@ export struct B_PrivacyPolicy {
       title: '撤回隐私授权',
       message: '撤回后，云端同步、服务端解析、语音转文字、OCR、实体抽取与推送上报都会停用；'
         + '手动增删改任务、本地提醒、通知、日历写入、导入导出不受影响。\n\n'
+        + '同时会撤销应用市场侧的隐私声明同意记录，下次打开应用会重新弹出隐私弹窗。'
         + '随时可以在本页重新授权。',
       buttons: [
         { text: '取消', color: $r('sys.color.ohos_id_color_text_primary') },
@@ -173,7 +189,8 @@ export struct B_PrivacyPolicy {
 
               this.consentBanner()
 
-              // 正文与首次启动引导的隐私页共用同一份文案（components/PrivacyPolicyText.ets）
+              // 正文走可复用组件（components/PrivacyPolicyText.ets）；2026-11-03 起只有本页用，
+              // 首次启动引导不再自己展示隐私声明（避免与系统标准隐私弹窗重复）
               PrivacyPolicyText()
 
               // 撤回 / 重新授权（页面底部，与正文分开，避免误触）
@@ -206,7 +223,7 @@ export struct B_PrivacyPolicy {
                   .accessibilityText('重新同意本政策')
                 }
 
-                Text('撤回与重新授权都只影响 AI 与云端能力，不影响你本机已有的任务。')
+                Text('撤回会同时撤销应用市场侧的同意记录；你本机已有的任务不受影响。')
                   .fontSize($r('sys.float.ohos_id_text_size_body2'))
                   .fontColor($r('sys.color.ohos_id_color_text_secondary'))
                   .width('100%')
