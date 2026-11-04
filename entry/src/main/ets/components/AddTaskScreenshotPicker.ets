@@ -16,6 +16,7 @@
  * **先在本机 OCR**（`OcrService.recognizeUri`，Core Vision Kit，图片不出手机），文字再发后端做抽取；
  * 本机认不出才回退「上传图片给后端」。
  */
+import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { MediaPickResult, pickSingleImage } from '../service/system';
@@ -48,8 +49,13 @@ export struct AddTaskScreenshotPicker {
     if (this.picking) {
       return;
     }
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      return;
+    }
     this.picking = true;
-    const result: MediaPickResult = await pickSingleImage();
+    // 服务层会把选中的图**复制进应用沙箱**再返回沙箱 URI（相册 URI 只带临时授权，重启后失效）
+    const result: MediaPickResult = await pickSingleImage(context);
     this.picking = false;
     if (result.uri !== '') {
       this.draft.imageUri = result.uri;

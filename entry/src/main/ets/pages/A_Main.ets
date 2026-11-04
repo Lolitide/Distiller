@@ -21,6 +21,7 @@ import { SettingsRepository } from '../repository/SettingsRepository';
 import { SyncService } from '../service/cloud/SyncService';
 import { PushRegistrar } from '../service/cloud/PushRegistrar';
 import { NotificationService } from '../service/system/NotificationService';
+import { TaskMediaCleanupService } from '../service/system/TaskMediaCleanupService';
 import { BackendConfig } from '../service/backend/BackendConfig';
 import { candidateToTask } from '../service/backend/TaskMapper';
 import { ManualParseResult, ManualParseService } from '../service/cloud/ManualParseService';
@@ -492,6 +493,15 @@ struct A_Main {
     // `store.init` 内部已经跑过一次「已过期」扫描（FE-29：`syncExpiredStatus`），
     // 所以这里不用再单独扫一遍；之后由下面这个 60 秒定时器 + `SyncService` 的 5 秒 tick 持续兜住。
     this.store.init(context);
+    // 顺手清掉「任务已被彻底删除」之后没人引用的截图副本（选图时会复制进 filesDir/media）。
+    // 必须**在 store.init 之后**、且把回收站一起传进去 —— 回收站里的任务还引用着它们的图。
+    TaskMediaCleanupService.sweep(context, this.store.allTasks().concat(this.store.trashList))
+      .then((removed: number) => {
+        hilog.info(DOMAIN, TAG, 'screenshot sweep: removed %{public}d orphan file(s)', removed);
+      })
+      .catch((err: BusinessError) => {
+        hilog.error(DOMAIN, TAG, 'screenshot sweep failed: %{public}s', err.message);
+      });
     this.store.setReminderFailureListener((message: string, code: number) => {
       this.onReminderFailure(message, code);
     });
