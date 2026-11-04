@@ -1,4 +1,4 @@
-import { ThemeStore } from '../utils/Theme';
+import { Theme, ThemeStore } from '../utils/Theme';
 /*
  * 任务详情页（**二级页**，按 §9.1 用 `B_` 前缀）。
  *
@@ -19,7 +19,7 @@ import { ThemeStore } from '../utils/Theme';
  *  · 本页有输入框，键盘避让改 `RESIZE`（默认 `OFFSET` 在光标位置靠上时**不会上抬页面**，见 #117）。
  */
 import { HdsNavigationMenuContentOptions, HdsNavDestination } from '@kit.UIDesignKit';
-import { ColorMetrics, KeyboardAvoidMode, LengthMetrics } from '@kit.ArkUI';
+import { ColorMetrics, KeyboardAvoidMode, LengthMetrics, window } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { WindowInsets } from '../utils/WindowInsets';
 import { MainTitleBar } from '../components/MainTitleBar';
@@ -91,6 +91,10 @@ export struct B_TaskDetail {
    *    下次再进来时 `aiLabelHidden` 已在 `aboutToDisappear` 置真，标识才会消失。
    */
   @Local aiLabelVisible: boolean = false;
+  /** 输入法是否弹起（弹起时隐藏底部 AI 标识，避免跟随页面抬起） */
+  @Local keyboardVisible: boolean = false;
+  /** 窗口句柄：用于解绑键盘高度监听 */
+  private hostWindow?: window.Window;
   /** 改名输入框的控制器：进入编辑时把光标放到文本末尾（不默认全选） */
   private nameController: TextInputController = new TextInputController();
   /**
@@ -130,6 +134,7 @@ export struct B_TaskDetail {
   aboutToAppear(): void {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
     this.syncStatusBarHeight();
+    this.watchKeyboard();
     this.snapshot = this.contentSnapshot();
     // AI 标识只在「用户从未改过这条 AI 生成任务」时显示；改过一次之后永久隐藏。
     // 注意：这里定的是**本次会话**的初值，本次编辑不会把它改掉（见字段注释）。
@@ -137,6 +142,28 @@ export struct B_TaskDetail {
     if (this.param.pendingMode && !this.param.trashMode) {
       this.param.store.markPendingSeen(this.param.task);
     }
+  }
+
+  /**
+   * 2026-11-04 需求方：「输入法弹出来时 AI 标识不要跟着弹上去」。
+   *
+   * 本页键盘避让是 `RESIZE`（整页随键盘收缩），浮层若参与布局就会一起上移。
+   * 这里监听键盘高度：**弹起时整条隐藏**（输入时也不需要这条合规标识），
+   * 收起后自动回到屏幕底部。
+   */
+  private watchKeyboard(): void {
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context === undefined) {
+      return;
+    }
+    window.getLastWindow(context).then((win: window.Window) => {
+      this.hostWindow = win;
+      win.on('keyboardHeightChange', (height: number) => {
+        this.keyboardVisible = height > 0;
+      });
+    }).catch(() => {
+      // 拿不到窗口就算了：标识最多跟随页面抬起，不影响功能
+    });
   }
 
   /**
@@ -250,6 +277,11 @@ export struct B_TaskDetail {
 
   aboutToDisappear(): void {
     this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.OFFSET);
+    // 解绑键盘监听，避免页面销毁后回调还写已释放的状态
+    if (this.hostWindow !== undefined) {
+      this.hostWindow.off('keyboardHeightChange');
+      this.hostWindow = undefined;
+    }
     // 真改过内容才置脏：置脏后 5 秒轮询不再覆盖这些字段（FE-79）
     if (this.contentSnapshot() !== this.snapshot) {
       this.param.task.userEdited = true;
@@ -554,6 +586,24 @@ export struct B_TaskDetail {
     })
   }
 
+  /**
+   * AI 标识浮层的渐变色：顶部全透明 → 底部页面底色（`GradientDirection.Bottom` = 从上向下）。
+   * 中段把 alpha 抬快一点，内容滚进来时更早淡出，观感才像"沉浸式压暗"而不是硬切。
+   */
+  @Computed
+  get aiBarColors(): Array<[ResourceColor, number]> {
+    const surface: string = this.themeStore.scheme.surface;
+    // 2026-11-04 需求方：6 档缓升（前段几乎透明、最后收实），看不出分界线
+    return [
+      [Theme.withAlpha(surface, '00'), 0.0],
+      [Theme.withAlpha(surface, '14'), 0.28],
+      [Theme.withAlpha(surface, '38'), 0.50],
+      [Theme.withAlpha(surface, '66'), 0.70],
+      [Theme.withAlpha(surface, '9E'), 0.86],
+      [Theme.withAlpha(surface, 'FF'), 1.0]
+    ];
+  }
+
   build() {
     HdsNavDestination() {
       // 2026-10-21 修「详情页底部导航条颜色未跟随页面」：
@@ -707,24 +757,12 @@ export struct B_TaskDetail {
               })
             }
 
-            // AI 生成内容显式标识（合规）：2026-10-29 需求方要求**放在整页最下面**，常驻显示
-            if (this.aiLabelVisible) {
-              Column() {
-                AiLabelBar()
-              }
-              .width('100%')
-              .padding({
-                left: CONTENT_SIDE_PADDING_VP,
-                right: CONTENT_SIDE_PADDING_VP,
-                top: CONTENT_GAP_VP
-              })
-            }
-
             // 底部留白：最后一张卡（原文 / 备注）不要贴着手势条。
             // 原来这里还有一块「任务详情待做」占位 —— 五张卡做完就撤了（需求方 2026-10-17：「把底部的任务待做去掉」）
+            // 底部浮层（AI 标识）会盖住约 44vp：滚到最底时补上，别让最后一张卡被压住
             Column()
               .width('100%')
-              .height(CONTENT_GAP_VP)
+              .height(CONTENT_GAP_VP + (this.aiLabelVisible ? 44 : 0))
           }
           .width('100%')
         }
@@ -762,6 +800,7 @@ export struct B_TaskDetail {
             }
           })
         }
+
       }
       .width('100%')
       .height('100%')
@@ -770,10 +809,36 @@ export struct B_TaskDetail {
       // 2026-10-19 全局 MD3：底色从系统浅蓝 `ohos_id_color_sub_background` 换成 M3 `surface`，
       // 与任务列表 / 设置页同一套色系（作者：「详情页的背景底色也没加」）。
       .backgroundColor(this.themeStore.scheme.surface)
+        // AI 显式标识：贴底浮层 + 从下到上的透明渐变（2026-11-04 需求方）。
+        // 必须是 Stack 的子节点（浮在正文之上）才能看见渐变；放在 Column 布局里会和页面同色、等于没效果。
+        if (this.aiLabelVisible && !this.keyboardVisible) {
+          Column() {
+            Column() {
+            AiLabelBar()
+              .width('100%')
+              .padding({
+                left: CONTENT_SIDE_PADDING_VP,
+                right: CONTENT_SIDE_PADDING_VP,
+                top: 40,
+                bottom: CONTENT_GAP_VP
+              })
+            }
+            .width('100%')
+            .linearGradient({
+              direction: GradientDirection.Bottom,
+              colors: this.aiBarColors
+            })
+          }
+          .width('100%')
+          .height('100%')
+          .justifyContent(FlexAlign.End)
+          .hitTestBehavior(HitTestMode.None)
+        }
       }
       .width('100%')
       .height('100%')
-    }
+
+      }
     // 标题栏与搜索页同一套官方风格；**标题固定写「任务详情」**，不显示任务名
     // （需求方 2026-10-16：「任务详情顶部栏不是显示任务名称 就显示任务详情」）
     .titleBar({

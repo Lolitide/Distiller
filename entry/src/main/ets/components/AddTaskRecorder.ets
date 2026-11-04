@@ -211,12 +211,25 @@ export struct AddTaskRecorder {
         }
       })
 
-      Text(this.stateLabel)
-        .fontSize($r('sys.float.ohos_id_text_size_body2'))
-        .fontWeight(FontWeight.Medium)
-        .fontColor($r('sys.color.ohos_id_color_text_primary'))
+      // 2026-11-04 需求方：已经有文本时，不再显示「按住说话」的黑字提示，
+      // 直接把已有文本用浅灰显示在原位置（单行、超长省略）。
+      if (this.state === RecordState.IDLE && this.draft.rawText.length > 0) {
+        Text(this.draft.rawText)
+          .fontSize($r('sys.float.ohos_id_text_size_body2'))
+          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%')
+          .textAlign(TextAlign.Center)
+      } else {
+        Text(this.stateLabel)
+          .fontSize($r('sys.float.ohos_id_text_size_body2'))
+          .fontWeight(FontWeight.Medium)
+          .fontColor($r('sys.color.ohos_id_color_text_primary'))
+      }
 
-      if (this.draft.rawText.length > 0) {
+      // 录音中/转写完成时：状态文案与已有文本同时保留（状态在上、文本在下）
+      if (this.state !== RecordState.IDLE && this.draft.rawText.length > 0) {
         Text(this.draft.rawText)
           .fontSize($r('sys.float.ohos_id_text_size_body2'))
           .fontColor($r('sys.color.ohos_id_color_text_secondary'))

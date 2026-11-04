@@ -19,6 +19,8 @@ import { TaskDayGroup, TaskListViewModel } from './TaskListViewModel';
 import { SettingsRepository } from '../repository/SettingsRepository';
 import { TaskRepository } from '../repository/TaskRepository';
 import { ReminderCoordinator } from '../service/system/ReminderCoordinator';
+import { ManualParseResult, ManualParseService } from '../service/cloud/ManualParseService';
+import { candidateToTask } from '../service/backend/TaskMapper';
 import { common } from '@kit.AbilityKit';
 
 /** 固定筛选项的键（与文案分开：以后"设置里让用户选固定哪几个"就是让用户勾这几个 key） */
@@ -217,6 +219,13 @@ export class TaskListStore {
       }
     });
     this.trashList = trash;
+    // 上次进程在解析途中被杀：占位卡不能永远停在「正在解析中......」，改成失败态让用户重来
+    active.forEach((task: Task) => {
+      if (task.parsing === true) {
+        task.parsing = false;
+        task.name = '解析中断，请重新解析';
+      }
+    });
     this.rebuildGroups(active);
     this.expireOverdue();
     // 启动即回写一次：把旧 `__ob_` 键文件/迁移数据规整成普通 JSON。
@@ -393,6 +402,8 @@ export class TaskListStore {
     target.priority = src.priority;
     target.level = src.level;
     target.category = src.category;
+    // 2026-11-04：占位卡原本没有 source（详情页会显示「未知来源」），这里一并同步
+    target.source = src.source;
     target.tags = src.tags;
     target.steps = src.steps;
     target.repeat = src.repeat;
@@ -561,6 +572,75 @@ export class TaskListStore {
     this.persist();
     this.reconcileReminders();
     // 新任务的标签可能带出新的筛选芯片：这里不用做别的，`chips` 是 `@Computed` 派生的
+  }
+
+  /** 后台解析占位卡的标题（列表里第一眼看到的就是它） */
+  private static readonly PARSING_TITLE: string = '正在解析中......';
+
+  /**
+   * 手动「AI 总结」：**先把半模态收掉**，再在「待确认消息」里放一张占位卡，
+   * 解析在后台继续（store 是页面级单例，不随半模态销毁）。
+   *
+   * 为什么这样做（2026-11-04 需求方）：`/parse` 要跑 25s 量级的大模型，
+   * 让用户对着半模态干等既没反馈、也容易以为卡死；把进度变成列表里的一张卡，
+   * 用户可以先去干别的，解析完这张卡自己变成正常的待确认项。
+   *
+   * @param rawText  文本来源的原文（截图来源可为空，此时靠 OCR 后回填）
+   * @param imageUri 截图来源的本地 URI；空串表示文本解析
+   */
+  startBackgroundAiParse(rawText: string, imageUri: string): void {
+    const text: string = rawText.trim();
+    const placeholder: Task = new Task();
+    placeholder.id = this.nextTaskId();
+    placeholder.status = TaskStatus.PENDING_CONFIRM;
+    placeholder.name = TaskListStore.PARSING_TITLE;
+    placeholder.rawText = text;
+    placeholder.createdAt = Date.now();
+    placeholder.pendingSeen = false;
+    placeholder.pendingSource = imageUri.length > 0 ? 'image' : 'manual';
+    placeholder.parsing = true;
+    this.addTask(placeholder);
+    this.runBackgroundAiParse(placeholder, text, imageUri);
+  }
+
+  /** 占位卡的后续：成功 → 原地换成解析结果；失败 → 改成可点开重试的失败态 */
+  private async runBackgroundAiParse(target: Task, text: string, imageUri: string): Promise<void> {
+    let result: ManualParseResult;
+    try {
+      result = imageUri.length > 0
+        ? await ManualParseService.parseImage(imageUri)
+        : await ManualParseService.parseText(text);
+    } catch (error) {
+      result = { ok: false, message: '解析时出错了，请重试', text: '' };
+    }
+    // 用户可能在解析途中把这张占位卡删了/挪进回收站：找不到就不再回填
+    if (!this.containsTask(target.id)) {
+      return;
+    }
+    if (!result.ok || result.candidate === undefined) {
+      target.parsing = false;
+      target.name = '解析失败，点开可重试';
+      target.note = result.message.length > 0 ? result.message : '没能识别出任务内容';
+      this.refreshGroups();
+      this.persist();
+      return;
+    }
+    const raw: string = text.length > 0 ? text : result.text;
+    const mapped: Task = candidateToTask(result.candidate, target.id, raw, true);
+    TaskListStore.mergeIncoming(target, mapped);
+    target.parsing = false;
+    target.pendingSeen = false;
+    if (result.link !== undefined && result.link.length > 0) {
+      target.linkUrl = result.link;
+    }
+    this.refreshGroups();
+    this.persist();
+  }
+
+  /** 这条任务是否还在活跃列表或回收站里 */
+  private containsTask(id: number): boolean {
+    return this.allTasks().some((task: Task) => task.id === id)
+      || this.trashList.some((task: Task) => task.id === id);
   }
 
   /** 找「那一天」现在已经存在的组对象（判据与 `groupByDay` 的分组口径一致：日期键 + 有无日期） */

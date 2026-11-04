@@ -509,6 +509,10 @@ export struct TaskCard {
 
   @Computed
   get pendingSourceLabel(): string {
+    if (this.task.pendingSource === 'manual') {
+      // 2026-11-04：手动「AI 总结」转后台解析的卡片
+      return '手动添加';
+    }
     if (this.task.pendingSource === 'image') {
       return '图片转发';
     }
@@ -525,6 +529,21 @@ export struct TaskCard {
   get pendingTimeLabel(): string {
     const d: Date = new Date(this.task.createdAt);
     return `${TaskListViewModel.pad2(d.getHours())}:${TaskListViewModel.pad2(d.getMinutes())}`;
+  }
+
+  /**
+   * 解析中占位卡的第二行：原文前几个字（去掉换行、超长省略）。
+   * 需求方 2026-11-04：「标题下方显示解析信息的前几个字，过长的部分写 ...」。
+   */
+  @Computed
+  get parsingExcerpt(): string {
+    const raw: string = this.task.rawText !== undefined ? this.task.rawText : '';
+    const oneLine: string = raw.split('\r').join(' ').split('\n').join(' ').trim();
+    if (oneLine.length === 0) {
+      return '正在读取内容…';
+    }
+    const limit: number = 18;
+    return oneLine.length > limit ? oneLine.substring(0, limit) + '…' : oneLine;
   }
 
   /** 待确认子卡的左侧图标：按来源区分（转发=机器人，图片=图片，群聊=群聊） */
@@ -544,10 +563,19 @@ export struct TaskCard {
 
   @Builder
   pendingPrefix() {
-    SymbolGlyph(this.pendingIcon)
-      .fontSize($r('sys.float.ohos_id_min_circle_button_icon_size'))
-      .fontColor([this.themeStore.scheme.primary])
-      .accessibilityText(this.pendingSourceLabel)
+    if (this.task.parsing === true) {
+      // 2026-11-04 需求方：解析中改用加载动画（转圈），比静态图标更能表达"正在处理"
+      LoadingProgress()
+        .width($r('sys.float.ohos_id_min_circle_button_icon_size'))
+        .height($r('sys.float.ohos_id_min_circle_button_icon_size'))
+        .color(this.themeStore.scheme.primary)
+        .accessibilityText('正在解析')
+    } else {
+      SymbolGlyph(this.pendingIcon)
+        .fontSize($r('sys.float.ohos_id_min_circle_button_icon_size'))
+        .fontColor([this.themeStore.scheme.primary])
+        .accessibilityText(this.pendingSourceLabel)
+    }
   }
 
   /** 与普通卡片两行同构：标题 + 「来源 · 时间 + 未读红点」 */
@@ -564,35 +592,48 @@ export struct TaskCard {
         .width('100%')
         .textAlign(TextAlign.Start)
 
-      Row({ space: 6 }) {
-        Text(this.pendingSourceLabel)
+      if (this.task.parsing === true) {
+        // 后台解析占位卡（2026-11-04）：第二行显示原文前几个字，超长省略
+        Text(this.parsingExcerpt)
           .fontSize($r('sys.float.ohos_id_text_size_caption'))
           .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-          .padding({
-            left: TAG_CHIP_SIDE_PADDING_VP,
-            right: TAG_CHIP_SIDE_PADDING_VP,
-            top: TAG_CHIP_VERTICAL_PADDING_VP,
-            bottom: TAG_CHIP_VERTICAL_PADDING_VP
-          })
-          .backgroundColor(this.themeStore.scheme.secondaryContainer)
-          .borderRadius(TAG_CHIP_RADIUS_VP)
-        Text('·')
-          .fontSize($r('sys.float.ohos_id_text_size_caption'))
-          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-        Text(this.pendingTimeLabel)
-          .fontSize($r('sys.float.ohos_id_text_size_caption'))
-          .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-        if (this.task.pendingSeen !== true) {
-          Column()
-            .width(12)
-            .height(12)
-            .borderRadius(6)
-            .backgroundColor(this.themeStore.scheme.error)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .width('100%')
+          .textAlign(TextAlign.Start)
+      } else {
+        Row({ space: 6 }) {
+          Text(this.pendingSourceLabel)
+            .fontSize($r('sys.float.ohos_id_text_size_caption'))
+            .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+            .padding({
+              left: TAG_CHIP_SIDE_PADDING_VP,
+              right: TAG_CHIP_SIDE_PADDING_VP,
+              top: TAG_CHIP_VERTICAL_PADDING_VP,
+              bottom: TAG_CHIP_VERTICAL_PADDING_VP
+            })
+            .backgroundColor(this.themeStore.scheme.secondaryContainer)
+            .borderRadius(TAG_CHIP_RADIUS_VP)
+          Text('·')
+            .fontSize($r('sys.float.ohos_id_text_size_caption'))
+            .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+          Text(this.pendingTimeLabel)
+            .fontSize($r('sys.float.ohos_id_text_size_caption'))
+            .fontColor($r('sys.color.ohos_id_color_text_secondary'))
+          if (this.task.pendingSeen !== true) {
+            // 2026-11-04 需求方：子卡片的未读红点再小一点（12 → 8vp）。
+            // 8vp 是 UX 规范里"界面图标不得小于"的下限，未读点是状态指示，取这个值最稳。
+            Column()
+              .width(8)
+              .height(8)
+              .borderRadius(4)
+              .backgroundColor(this.themeStore.scheme.error)
+          }
         }
+        .width('100%')
+        .alignItems(VerticalAlign.Center)
+        .justifyContent(FlexAlign.Start)
       }
-      .width('100%')
-      .alignItems(VerticalAlign.Center)
-      .justifyContent(FlexAlign.Start)
     }
     .width('100%')
     .justifyContent(FlexAlign.Center)

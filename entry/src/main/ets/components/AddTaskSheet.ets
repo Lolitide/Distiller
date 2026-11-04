@@ -348,6 +348,39 @@ export struct AddTaskSheet {
     }
   }
 
+  /**
+   * 「AI 总结」：**不在半模态里等**（/parse 要 20s 量级）。
+   *
+   * 动作顺序（2026-11-04 需求方）：
+   *  1. 立即收起半模态；
+   *  2. 由 store 在「待确认消息」里插一张「正在解析中......」的占位卡
+   *     （组不存在时它会自己出现，因为列表按 `pendingList.length > 0` 渲染）；
+   *  3. 解析在后台跑，结果回来后原地回填这张卡。
+   */
+  private startBackgroundAiSummarize(): void {
+    const isShot: boolean = this.draft.sourceTab === AddTaskSource.SCREENSHOT;
+    if (isShot) {
+      if (this.draft.imageUri.length === 0) {
+        this.toast('先点上面那块选一张截图');
+        return;
+      }
+    } else if (this.draft.rawText.trim().length === 0) {
+      this.toast('先输入或粘贴一段内容');
+      return;
+    }
+    const text: string = this.draft.rawText;
+    const imageUri: string = isShot ? this.draft.imageUri : '';
+    this.store.startBackgroundAiParse(text, imageUri);
+    // 表单内容已经交给后台任务，草稿清掉，下次点「＋」是干净的
+    this.draft.reset();
+    const context: common.Context | undefined = this.getUIContext().getHostContext();
+    if (context !== undefined) {
+      DraftRepository.clear(context);
+    }
+    this.onClose();
+    this.toast('已开始解析，进度见「待确认消息」');
+  }
+
   private toast(message: string): void {
     try {
       this.getUIContext().getPromptAction().showToast({ message: message });
@@ -597,16 +630,10 @@ export struct AddTaskSheet {
             showAi: true,
             lowConfidence: this.draft.certainty > 0 && this.draft.certainty < 60,
             onAiFill: () => {
-              this.aiFill();
+              this.startBackgroundAiSummarize();
             }
           })
           .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
-
-          // AI 生成内容显式标识：AI 生成成功后始终显示（合规要求「生成时即时提示」）
-          if (this.isAiDraft) {
-            AiLabelBar()
-              .margin({ top: LengthMetrics.resource($r('sys.float.padding_level8')) })
-          }
         }
         .width('100%')
         // 滚动内容的留白：左右 `padding_level8`(16vp)，上 8vp（标题行自己带了下留白）。
@@ -631,6 +658,19 @@ export struct AddTaskSheet {
         scrollForward: NestedScrollMode.PARENT_FIRST,
         scrollBackward: NestedScrollMode.SELF_FIRST
       })
+
+      // 2026-11-04 需求方：AI 显式标识固定在**屏幕底部**（跟在滚动内容里会随内容滚走）。
+      // 放在 Scroll 之后、面板根 Column 之内：内容再长也只滚上面那块，标识始终可见。
+      if (this.isAiDraft) {
+        AiLabelBar()
+          .width('100%')
+          .padding({
+            start: LengthMetrics.resource($r('sys.float.padding_level8')),
+            end: LengthMetrics.resource($r('sys.float.padding_level8')),
+            top: LengthMetrics.resource($r('sys.float.padding_level4')),
+            bottom: LengthMetrics.vp(12)
+          })
+      }
     }
     .width('100%')
     // 不写 `height('100%')`：高度交给 FIT_CONTENT 按内容撑，避免内容变短后底部留一大片空白。
