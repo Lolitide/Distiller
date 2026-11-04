@@ -3,7 +3,7 @@
  *
  * 只有这里知道 URL；页面与 ViewModel 不许拼路径。
  */
-import { ApiClient } from './ApiClient';
+import { ApiClient, PARSE_READ_TIMEOUT } from './ApiClient';
 import {
   ApiResult,
   BindCodeData,
@@ -96,7 +96,7 @@ export class RelayApi {
     return await ApiClient.post<ParseData>(BASE + '/parse', {
       'text': text,
       'source': source
-    });
+    }, PARSE_READ_TIMEOUT);
   }
 
   /** 手动添加：截图 → 后端多模态 OCR → 候选（`capabilities` 不含 `ocr` 时返回 501） */
@@ -104,7 +104,7 @@ export class RelayApi {
     return await ApiClient.post<ParseData>(BASE + '/parse', {
       'image_b64': imageB64,
       'source': source
-    });
+    }, PARSE_READ_TIMEOUT);
   }
 
   /** 手动添加：文件 → 后端抽取文本 → 候选（docx/xlsx/pptx/pdf/txt…） */
@@ -113,7 +113,7 @@ export class RelayApi {
       'file_b64': fileB64,
       'file_name': fileName,
       'source': source
-    });
+    }, PARSE_READ_TIMEOUT);
   }
 
   static async feedback(body: FeedbackBody): Promise<ApiResult<Record<string, Object>>> {

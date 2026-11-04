@@ -16,22 +16,31 @@ const DOMAIN: number = 0x0000;
 const TAG: string = 'ApiClient';
 const CONNECT_TIMEOUT: number = 8000;
 const READ_TIMEOUT: number = 25000;
+/**
+ * AI 解析（`/parse`）的读超时：服务端要跑一次本地大模型，
+ * 实测同一条语料 **25.4s** 才返回 —— 用 25s 的默认值会在返回前一瞬被客户端掐断，
+ * 页面显示「连不上服务器」。冷启动/大模型排队时更慢，所以给到 120s。
+ */
+export const PARSE_READ_TIMEOUT: number = 120000;
+/** HarmonyOS http 的超时错误码 */
+const ERR_TIMEOUT: number = 2300028;
 
 export class ApiClient {
-  static async get<T>(path: string): Promise<ApiResult<T>> {
-    return await ApiClient.request<T>(http.RequestMethod.GET, path, '');
+  static async get<T>(path: string, readTimeoutMs: number = READ_TIMEOUT): Promise<ApiResult<T>> {
+    return await ApiClient.request<T>(http.RequestMethod.GET, path, '', readTimeoutMs);
   }
 
-  static async post<T>(path: string, body: Record<string, Object>): Promise<ApiResult<T>> {
-    return await ApiClient.request<T>(http.RequestMethod.POST, path, JSON.stringify(body));
+  static async post<T>(path: string, body: Record<string, Object>,
+    readTimeoutMs: number = READ_TIMEOUT): Promise<ApiResult<T>> {
+    return await ApiClient.request<T>(http.RequestMethod.POST, path, JSON.stringify(body), readTimeoutMs);
   }
 
-  static async del<T>(path: string): Promise<ApiResult<T>> {
-    return await ApiClient.request<T>(http.RequestMethod.DELETE, path, '');
+  static async del<T>(path: string, readTimeoutMs: number = READ_TIMEOUT): Promise<ApiResult<T>> {
+    return await ApiClient.request<T>(http.RequestMethod.DELETE, path, '', readTimeoutMs);
   }
 
   private static async request<T>(method: http.RequestMethod, path: string,
-    body: string): Promise<ApiResult<T>> {
+    body: string, readTimeoutMs: number = READ_TIMEOUT): Promise<ApiResult<T>> {
     const url: string = BackendConfig.baseUrl + path;
     if (BackendConfig.baseUrl.length === 0) {
       return {
@@ -55,7 +64,7 @@ export class ApiClient {
         method: method,
         header: headers,
         connectTimeout: CONNECT_TIMEOUT,
-        readTimeout: READ_TIMEOUT,
+        readTimeout: readTimeoutMs,
         expectDataType: http.HttpDataType.STRING
       };
       if (body.length > 0) {
@@ -66,10 +75,19 @@ export class ApiClient {
       return ApiClient.parse<T>(text, resp.responseCode);
     } catch (error) {
       const err = error as BusinessError;
-      hilog.warn(DOMAIN, TAG, 'request failed %{public}s: %{public}s', path, err.message);
+      const isTimeout: boolean = err.code === ERR_TIMEOUT
+        || (err.message !== undefined && err.message.indexOf('timeout') >= 0);
+      hilog.warn(DOMAIN, TAG, 'request failed %{public}s (%{public}d): %{public}s',
+        path, err.code, err.message);
+      // 超时和"连不上"要分开提示：AI 解析慢导致读超时时，地址其实是通的
       return {
         ok: false,
-        error: { code: 'network', message: '连不上服务器，请检查地址与网络：' + err.message }
+        error: {
+          code: isTimeout ? 'timeout' : 'network',
+          message: isTimeout
+            ? '服务端处理超时，请稍后重试（AI 解析较慢）'
+            : '连不上服务器，请检查地址与网络：' + err.message
+        }
       };
     } finally {
       req.destroy();
