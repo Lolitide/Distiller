@@ -3,6 +3,15 @@
  *
  * 不做成独立路由页：由 `A_Main` 用全屏覆盖层显示，避免 EntryAbility 为「是否首次」决定
  * 首个页面（会让冷启动路径分叉）。三块内容对应三条通道，通知/日历默认关闭，用户点了才授权。
+ *
+ * ⚠️ 2026-11-03（AGC 审核驳回「应用出现两个隐私弹窗」）：
+ * 本页**不再自己展示隐私声明、也不再要一次「同意」**。应用在 AGC 勾了「标准化隐私声明托管服务」，
+ * 首次打开时**系统**已经弹出标准隐私弹窗，应用内再画一份就是第二个隐私弹窗。官方原文
+ * （`开发指南/AppGallery_Kit_应用市场服务/隐私管理服务/store-privacy`）：「如果在应用/元服务中使用了
+ * 标准化隐私声明托管服务，则首次打开应用/元服务，会默认显示标准化隐私弹窗，**请勿在应用/元服务中
+ * 自行实现弹窗展示隐私声明**，否则发布审核将被驳回。」
+ * 所以第 1 页只保留「数据边界」说明，底部按钮由「取消 / 同意」改成「继续」；签署状态与撤回统一走
+ * 平台托管服务（见 `service/system/PrivacyConsent.ets`）。
  */
 import { common } from '@kit.AbilityKit';
 import { BusinessError, pasteboard } from '@kit.BasicServicesKit';
@@ -11,10 +20,8 @@ import { ThemeStore } from '../utils/Theme';
 import { NotificationService } from '../service/system/NotificationService';
 import { CalendarService } from '../service/system/CalendarService';
 import { PermissionEvents } from '../service/system/PermissionEvents';
-import { PrivacyConsent } from '../service/system/PrivacyConsent';
 import { WindowInsets } from '../utils/WindowInsets';
 import { M3Switch } from '../components/M3Switch';
-import { PrivacyPolicyText } from '../components/PrivacyPolicyText';
 import { RelayApi } from '../service/backend/RelayApi';
 import { apiErrorMessage } from '../service/backend/BackendTypes';
 import { BackendConfig } from '../service/backend/BackendConfig';
@@ -55,12 +62,10 @@ export struct A_Onboarding {
   @Local busy: boolean = false;
   /**
    * 当前页（2026-10-29 需求方：首次启动内容太多，拆成两页 + ←→ 分页器）：
-   *  0 = 数据边界 + 同意隐私政策；1 = 可选权限（通知 / 日历）与后续配置说明。
-   * 必须先在 0 页同意，才能翻到 1 页申请权限。
+   *  0 = 数据边界说明；1 = 可选权限（通知 / 日历）与后续配置说明。
+   * 隐私声明的同意不在这里做（2026-11-03：交给系统标准隐私弹窗，见文件头注释）。
    */
   @Local page: number = 0;
-  /** 是否正在全屏查看《隐私政策》（就地用 contentCover 打开，不离开引导流程） */
-  @Local privacyShown: boolean = false;
   /** 第 3 页：QQ Bot 绑定状态（与设置页共用 BackendConfig） */
   @Local bound: boolean = false;
   @Local boundAppId: string = '';
@@ -216,28 +221,6 @@ export struct A_Onboarding {
     }
   }
 
-  /**
-   * 打开《隐私政策》：用 `bindContentCover` 就地全屏展示。
-   * 不能走路由 push —— 引导是全屏覆盖层，push 出来的页面会被盖住，看起来像「点了没反应」。
-   */
-  private openPrivacyPolicy(): void {
-    this.privacyShown = true;
-  }
-
-  /**
-   * 点「开始使用」：**先落隐私授权**再通知宿主收起引导。
-   *
-    * 合规要点：点第 1 页「同意」时已经落盘 `privacy_consent = true`（见 `persistConsent`）；
-    * 这里再写一次是幂等兜底。
-    */
-  private async finish(): Promise<void> {
-    const ctx: common.Context | undefined = this.hostContext();
-    if (ctx !== undefined) {
-      await PrivacyConsent.setGranted(ctx, true);
-    }
-    this.onFinish();
-  }
-
   private async toggleNotify(isOn: boolean): Promise<void> {
     if (!isOn) {
       this.notifyOn = false;
@@ -287,21 +270,9 @@ export struct A_Onboarding {
     this.getUIContext().getPromptAction().showToast({ message: message });
   }
 
-  /** 能不能翻到下一页：所有页都可前进（第 1 页点「同意」本身就是授权动作） */
-  private canGoNext(): boolean {
-    return true;
-  }
-
-  /** 「同意 / 继续 / 开始」：翻到下一页；最后一页才真正结束引导 */
+  /** 「继续 / 开始」：翻到下一页；最后一页才真正结束引导 */
   private goNext(): void {
-    if (!this.canGoNext()) {
-      return;
-    }
     if (this.page < 2) {
-      // 第 1 页点「同意」时就把隐私授权落盘，后面第 3 页的绑定接口才能正常工作
-      if (this.page === 0) {
-        this.persistConsent();
-      }
       // 只靠页面容器的 transition 播放转场；
       // **不能**把状态变更包进 animateTo —— 那会把新页里的开关也纳入属性动画，
       // 导致轨道颜色从深到浅过渡（2026-10-29 需求方）。
@@ -320,15 +291,8 @@ export struct A_Onboarding {
       }
       return;
     }
-    this.finish();
-  }
-
-  /** 页 1 点「同意」即落盘（finish 里还会再写一次，幂等） */
-  private persistConsent(): void {
-    const ctx: common.Context | undefined = this.hostContext();
-    if (ctx !== undefined) {
-      PrivacyConsent.setGranted(ctx, true);
-    }
+    // 最后一页「开始」：收起全屏引导。隐私声明的同意由系统标准弹窗取得，这里不写任何授权状态
+    this.onFinish();
   }
 
   private goPrev(): void {
@@ -339,14 +303,6 @@ export struct A_Onboarding {
       } else {
         this.stopVideoLoop();
       }
-    }
-  }
-
-  /** 「取消」：直接退出应用（首次启动还没同意隐私政策，不进入任何业务页面） */
-  private exitApp(): void {
-    const ctx: common.Context | undefined = this.hostContext();
-    if (ctx !== undefined) {
-      (ctx as common.UIAbilityContext).terminateSelf();
     }
   }
 
@@ -474,7 +430,7 @@ export struct A_Onboarding {
 
   private pageSubtitle(): string {
     if (this.page === 0) {
-      return '先了解数据边界并同意隐私政策，再决定是否开启可选权限';
+      return '先了解数据边界，再决定是否开启可选权限';
     }
     if (this.page === 1) {
       return '可开启通知和日历权限。当有新的待办生成时，让知了及时通知你，并帮忙写进日历';
@@ -513,71 +469,6 @@ export struct A_Onboarding {
     }
   }
 
-  /** 全屏政策正文（带返回按钮），用于首次启动时就地阅读 */
-  @Builder
-  privacyCover() {
-    Column() {
-      Row({ space: 8 }) {
-        Button({ type: ButtonType.Circle, stateEffect: true }) {
-          SymbolGlyph($r('sys.symbol.arrow_left'))
-            .fontSize(20)
-            .fontColor([this.themeStore.scheme.onSurface])
-        }
-        .width(40)
-        .height(40)
-        .backgroundColor(Color.Transparent)
-        .accessibilityText('返回')
-        .onClick(() => {
-          this.privacyShown = false;
-        })
-
-        Text('隐私政策')
-          .fontSize($r('sys.float.titlebar_title_primary_size'))
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('sys.color.ohos_id_color_text_primary'))
-          .layoutWeight(1)
-
-        // 右侧留白，让标题视觉居中（与左侧返回键同宽）
-        Row().width(40).height(40)
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: 8, right: 12 })
-      .alignItems(VerticalAlign.Center)
-
-      Scroll() {
-        Column({ space: 12 }) {
-          Column({ space: 4 }) {
-            Text('生效日期：2026 年 10 月 27 日')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-              .width('100%')
-            Text('更新日期：2026 年 10 月 29 日    版本：v1.1')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-              .width('100%')
-          }
-          .width('100%')
-          .alignItems(HorizontalAlign.Start)
-
-          PrivacyPolicyText()
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
-        .padding({ left: 20, right: 20, bottom: 32 })
-      }
-      .layoutWeight(1)
-      .width('100%')
-      .align(Alignment.Top)
-      .scrollBar(BarState.Off)
-      .edgeEffect(EdgeEffect.Spring)
-    }
-    .width('100%')
-    .height('100%')
-    .padding({ top: this.statusBarVp })
-    .backgroundColor(this.themeStore.scheme.surface)
-  }
-
   build() {
     Column() {
       Column({ space: 8 }) {
@@ -594,8 +485,11 @@ export struct A_Onboarding {
       .padding({ top: 8, bottom: 16 })
 
       if (this.page === 0) {
-        // ── 第 1 页：中间 logo，底部数据边界 + 隐私政策同意 ──
-        // 不走 Scroll：logo 用 layoutWeight 吃掉中间空间，两张卡片自然贴底
+        // ── 第 1 页：中间 logo，底部只留「数据边界」说明 ──
+        // 2026-11-03：原来这里还有一块「请点击此处阅读《隐私政策》…点击「同意」」的**自建隐私声明**，
+        // AGC 审核驳回「应用出现两个隐私弹窗」后整块删掉 —— 隐私声明的展示与同意都交给系统的标准隐私弹窗
+        // （平台托管服务），应用内不再自己画一份（见文件头注释）。
+        // 不走 Scroll：logo 用 layoutWeight 吃掉中间空间，卡片自然贴底
         Column() {
           // 中间 logo：吃掉剩余空间并居中
           Column() {
@@ -631,33 +525,6 @@ export struct A_Onboarding {
                 + '任务内容不会上传到服务器')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
                 .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-            }
-            .width('100%')
-            .padding(14)
-            .alignItems(HorizontalAlign.Start)
-            .backgroundColor(this.themeStore.scheme.surfaceContainerLow)
-            .borderRadius(14)
-
-            // 隐私政策同意：点下方「同意」即视为同意，不再单独放勾选框（与同意按钮语义重复）。
-            // 随时可以在「设置 → 关于 → 隐私说明」的独立页面里撤回。
-            // 撤回后 AI 与云端能力停用，本机基础功能（手动增删改、提醒、通知、日历、导入导出）照常。
-            Column({ space: 8 }) {
-              Text() {
-                Span('请点击此处阅读')
-                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                  .fontColor($r('sys.color.ohos_id_color_text_primary'))
-                Span('《隐私政策》')
-                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                  .fontColor(this.themeStore.scheme.primary)
-                  .onClick(() => {
-                    this.openPrivacyPolicy();
-                  })
-                Span(
-                  '，点击「同意」按钮表示您了解并同意使用云端及 AI 相关服务。')
-                  .fontSize($r('sys.float.ohos_id_text_size_body2'))
-                  .fontColor($r('sys.color.ohos_id_color_text_secondary'))
-              }
-              .width('100%')
             }
             .width('100%')
             .padding(14)
@@ -1139,41 +1006,34 @@ export struct A_Onboarding {
       .justifyContent(FlexAlign.Center)
       .margin({ top: 4, bottom: 10 })
 
-      // 第 1 页：取消（退出 App） / 同意（进入第 2 页）
+      // 第 1 页：继续（进入第 2 页）。2026-11-03：没有「取消 = 退出 App」了 ——
+      //   那个按钮原本是隐私声明同意门禁的「不同意」出口，同意已交给系统标准隐私弹窗，这里不再拦。
       // 第 2 页：返回（上一页） / 继续（进入第 3 页）
       // 第 3 页：返回（上一页） / 开始（结束引导进入任务列表，不绑 Bot 也可开始）
       Row({ space: 12 }) {
-        Button({ type: ButtonType.Capsule, stateEffect: true }) {
-          Text(this.page === 0 ? '取消' : '返回')
-            .fontSize($r('sys.float.ohos_id_text_size_body1'))
-            .fontColor($r('sys.color.ohos_id_color_text_primary'))
-        }
-        .layoutWeight(1)
-        .height(44)
-        .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
-        .borderRadius(22)
-        .onClick(() => {
-          if (this.page === 0) {
-            this.exitApp();
-          } else {
-            this.goPrev();
+        if (this.page > 0) {
+          Button({ type: ButtonType.Capsule, stateEffect: true }) {
+            Text('返回')
+              .fontSize($r('sys.float.ohos_id_text_size_body1'))
+              .fontColor($r('sys.color.ohos_id_color_text_primary'))
           }
-        })
+          .layoutWeight(1)
+          .height(44)
+          .backgroundColor(this.themeStore.scheme.surfaceContainerHigh)
+          .borderRadius(22)
+          .onClick(() => {
+            this.goPrev();
+          })
+        }
 
         Button({ type: ButtonType.Capsule, stateEffect: true }) {
-          Text(this.page === 0 ? '同意' : (this.page === 1 ? '继续' : '开始'))
+          Text(this.page === 2 ? '开始' : '继续')
             .fontSize($r('sys.float.ohos_id_text_size_body1'))
-            .fontColor(this.canGoNext()
-              ? this.themeStore.scheme.onPrimary
-              : $r('sys.color.ohos_id_color_text_secondary'))
+            .fontColor(this.themeStore.scheme.onPrimary)
         }
         .layoutWeight(1)
         .height(44)
-        // 第 1 页未勾选隐私政策时变灰且点不动（合规：先取得同意再处理个人信息）
-        .enabled(this.canGoNext())
-        .backgroundColor(this.canGoNext()
-          ? this.themeStore.scheme.primary
-          : this.themeStore.scheme.surfaceContainerHighest)
+        .backgroundColor(this.themeStore.scheme.primary)
         .borderRadius(22)
         .onClick(() => {
           this.goNext();
@@ -1193,12 +1053,5 @@ export struct A_Onboarding {
       top: this.statusBarVp + 30
     })
     .backgroundColor(this.themeStore.scheme.surface)
-    // 隐私政策就地全屏打开：不离开引导流程，返回后勾选状态仍在
-    .bindContentCover(this.privacyShown, this.privacyCover(), {
-      modalTransition: ModalTransition.DEFAULT,
-      onDisappear: () => {
-        this.privacyShown = false;
-      }
-    })
   }
 }

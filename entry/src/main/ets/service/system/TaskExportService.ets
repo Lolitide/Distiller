@@ -50,7 +50,7 @@ export class TaskExportService {
    * @param fileName 预填的文件名（用户仍可改）
    * @param suffixChoice 后缀选项，形如 `'CSV|.csv'`（官方格式：`描述|后缀`）
    * @param content 要写入的文本
-   * @param companionFileName 可选：伴随文件名（CSV 的隐式标识 `.meta.json`）
+   * @param companionFileName 可选：伴随文件名（CSV 的隐式标识 `.aigc.json`）
    * @param companionContent 可选：伴随文件内容
    *
    * 一次 `save()` 可创建多个文件（官方说明「用户可以保存一个或多个文件」），

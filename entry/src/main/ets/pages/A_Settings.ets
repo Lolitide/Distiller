@@ -1056,8 +1056,8 @@ export struct A_Settings {
     const content: string = csv ? TaskExportViewModel.buildCsv(tasks) : TaskExportViewModel.buildJson(tasks);
     const fileName: string = TaskExportViewModel.fileName(ext);
     const suffix: string = csv ? 'CSV|.csv' : 'JSON|.json';
-    // CSV 无法承载元数据段 → 同时落一份 `xxx.csv.meta.json` 隐式标识（合规要求）
-    const metaName: string | undefined = csv ? fileName + '.meta.json' : undefined;
+    // CSV 无法承载元数据段 → 同时落一份 `xxx.csv.aigc.json` 隐式标识（《标识办法》第五条 + 附录 E）
+    const metaName: string | undefined = csv ? fileName + '.aigc.json' : undefined;
     const meta: string | undefined = csv ? TaskExportViewModel.buildCsvMeta() : undefined;
     const result: TaskExportResult =
       await TaskExportService.saveFile(context, fileName, suffix, content, metaName, meta);
@@ -1065,7 +1065,7 @@ export struct A_Settings {
       return;
     }
     if (result.ok) {
-      this.toast(`已导出 ${tasks.length} 条任务` + (csv ? '（CSV，含 AI 生成标识）' : '（JSON，含原文与 AI 元数据）'));
+      this.toast(`已导出 ${tasks.length} 条任务` + (csv ? '（CSV，含 AI 生成标识与隐式标识文件）' : '（JSON，含原文与 AIGC 元数据）'));
       return;
     }
     this.toast(result.message.length > 0 ? result.message : '导出失败');

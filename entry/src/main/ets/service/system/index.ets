@@ -8,6 +8,7 @@
  *
  * 已落地成员：
  *   MediaPickService    相册选图（系统 picker，**不需要权限**）；「添加任务 · 截图」用它
+ *   TaskMediaCleanupService  清掉没人引用的截图副本（启动时扫一遍；见该文件顶部注释）
  *   TaskExpiryService   「已过期」扫描的唯一入口（启动 / 轮询 / 改到期时调；写逻辑在 store）
  *   TaskExportService   任务导出落地（系统保存面板 / 剪贴板）；FE-60
  *
@@ -16,5 +17,6 @@
  * 不许出现 `if (用了日历)` 这类分支。
  */
 export { MediaPickResult, pickSingleImage } from './MediaPickService';
+export { TaskMediaCleanupService } from './TaskMediaCleanupService';
 export { TaskExpiryService } from './TaskExpiryService';
 export { TaskExportResult, TaskExportService } from './TaskExportService';

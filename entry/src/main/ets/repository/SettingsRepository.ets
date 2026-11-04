@@ -44,11 +44,13 @@ const KEY_FIRST_LAUNCH: string = 'first_launch_done';
  */
 const KEY_DEMO_MODE: string = 'demo_mode';
 /**
- * 隐私授权（用户是否同意《隐私政策》）。
+ * 隐私授权（AI / 云能力的本地门禁；隐私声明的同意记录在平台托管侧）。
  *
  * 2026-10-27：隐私政策改成独立页面后，需要一条可**撤回**的授权状态 ——
  * 撤回后 AI / 云相关能力全部停用，只留本地基础功能（见 `service/system/PrivacyConsent.ets`）。
- * 默认 **true**：升级上来的老用户不会被突然锁住；首次启动引导里必须勾选才继续。
+ * 默认 **true**：升级上来的老用户不会被突然锁住。
+ * 2026-11-03（AGC 审核「两个隐私弹窗」）：应用内不再自己问一遍隐私声明，新装用户的同意由
+ * **系统标准隐私弹窗**（AGC 隐私声明托管服务）取得；冷启动会用 `privacyManager` 的签署记录对齐这里。
  */
 const KEY_PRIVACY_CONSENT: string = 'privacy_consent';
 
@@ -357,8 +359,8 @@ export class SettingsRepository {
    * 隐私授权状态（默认 **true**）。
    *
    * 默认 true 的理由：这是**已上线用户**的升级路径 —— 他们早已在使用 AI/云功能，
-   * 升级后突然被锁成"未授权"会直接坏掉主流程。首次启动引导里则是**必须勾选**才放行，
-   * 所以新装用户的那份同意是显式取得的。
+   * 升级后突然被锁成"未授权"会直接坏掉主流程。新装用户的隐私声明同意由系统标准隐私弹窗取得
+   * （2026-11-03 起应用内不再自己问，见 `PrivacyConsent` 文件头），冷启动再与平台签署记录对齐。
    */
   static async getPrivacyConsent(context: common.Context): Promise<boolean> {
     const store: preferences.Preferences | undefined = await SettingsRepository.ensure(context);
