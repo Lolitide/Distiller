@@ -88,6 +88,8 @@ interface TaskPlain {
   pendingSeen?: boolean;
   pendingSource?: string;
   trashKind?: string;
+  /** 后台 AI 解析中（占位卡）；重启后会被 store 复位成失败态 */
+  parsing?: boolean;
 }
 
 /**
@@ -336,6 +338,9 @@ export class TaskRepository {
     if (task.trashKind !== undefined) {
       plain.trashKind = task.trashKind;
     }
+    if (task.parsing !== undefined) {
+      plain.parsing = task.parsing;
+    }
     return plain;
   }
 
@@ -426,6 +431,9 @@ export class TaskRepository {
     }
     if (typeof raw.trashKind === 'string') {
       task.trashKind = raw.trashKind;
+    }
+    if (raw.parsing === true) {
+      task.parsing = true;
     }
     if (Array.isArray(raw.steps)) {
       const steps: TaskStep[] = [];

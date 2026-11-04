@@ -205,6 +205,13 @@ export class Task {
   @Trace pendingSource?: string;
   /** 31. 回收站：ignored（忽略的消息）/ deleted（删除的待办）；为空表示仍在活跃列表 */
   @Trace trashKind?: string;
+  /**
+   * 32. 后台 AI 解析占位卡（2026-11-04）：
+   * 用户在添加任务里点「AI 总结」后，半模态**立即收起**，先在「待确认消息」里放一条
+   * `name = 正在解析中......` 的占位任务；`parsing = true` 时卡片第二行显示原文前几个字。
+   * 解析完成后置 false 并回填字段；失败则改成「解析失败」。
+   */
+  @Trace parsing?: boolean;
 }
 
 /** 类型（`category`）预设：作业 / 考试 / 活动 / 通知 / 其他；也可自定义（字段表 §1 第 23 项） */

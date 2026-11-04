@@ -21,9 +21,20 @@ import {
 } from '../../model';
 import { CandidateItem, RepeatRuleDto, ServeParse, StepDto } from './BackendTypes';
 
+/**
+ * `source.group_label` 有时不是「群名」，而是后端把请求里的通道名原样回传
+ * （手动解析传 `manual_text`，它就回 `manual_text`）。这类值不能当展示名，
+ * 否则详情页会显示「来源于 manual_text」而不是「来源于 机器人」。
+ */
+function isChannelKeyword(label: string): boolean {
+  const value: string = (label || '').trim();
+  return value === 'manual' || value === 'manual_text' || value === 'manual_image'
+    || value === 'manual_file' || value === 'group' || value === 'forward'
+    || value === 'image' || value === 'file' || value === 'voice' || value === 'share';
+}
+
 /** 后端时间串（"2026-10-13 23:07:59"）→ 毫秒；解析不了返回 0 */
-export function parseBackendTime(text: string): number {
-  const s: string = (text || '').trim();
+export function parseBackendTime(text: string): number {  const s: string = (text || '').trim();
   if (s.length < 10) {
     return 0;
   }
@@ -162,16 +173,19 @@ export function candidateToTask(c: CandidateItem, id: number, rawText: string, p
   if (c.repeat_text !== undefined && c.repeat_text.length > 0) {
     task.repeatText = c.repeat_text;
   }
-  if (c.certainty !== undefined && c.certainty > 0) {
-    task.certainty = Math.round(c.certainty);
-  } else {
-    task.certainty = Math.round(c.confidence * 100);
+  // 置信度：后端可能只给 confidence（0~1）也可能给 certainty（0~100）；都给不出就别写 NaN，
+  // 否则详情页 `certainty > 0` 判假 → AI 标识不显示（2026-11-04 实机踩到）
+  const certaintyRaw: number = c.certainty !== undefined && c.certainty > 0
+    ? Math.round(c.certainty)
+    : Math.round((c.confidence !== undefined ? c.confidence : 0) * 100);
+  if (certaintyRaw > 0) {
+    task.certainty = certaintyRaw;
   }
   if (c.missing_fields !== undefined && c.missing_fields.length > 0) {
     task.missingFields = c.missing_fields;
   }
   task.source = TaskSource.BOT;
-  task.originDetail = c.source.group_label;
+  task.originDetail = isChannelKeyword(c.source.group_label) ? '' : c.source.group_label;
   return task;
 }
 

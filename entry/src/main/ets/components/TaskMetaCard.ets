@@ -99,7 +99,7 @@ export struct TaskMetaCard {
   @Computed
   get sourceLabel(): ResourceStr {
     const detail: string | undefined = this.task.originDetail;
-    if (detail !== undefined && detail.length > 0) {
+    if (detail !== undefined && detail.length > 0 && !TaskMetaCard.isChannelKeyword(detail)) {
       return `来源于 ${detail}`;
     }
     const channel: string | undefined = this.channelLabel();
@@ -113,10 +113,21 @@ export struct TaskMetaCard {
   @Computed
   get sourceSet(): boolean {
     const detail: string | undefined = this.task.originDetail;
-    if (detail !== undefined && detail.length > 0) {
+    if (detail !== undefined && detail.length > 0 && !TaskMetaCard.isChannelKeyword(detail)) {
       return true;
     }
     return this.task.source !== undefined;
+  }
+
+  /**
+   * 老数据里 `originDetail` 可能被写成了通道名（后端把请求的 `manual_text` 原样回传），
+   * 那不是展示名 —— 当作「没有展示名」，回退到通道中文（机器人 / 手动…）。
+   */
+  private static isChannelKeyword(label: string): boolean {
+    const value: string = label.trim();
+    return value === 'manual' || value === 'manual_text' || value === 'manual_image'
+      || value === 'manual_file' || value === 'group' || value === 'forward'
+      || value === 'image' || value === 'file' || value === 'voice' || value === 'share';
   }
 
   /** 通道枚举 → 中文；没有通道返回 `undefined` */
