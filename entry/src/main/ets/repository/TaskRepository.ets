@@ -90,6 +90,10 @@ interface TaskPlain {
   trashKind?: string;
   /** 后台 AI 解析中（占位卡）；重启后会被 store 复位成失败态 */
   parsing?: boolean;
+  /** 后台解析失败（可重新解析） */
+  parseFailed?: boolean;
+  /** 图片解析的本地 URI（重解析用） */
+  parseImageUri?: string;
 }
 
 /**
@@ -341,6 +345,12 @@ export class TaskRepository {
     if (task.parsing !== undefined) {
       plain.parsing = task.parsing;
     }
+    if (task.parseFailed !== undefined) {
+      plain.parseFailed = task.parseFailed;
+    }
+    if (task.parseImageUri !== undefined) {
+      plain.parseImageUri = task.parseImageUri;
+    }
     return plain;
   }
 
@@ -434,6 +444,12 @@ export class TaskRepository {
     }
     if (raw.parsing === true) {
       task.parsing = true;
+    }
+    if (raw.parseFailed === true) {
+      task.parseFailed = true;
+    }
+    if (typeof raw.parseImageUri === 'string') {
+      task.parseImageUri = raw.parseImageUri;
     }
     if (Array.isArray(raw.steps)) {
       const steps: TaskStep[] = [];

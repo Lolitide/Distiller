@@ -150,10 +150,18 @@ export class TaskListStore {
     return list;
   }
 
+  /**
+   * 未读待确认条数（组头右侧「红点 + 数字」）。
+   *
+   * 2026-11-05 需求方：「若一个消息还在解析，则暂时不算一条新消息……解析完了才 +1」——
+   * 占位卡（`parsing === true`）先不计数；`runBackgroundAiParse` 结束时会把 `parsing` 置 false
+   * 并 `refreshGroups()`（重排 `pendingList` 引用），界面此时才 +1。
+   * 解析失败也置 false，于是失败卡同样计入——它确实需要用户点开处理。
+   */
   pendingUnseenCount(): number {
     let n: number = 0;
     this.pendingList.forEach((task: Task) => {
-      if (task.pendingSeen !== true) {
+      if (task.parsing !== true && task.pendingSeen !== true) {
         n++;
       }
     });
@@ -219,11 +227,14 @@ export class TaskListStore {
       }
     });
     this.trashList = trash;
-    // 上次进程在解析途中被杀：占位卡不能永远停在「正在解析中......」，改成失败态让用户重来
+    // 上次进程在解析途中被杀：占位卡不能永远停在「正在解析中...」，改成失败态让用户重来
     active.forEach((task: Task) => {
       if (task.parsing === true) {
         task.parsing = false;
-        task.name = '解析中断，请重新解析';
+        // 2026-11-05：中断与失败走同一套 UI —— 标题「解析失败」+ 右侧「重新解析」
+        task.parseFailed = true;
+        task.name = '解析失败';
+        task.note = '上次解析被中断，请重新解析';
       }
     });
     this.rebuildGroups(active);
@@ -575,7 +586,10 @@ export class TaskListStore {
   }
 
   /** 后台解析占位卡的标题（列表里第一眼看到的就是它） */
-  private static readonly PARSING_TITLE: string = '正在解析中......';
+  private static readonly PARSING_TITLE: string = '正在解析中...';
+
+  /** 解析失败卡的标题（2026-11-05 需求方指定的文案：「解析失败」） */
+  private static readonly PARSE_FAILED_TITLE: string = '解析失败';
 
   /**
    * 手动「AI 总结」：**先把半模态收掉**，再在「待确认消息」里放一张占位卡，
@@ -599,8 +613,28 @@ export class TaskListStore {
     placeholder.pendingSeen = false;
     placeholder.pendingSource = imageUri.length > 0 ? 'image' : 'manual';
     placeholder.parsing = true;
+    if (imageUri.length > 0) {
+      // 失败后要能原样再解析一次，所以把本地 URI 一起留着（只在本机，不上传）
+      placeholder.parseImageUri = imageUri;
+    }
     this.addTask(placeholder);
     this.runBackgroundAiParse(placeholder, text, imageUri);
+  }
+
+  /**
+   * 失败卡右侧的「重新解析」（2026-11-05 需求方）：
+   * 卡片原地回到「正在解析中...」占位态再跑一遍；来源是图片时复用保存下来的本地 URI。
+   */
+  retryParse(task: Task): void {
+    const text: string = task.rawText !== undefined ? task.rawText : '';
+    const imageUri: string = task.parseImageUri !== undefined ? task.parseImageUri : '';
+    task.parsing = true;
+    task.parseFailed = false;
+    task.name = TaskListStore.PARSING_TITLE;
+    task.note = '';
+    this.refreshGroups();
+    this.persist();
+    this.runBackgroundAiParse(task, text, imageUri);
   }
 
   /** 占位卡的后续：成功 → 原地换成解析结果；失败 → 改成可点开重试的失败态 */
@@ -618,8 +652,10 @@ export class TaskListStore {
       return;
     }
     if (!result.ok || result.candidate === undefined) {
+      // 2026-11-05 需求方：标题固定「解析失败」，原文留在第二行，右侧给「重新解析」
       target.parsing = false;
-      target.name = '解析失败，点开可重试';
+      target.parseFailed = true;
+      target.name = TaskListStore.PARSE_FAILED_TITLE;
       target.note = result.message.length > 0 ? result.message : '没能识别出任务内容';
       this.refreshGroups();
       this.persist();
@@ -629,6 +665,7 @@ export class TaskListStore {
     const mapped: Task = candidateToTask(result.candidate, target.id, raw, true);
     TaskListStore.mergeIncoming(target, mapped);
     target.parsing = false;
+    target.parseFailed = false;
     target.pendingSeen = false;
     if (result.link !== undefined && result.link.length > 0) {
       target.linkUrl = result.link;

@@ -19,6 +19,8 @@ export const ROUTE_PRIVACY_POLICY: string = 'PrivacyPolicyPage';
 export const ROUTE_CLOUD_FIELDS: string = 'CloudFieldsPage';
 /** 回收站（忽略的消息 / 删除的待办） */
 export const ROUTE_RECYCLE_BIN: string = 'RecycleBinPage';
+/** 关于页（设置 → 知了与隐私说明）：版本 / 隐私说明 / 重看引导 / 备案号 */
+export const ROUTE_ABOUT: string = 'AboutPage';
 
 /**
  * 导航栈在 `AppStorage` 里的键。

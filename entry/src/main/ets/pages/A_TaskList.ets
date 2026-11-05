@@ -414,6 +414,10 @@ export struct A_TaskList {
         this.store.markPendingSeen(task);
         AppStorage.get<NavPathStack>(NAV_STACK_KEY)
           ?.pushPathByName(ROUTE_TASK_DETAIL, new TaskDetailParam(task, this.store, true));
+      },
+      // 解析失败卡右侧的「重新解析」：回到占位态再跑一遍（2026-11-05 需求方）
+      onRetryParse: () => {
+        this.store.retryParse(task);
       }
     })
   }

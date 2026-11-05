@@ -24,6 +24,11 @@
       "name": "RecycleBinPage",
       "pageSourceFile": "src/main/ets/pages/B_RecycleBin.ets",
       "buildFunction": "RecycleBinPageBuilder"
+    },
+    {
+      "name": "AboutPage",
+      "pageSourceFile": "src/main/ets/pages/B_About.ets",
+      "buildFunction": "AboutPageBuilder"
     }
   ]
 }

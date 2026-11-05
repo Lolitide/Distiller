@@ -38,7 +38,7 @@ import { M3SegmentGroup, M3SegmentOption } from '../components/M3SegmentGroup';
 import { M3Switch } from '../components/M3Switch';
 import { Task } from '../model';
 import { TaskListStore } from '../viewmodel/TaskListStore';
-import { NAV_STACK_KEY, ROUTE_CLOUD_FIELDS, ROUTE_PRIVACY_POLICY, ROUTE_RECYCLE_BIN } from '../viewmodel/TaskNavParams';
+import { NAV_STACK_KEY, ROUTE_ABOUT, ROUTE_CLOUD_FIELDS, ROUTE_PRIVACY_POLICY, ROUTE_RECYCLE_BIN } from '../viewmodel/TaskNavParams';
 import { TaskExportViewModel, TaskImportParseResult } from '../viewmodel/TaskExportViewModel';
 import { TaskExportResult, TaskExportService } from '../service/system/TaskExportService';
 import { TaskImportFileResult, TaskImportService } from '../service/system/TaskImportService';
@@ -689,31 +689,6 @@ export struct A_Settings {
     });
   }
 
-  private replayOnboarding(): void {
-    const ctx: common.Context | undefined = this.hostContext();
-    if (ctx === undefined) {
-      return;
-    }
-    SettingsRepository.setFirstLaunchDone(ctx, false);
-    this.toast('下次启动会显示启动引导');
-  }
-
-  /** 版本信息等「关于」区的内容由 `versionLabel` 等字段直接渲染（演示模式开关已按需求删除） */
-
-  /**
-   * 推送通道 / 推送验证说明这两行**已删除**（需求方 2026-10-27：「推送通道删去、推送验证说明删去」）。
-   *
-   * 连带删掉的成员：`pushStatus` 字段、`pushLine` getter、`retryPush()`、`showPushHelp()`，
-   * 以及 `PushStatus` / `PUSH_PHASE_*` 的导入 —— 它们只服务那两行。
-   * 推送本身仍在跑（`A_Main` 启动/回前台时由 `PushRegistrar.register()` 上报），只是不再把
-   * 开发者向的诊断信息摊在设置页上。
-   */
-
-  /** 隐私说明：改成跳**独立页面**（`B_PrivacyPolicy`，2026-10-27） */
-  private openPrivacyPage(): void {
-    AppStorage.get<NavPathStack>(NAV_STACK_KEY)?.pushPathByName(ROUTE_PRIVACY_POLICY, '');
-  }
-
   /**
    * 「会离开手机的字段」：2026-10-27 需求方「这个不用系统 showDialog，用一个新的页面展示」。
    *
@@ -796,19 +771,6 @@ export struct A_Settings {
     return `提前 ${minutes} 分钟`;
   }
 
-  /** 版本号从安装包读，不写死 */
-  @Computed
-  get versionLabel(): string {
-    try {
-      const info: bundleManager.BundleInfo = bundleManager.getBundleInfoForSelfSync(
-        bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT);
-      return info.versionName === undefined ? '—' : info.versionName;
-    } catch (error) {
-      const err = error as BusinessError;
-      hilog.error(DOMAIN, TAG, 'read version failed: %{public}s', err.message);
-      return '—';
-    }
-  }
 
   /* ── 写入 ── */
 
@@ -1724,57 +1686,26 @@ export struct A_Settings {
         .margin({ top: SECTION_GAP_VP })
 
         Column() {
-          // 2026-11-02 需求方：「把演示模式那一行删掉」——「关于」里不再提供演示任务开关，
-          // 直接以「版本」开头（原来是 演示模式 / 版本 / 隐私说明 / 重看引导）。
-          this.infoRow('版本', this.versionLabel)
-          this.rowDivider()
-          // 「隐私说明」：2026-10-27 改成**独立页面**（弹窗塞不下一篇合规的隐私政策），
-          // 右侧显示当前授权状态；页内可撤回/重新授权（撤回后 AI 与云端停用，本机基础功能保留）。
-          Row() {
-            Text('隐私说明')
+          // 2026-11-05 需求方：原来「版本 / 隐私说明 / 重新查看启动引导」三行合并成一行，
+          // 点进去是独立《关于》页（B_About）：那三行 + 底部备案号都在里面。
+          Row({ space: 8 }) {
+            Text('知了与隐私说明')
               .fontSize($r('sys.float.ohos_id_text_size_body1'))
               .fontColor($r('sys.color.ohos_id_color_text_primary'))
               .layoutWeight(1)
-            Text('查看')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor(this.themeStore.scheme.primary)
-              .margin({ left: 8 })
+              .maxLines(1)
+              .textAlign(TextAlign.Start)
+            SymbolGlyph($r('sys.symbol.chevron_right'))
+              .fontSize(Theme.ICON_CHEVRON)
+              .fontColor([$r('sys.color.icon_secondary')])
           }
           .width('100%')
           .height(ROW_HEIGHT_VP)
           .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
           .alignItems(VerticalAlign.Center)
           .onClick(() => {
-            this.openPrivacyPage();
+            AppStorage.get<NavPathStack>(NAV_STACK_KEY)?.pushPathByName(ROUTE_ABOUT, '');
           })
-
-          this.rowDivider()
-          Row() {
-            Text('重新查看启动引导')
-              .fontSize($r('sys.float.ohos_id_text_size_body1'))
-              .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              .layoutWeight(1)
-            Text('下次启动')
-              .fontSize($r('sys.float.ohos_id_text_size_body2'))
-              .fontColor(this.themeStore.scheme.primary)
-          }
-          .width('100%')
-          .height(ROW_HEIGHT_VP)
-          .padding({ left: ROW_SIDE_PADDING_VP, right: ROW_SIDE_PADDING_VP })
-          .alignItems(VerticalAlign.Center)
-          .onClick(() => {
-            this.replayOnboarding();
-          })
-
-          /*
-           * 2026-10-27 需求方：「设置项分类不对与冗余」——
-           *  · 「通知与横幅设置」→ 已搬到「权限管理」里、「通知权限」下面；
-           *  · 「提醒状态」→ 已搬到「通知个性化」里；
-           *  · 「推送通道」「推送验证说明」→ **删除**（连同 `pushStatus` / `pushLine` /
-           *    `retryPush` / `showPushHelp` 与 `PushStatus` 导入）。
-           * 所以「关于」现在只剩：版本 / 隐私说明 / 重新查看启动引导
-           * （2026-11-02：演示模式开关也按需求删除了）。
-           */
         }
         .width('100%')
         .backgroundColor(this.themeStore.scheme.surfaceContainerLow)

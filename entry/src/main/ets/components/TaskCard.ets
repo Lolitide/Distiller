@@ -98,6 +98,8 @@ export struct TaskCard {
   @Event onRemindChange: (isOn: boolean) => void = () => {};
   /** 点整卡 → 交给页面去压任务详情页（卡片本身不知道路由） */
   @Event onOpen: () => void = () => {};
+  /** 待确认卡右侧「重新解析」（仅解析失败时出现）→ 由页面转给 store 再跑一遍 */
+  @Event onRetryParse: () => void = () => {};
 
   /**
    * 视觉个性化（`utils/Theme.ets`）：卡片密度与主题色都从这里读。
@@ -592,8 +594,9 @@ export struct TaskCard {
         .width('100%')
         .textAlign(TextAlign.Start)
 
-      if (this.task.parsing === true) {
+      if (this.task.parsing === true || this.task.parseFailed === true) {
         // 后台解析占位卡（2026-11-04）：第二行显示原文前几个字，超长省略
+        // 2026-11-05 需求方：解析失败的卡片「下方仍是原文」，所以失败态也走这一支
         Text(this.parsingExcerpt)
           .fontSize($r('sys.float.ohos_id_text_size_caption'))
           .fontColor($r('sys.color.ohos_id_color_text_secondary'))
@@ -642,8 +645,20 @@ export struct TaskCard {
 
   @Builder
   pendingSuffixRow() {
-    // 待确认卡片暂时不放任何右侧操作图标
-    Row().width(0).height(0)
+    if (this.task.parseFailed === true) {
+      // 2026-11-05 需求方：解析失败的卡片最右侧出现红色「重新解析」，点它原地再解析一次。
+      // 单独给 44vp 触控高度（≥40vp 可点区），并 `hitTestBehavior` 默认拦截，避免冒泡到整卡「打开详情」。
+      Text('重新解析')
+        .fontSize($r('sys.float.ohos_id_text_size_body2'))
+        .fontColor(this.themeStore.scheme.error)
+        .height(44)
+        .padding({ left: 8, right: 8 })
+        .textAlign(TextAlign.Center)
+        .onClick(() => {
+          this.onRetryParse();
+        })
+        .accessibilityText('重新解析这条消息')
+    }
   }
 
   @Computed
