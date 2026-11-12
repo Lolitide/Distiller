@@ -12,7 +12,6 @@
 import { image } from '@kit.ImageKit';
 import { textRecognition } from '@kit.CoreVisionKit';
 import { fileIo } from '@kit.CoreFileKit';
-import { detectBarcode, scanBarcode, scanCore } from '@kit.ScanKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { PrivacyConsent } from '../system/PrivacyConsent';
@@ -23,36 +22,6 @@ const TAG: string = 'OcrService';
 const MAX_IMAGE_BYTES: number = 6 * 1024 * 1024;
 
 export class OcrService {
-  /**
-   * 识别二维码/条形码，返回码值（没有就空串）。
-   * 用 Scan Kit 的 detectBarcode；picker 给的 uri 本身就能直接传（不落临时文件）。
-   */
-  static async detectBarcode(uri: string): Promise<string> {
-    // 隐私授权门禁：撤回后所有端侧识别一并停用（AI 能力与基础功能分隔）
-    if (!PrivacyConsent.allowed()) {
-      return '';
-    }
-    if ((uri || '').length === 0) {
-      return '';
-    }
-    try {
-      const options: scanBarcode.ScanOptions = {
-        scanTypes: [scanCore.ScanType.ALL]
-      };
-      const input: detectBarcode.InputImage = { uri: uri };
-      const results: scanBarcode.ScanResult[] = await detectBarcode.decode(input, options);
-      if (results === undefined || results === null || results.length === 0) {
-        return '';
-      }
-      const value: string | undefined = results[0].originalValue;
-      return value !== undefined ? value.trim() : '';
-    } catch (error) {
-      const err = error as BusinessError;
-      hilog.warn(DOMAIN, TAG, 'barcode decode failed: %{public}s', err.message);
-      return '';
-    }
-  }
-
   /** 识别本地文件（系统 picker 给的 uri）里的文字；失败返回空串 */
   static async recognizeUri(uri: string): Promise<string> {
     // 隐私授权门禁：撤回后所有端侧识别一并停用（AI 能力与基础功能分隔）

@@ -72,21 +72,11 @@ export class ManualParseService {
       return { ok: false, message: '先选一张截图', text: '' };
     }
 
-    // ① 先认二维码/条形码：如果是 URL，直接做成带链接的任务
-    //    （把 URL 丢给模型没有意义，还会浪费一次调用）
-    const code: string = await OcrService.detectBarcode(uri);
-    if (code.length > 0 && ManualParseService.isHttpUrl(code)) {
-      return {
-        ok: true,
-        message: '',
-        candidate: ManualParseService.linkCandidate(code),
-        text: code,
-        localOcr: true,
-        link: code
-      };
-    }
+    // 2026-11-11 隐私合规整改：删除「先认二维码/条形码」这一步 —— 它依赖 @kit.ScanKit，
+    // 静态扫描会判定「存在相机调用」，而本项目从未打开相机、也不申请 CAMERA 权限。
+    // 截图统一走下面的端侧 OCR（扫码得到的 URL 仍可由 OCR 文本 + 后端识别兜底）。
 
-    // ② 优先在**端侧** OCR：图片不出手机，只把文字发给后端，
+    // ① 优先在**端侧** OCR：图片不出手机，只把文字发给后端，
     //    这样后端没有多模态模型也能用，流量也更小。
     const localText: string = await OcrService.recognizeUri(uri);
     if (localText.length > 0) {
@@ -140,53 +130,6 @@ export class ManualParseService {
     return { ok: true, message: '', candidate: res.data.candidate, text: res.data.text };
   }
 
-  private static isHttpUrl(text: string): boolean {
-    const lower: string = text.toLowerCase();
-    return lower.startsWith('http://') || lower.startsWith('https://');
-  }
-
-  /** 扫码得到 URL 时构造一条最小候选（标题固定「扫码链接」，链接另存到 Task.linkUrl） */
-  private static linkCandidate(url: string): CandidateItem {
-    return {
-      candidate_id: 'qr_' + Date.now(),
-      rev_seq: 0,
-      thread_id: '',
-      kind: '待办',
-      priority: 'normal',
-      level: 0,
-      category: '其他',
-      channel: 'manual',
-      due_at: 0,
-      due_text: '',
-      repeat: [],
-      repeat_text: '',
-      certainty: 100,
-      missing_fields: ['dueAt', 'place', 'who'],
-      title: '扫码链接',
-      summary: url,
-      time_text: '',
-      time_normalized: '',
-      time_unresolved: false,
-      place: '',
-      who: '',
-      deadline: '',
-      items: [],
-      steps: [],
-      tags: [],
-      confidence: 1,
-      engine: 'rules',
-      source: {
-        group_openid: '',
-        group_label: '扫码',
-        senders: [],
-        msg_ids: [],
-        count: 1,
-        first_ts: '',
-        last_ts: ''
-      },
-      created_at: ''
-    };
-  }
 
   /** 读文件 → base64；失败返回空串（页面据此提示换图） */
   private static readBase64(uri: string, maxBytes: number): string {

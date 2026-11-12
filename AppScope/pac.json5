@@ -1,0 +1,61 @@
+/*
+ * pac.json5 —— 隐私清单（AGC 据此生成「隐私标签」）
+ *
+ * 官方：开发指南/附录/pac_json5隐私清单文件/agc-pac —— App 在 AppScope 下建这个文件，
+ * 编译时合入软件包（产物里叫 `pac.json`），上架时 AGC 用它自动生成隐私标签。
+ *
+ * 声明口径与代码一一对应（2026-11-05 补）：
+ *  · Identifiers / Other device identifiers：
+ *      自建服务器注册时生成的设备标识与访问令牌（`BackendConfig.deviceId`）、Push 令牌
+ *      （`service/system/PushTokenService.ets`）。用于把解析结果与提醒送到正确的设备，属于用户关联，不做追踪。
+ *  · User content / Text information：
+ *      「AI 总结」与转发解析会把用户输入的文本发给服务器（`ManualParseService.parseText`）。
+ *  · User content / Image or video：
+ *      截图**优先在端侧 OCR**；端侧识别不到时回退，把该张图片以 base64 发给服务器做多模态 OCR
+ *      （`ManualParseService.parseImage` 第 ③ 步）。所以图片在特定情况下会离开设备，必须声明。
+ *      —— 语音不在此列：`SpeechService` 全程端侧，音频不出设备。
+ *
+ * ⚠️ 改这里之前先改隐私政策正文，两处不一致会被审核判「与实际行为不符」。
+ */
+{
+  "dataProcess": [
+    {
+      "dataType": "Identifiers",
+      "dataLabels": [
+        {
+          "label": "Other device identifiers",
+          "purposes": ["App functionality"],
+          "userLinked": true,
+          "tracking": false
+        }
+      ]
+    },
+    {
+      "dataType": "User content",
+      "dataLabels": [
+        {
+          "label": "Text information",
+          "purposes": ["App functionality"],
+          "userLinked": true,
+          "tracking": false
+        },
+        {
+          "label": "Image or video",
+          "purposes": ["App functionality"],
+          "userLinked": true,
+          "tracking": false
+        }
+      ]
+    }
+  ],
+  "specialAPIs": [
+    {
+      "apiType": "User preferences APIs",
+      "reasons": ["Access preferences data in-app"]
+    },
+    {
+      "apiType": "File timestamp APIs",
+      "reasons": ["Access file metadata in-app"]
+    }
+  ]
+}

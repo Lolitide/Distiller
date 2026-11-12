@@ -521,8 +521,8 @@ export struct A_Onboarding {
                 .fontSize($r('sys.float.ohos_id_text_size_body1'))
                 .fontWeight(FontWeight.Medium)
                 .fontColor($r('sys.color.ohos_id_color_text_primary'))
-              Text('APP 中的任务、备注、原文、草稿只存在本机。开启云端同步后，只会发送设备标识、绑定关系与反馈计数，'
-                + '任务内容不会上传到服务器')
+              Text('APP 中的任务、备注、原文、草稿只存在本机。同意隐私政策后，应用只会向开发者服务器发送设备标识、'
+                + '绑定关系与反馈计数，任务内容不会上传；可随时在隐私说明里撤回授权')
                 .fontSize($r('sys.float.ohos_id_text_size_body2'))
                 .fontColor($r('sys.color.ohos_id_color_text_secondary'))
             }
